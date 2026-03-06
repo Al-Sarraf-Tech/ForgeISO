@@ -150,7 +150,9 @@ async fn main() -> anyhow::Result<()> {
             if json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else {
-                println!("Built ISO: {}", result.artifacts[0].display());
+                if let Some(iso) = result.artifacts.first() {
+                    println!("Built ISO: {}", iso.display());
+                }
                 println!("Report JSON: {}", result.report_json.display());
                 println!("Report HTML: {}", result.report_html.display());
                 println!(

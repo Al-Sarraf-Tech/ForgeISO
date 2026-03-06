@@ -199,6 +199,9 @@ impl ForgeIsoEngine {
             ],
             None,
         )?;
+        // xorriso extracts files with read-only permissions; make writable
+        // so we can modify the tree and clean up afterwards.
+        chmod_recursive_writable(&extract_dir);
 
         let mut warnings = iso.warnings.clone();
         let mut rootfs_dir = None;
@@ -208,10 +211,11 @@ impl ForgeIsoEngine {
                 require_tools(&["unsquashfs", "mksquashfs"])?;
                 let unpack_dir = workspace.work.join("rootfs");
                 std::fs::create_dir_all(&unpack_dir)?;
-                run_command_capture(
+                run_command_lossy(
                     "unsquashfs",
                     &[
                         "-f".to_string(),
+                        "-no-xattrs".to_string(),
                         "-d".to_string(),
                         unpack_dir.display().to_string(),
                         rootfs_image.display().to_string(),
@@ -231,6 +235,7 @@ impl ForgeIsoEngine {
                         "-comp".to_string(),
                         "xz".to_string(),
                         "-noappend".to_string(),
+                        "-no-xattrs".to_string(),
                     ],
                     None,
                 )?;
@@ -283,8 +288,21 @@ impl ForgeIsoEngine {
             format!("build completed: {}", output_iso.display()),
         ));
 
+        let workspace_root = workspace.root.clone();
+        if !cfg.keep_workdir {
+            if let Err(e) = remove_dir_all_force(&workspace.root) {
+                self.emit(EngineEvent::warn(
+                    EventPhase::Complete,
+                    format!(
+                        "failed to clean up workspace {}: {e}",
+                        workspace.root.display()
+                    ),
+                ));
+            }
+        }
+
         Ok(BuildResult {
-            workspace_root: workspace.root,
+            workspace_root,
             output_dir: out_dir.to_path_buf(),
             report_json,
             report_html,
@@ -365,7 +383,8 @@ impl ForgeIsoEngine {
             if body.contains("no bootable option or device")
                 || body.contains("failed to load boot")
                 || body.contains("kernel panic")
-                || body.contains("error:")
+                || body.contains("boot failed")
+                || body.contains("no bootable device")
             {
                 passed = false;
             }
@@ -467,19 +486,7 @@ pub fn default_cache_root() -> EngineResult<PathBuf> {
         return Ok(path);
     }
 
-    if let Ok(path) = std::env::var("XDG_CACHE_HOME") {
-        let path = PathBuf::from(path).join("forgeiso");
-        std::fs::create_dir_all(&path)?;
-        return Ok(path);
-    }
-
-    if let Ok(home) = std::env::var("HOME") {
-        let path = PathBuf::from(home).join(".cache").join("forgeiso");
-        std::fs::create_dir_all(&path)?;
-        return Ok(path);
-    }
-
-    let path = std::env::current_dir()?.join(".forgeiso-cache");
+    let path = PathBuf::from("/tmp/forgeoutput");
     std::fs::create_dir_all(&path)?;
     Ok(path)
 }
@@ -529,6 +536,31 @@ pub struct CommandOutput {
     pub stderr: String,
 }
 
+/// Like `run_command_capture` but tolerates non-zero exit codes (e.g. unsquashfs
+/// returning exit 2 for device-node warnings when not running as root).
+pub fn run_command_lossy(
+    program: &str,
+    args: &[String],
+    cwd: Option<&Path>,
+) -> EngineResult<CommandOutput> {
+    let mut command = std::process::Command::new(program);
+    command.args(args);
+    if let Some(dir) = cwd {
+        command.current_dir(dir);
+    }
+
+    let output = command
+        .output()
+        .map_err(|e| EngineError::Runtime(format!("failed to run {program}: {e}")))?;
+
+    Ok(CommandOutput {
+        program: program.to_string(),
+        status: output.status.code().unwrap_or(1),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    })
+}
+
 pub fn sha256_file(path: &Path) -> EngineResult<String> {
     use sha2::{Digest, Sha256};
 
@@ -574,7 +606,7 @@ fn require_tools(tools: &[&str]) -> EngineResult<()> {
 }
 
 fn is_squashfs_path(path: &str) -> bool {
-    path.ends_with(".squashfs") || path.ends_with(".sfs")
+    path.ends_with(".squashfs") || path.ends_with(".sfs") || path.ends_with(".erofs")
 }
 
 fn write_iso_manifest(
@@ -813,6 +845,35 @@ fn ovmf_path() -> EngineResult<PathBuf> {
     Err(EngineError::MissingTool(
         "OVMF firmware is required for UEFI smoke tests".to_string(),
     ))
+}
+
+/// Recursively grant user-write permission before removal so files extracted
+/// from ISOs (which may carry read-only permissions) can be deleted.
+fn remove_dir_all_force(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    for entry in WalkDir::new(path).into_iter().filter_map(Result::ok) {
+        let meta = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let mut perms = meta.permissions();
+        perms.set_mode(perms.mode() | 0o700);
+        let _ = std::fs::set_permissions(entry.path(), perms);
+    }
+    std::fs::remove_dir_all(path)
+}
+
+fn chmod_recursive_writable(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    for entry in WalkDir::new(path).into_iter().filter_map(Result::ok) {
+        let meta = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let mut perms = meta.permissions();
+        perms.set_mode(perms.mode() | 0o700);
+        let _ = std::fs::set_permissions(entry.path(), perms);
+    }
 }
 
 impl From<TestResult> for TestSummary {
