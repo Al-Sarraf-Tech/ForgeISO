@@ -79,6 +79,7 @@ jobs:
       - name: Run stage in ephemeral container
         run: |
           docker run --rm \
+            -e CI=true \
             -v "$PWD:/workspace" \
             forgeiso-${{ matrix.id }} \
             bash -c "${{ matrix.script }}"
