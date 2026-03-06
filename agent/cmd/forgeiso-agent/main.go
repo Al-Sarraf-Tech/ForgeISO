@@ -24,14 +24,14 @@ import (
 
 func main() {
 	var (
-		listenAddr   string
-		certFile     string
-		keyFile      string
-		caFile       string
-		workDir      string
-		jobToken     string
-		selfSigned   bool
-		requireMTLS  bool
+		listenAddr  string
+		certFile    string
+		keyFile     string
+		caFile      string
+		workDir     string
+		jobToken    string
+		selfSigned  bool
+		requireMTLS bool
 	)
 
 	flag.StringVar(&listenAddr, "listen", ":7443", "gRPC listen address")

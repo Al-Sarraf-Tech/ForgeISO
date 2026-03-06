@@ -1,6 +1,6 @@
 SHELL := /usr/bin/env bash
 
-.PHONY: dev test build release ci-local fmt lint clean
+.PHONY: dev test build release package ci-local fmt lint clean
 
 dev:
 	@echo "Starting ForgeISO developer workflow"
@@ -20,6 +20,14 @@ build:
 release:
 	@echo "Release workflow is tag-driven via .github/workflows/ci.yml"
 	@echo "Use: git tag vX.Y.Z && git push origin vX.Y.Z"
+
+package:
+	@echo "Packaging requires release binaries in target/release"
+	@echo "Running package scripts for tar.gz, RPM, DEB, and Pacman"
+	scripts/release/package-tarball.sh
+	scripts/release/package-rpm.sh
+	scripts/release/package-deb.sh
+	scripts/release/package-pacman.sh
 
 ci-local:
 	docker compose -f docker-compose.ci.yml up --build --abort-on-container-exit --exit-code-from c1

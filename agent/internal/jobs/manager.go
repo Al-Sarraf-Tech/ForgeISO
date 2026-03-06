@@ -14,12 +14,12 @@ const (
 )
 
 type Job struct {
-	ID         string
-	Type       Type
-	CreatedAt  time.Time
-	Done       bool
-	Logs       []LogEntry
-	Artifacts  []Artifact
+	ID          string
+	Type        Type
+	CreatedAt   time.Time
+	Done        bool
+	Logs        []LogEntry
+	Artifacts   []Artifact
 	subscribers []chan LogEntry
 }
 

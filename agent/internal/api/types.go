@@ -6,9 +6,9 @@ type BuildInputArtifact struct {
 }
 
 type SubmitBuildJobRequest struct {
-	RequestID string               `json:"request_id"`
-	ConfigYAML []byte              `json:"config_yaml"`
-	Artifacts []BuildInputArtifact `json:"artifacts"`
+	RequestID  string               `json:"request_id"`
+	ConfigYAML []byte               `json:"config_yaml"`
+	Artifacts  []BuildInputArtifact `json:"artifacts"`
 }
 
 type SubmitBuildJobResponse struct {

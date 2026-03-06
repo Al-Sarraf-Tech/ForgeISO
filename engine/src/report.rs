@@ -83,7 +83,13 @@ impl BuildReport {
             .metadata
             .policy_warnings
             .iter()
-            .map(|w| format!("<li><b>{}</b>: {}</li>", html_escape(&w.code), html_escape(&w.message)))
+            .map(|w| {
+                format!(
+                    "<li><b>{}</b>: {}</li>",
+                    html_escape(&w.code),
+                    html_escape(&w.message)
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n");
 

@@ -24,7 +24,10 @@ pub fn plan(
     let module_script = module_snippets(actions);
     fs::write(
         profile_dir.join("airootfs/root/forgeiso-post.sh"),
-        format!("#!/usr/bin/env bash\nset -euo pipefail\n{}\n", module_script),
+        format!(
+            "#!/usr/bin/env bash\nset -euo pipefail\n{}\n",
+            module_script
+        ),
     )?;
 
     let command = format!(
@@ -44,7 +47,9 @@ pub fn plan(
             command,
             workspace,
         )],
-        warnings: vec!["Arch is rolling release; snapshot reproducibility is best effort".to_string()],
+        warnings: vec![
+            "Arch is rolling release; snapshot reproducibility is best effort".to_string(),
+        ],
         produced_iso: artifact,
     })
 }

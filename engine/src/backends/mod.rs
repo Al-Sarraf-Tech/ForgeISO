@@ -73,7 +73,10 @@ pub fn spec(image: &str, command: String, workspace: &Workspace) -> ContainerRun
 pub fn module_snippets(actions: &[ModuleAction]) -> String {
     let mut snippets = Vec::new();
     for action in actions {
-        snippets.push(format!("echo '[module] {}'", shell_escape(&action.description)));
+        snippets.push(format!(
+            "echo '[module] {}'",
+            shell_escape(&action.description)
+        ));
         snippets.extend(action.shell_snippets.iter().cloned());
     }
     snippets.join("; ")

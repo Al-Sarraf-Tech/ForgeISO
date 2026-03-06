@@ -135,7 +135,9 @@ impl ReleaseTracker {
             version: format!("{:04}.{:02}.{:02}", now.year(), now.month(), now.day()),
             lts: false,
             stable: true,
-            eol_warning: Some("Arch is rolling; snapshot reproducibility is best effort.".to_string()),
+            eol_warning: Some(
+                "Arch is rolling; snapshot reproducibility is best effort.".to_string(),
+            ),
         }]
     }
 }

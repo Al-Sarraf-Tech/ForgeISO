@@ -32,8 +32,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.logs.push(format!(
         "doctor completed at {} (docker={}, podman={})",
         doctor.timestamp,
-        doctor.runtime_candidates.get("docker").copied().unwrap_or(false),
-        doctor.runtime_candidates.get("podman").copied().unwrap_or(false)
+        doctor
+            .runtime_candidates
+            .get("docker")
+            .copied()
+            .unwrap_or(false),
+        doctor
+            .runtime_candidates
+            .get("podman")
+            .copied()
+            .unwrap_or(false)
     ));
 
     let mut rx = engine.subscribe();
@@ -147,8 +155,8 @@ fn render_main(frame: &mut ratatui::Frame<'_>, area: Rect, app: &App) {
         _ => "Reports\n- JSON and HTML export\n- Build provenance and security summaries",
     };
 
-    let paragraph = Paragraph::new(text)
-        .block(Block::default().borders(Borders::ALL).title("Panel"));
+    let paragraph =
+        Paragraph::new(text).block(Block::default().borders(Borders::ALL).title("Panel"));
 
     frame.render_widget(paragraph, area);
 }
@@ -163,8 +171,8 @@ fn render_logs(frame: &mut ratatui::Frame<'_>, area: Rect, app: &App) {
         .map(|line| Line::from(line.clone()))
         .collect::<Vec<_>>();
 
-    let logs = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title("Live Logs"));
+    let logs =
+        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title("Live Logs"));
 
     frame.render_widget(logs, area);
 }

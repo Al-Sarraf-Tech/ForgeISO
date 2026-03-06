@@ -74,7 +74,10 @@ impl ForgeIsoEngine {
     }
 
     pub async fn doctor(&self) -> DoctorReport {
-        self.emit(EngineEvent::info(EventPhase::Doctor, "running toolchain doctor"));
+        self.emit(EngineEvent::info(
+            EventPhase::Doctor,
+            "running toolchain doctor",
+        ));
 
         let mut runtime_candidates = BTreeMap::new();
         runtime_candidates.insert("docker".to_string(), which::which("docker").is_ok());
@@ -199,10 +202,10 @@ impl ForgeIsoEngine {
             .metadata
             .tool_versions
             .insert("container_runtime".to_string(), runtime_bin.to_string());
-        report.metadata.tool_versions.insert(
-            "engine".to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
-        );
+        report
+            .metadata
+            .tool_versions
+            .insert("engine".to_string(), env!("CARGO_PKG_VERSION").to_string());
         report
             .metadata
             .policy_warnings
@@ -222,12 +225,10 @@ impl ForgeIsoEngine {
             let final_out = out_dir.join("artifacts");
             std::fs::create_dir_all(&final_out)?;
 
-            let final_iso = final_out.join(
-                backend
-                    .produced_iso
-                    .file_name()
-                    .ok_or_else(|| EngineError::Runtime("invalid artifact filename".to_string()))?,
-            );
+            let final_iso =
+                final_out.join(backend.produced_iso.file_name().ok_or_else(|| {
+                    EngineError::Runtime("invalid artifact filename".to_string())
+                })?);
             std::fs::copy(&backend.produced_iso, &final_iso)?;
             std::fs::copy(&report_json, final_out.join("build-report.json"))?;
             std::fs::copy(&report_html, final_out.join("build-report.html"))?;
@@ -327,7 +328,10 @@ impl ForgeIsoEngine {
             logs.push(uefi_log);
 
             let shot = out_dir.join("uefi-screenshot.txt");
-            std::fs::write(&shot, "screenshot capture path placeholder for automated harness")?;
+            std::fs::write(
+                &shot,
+                "screenshot capture path placeholder for automated harness",
+            )?;
             screenshots.push(shot);
         }
 
@@ -402,7 +406,10 @@ impl ForgeIsoEngine {
             "inspected_at": chrono::Utc::now().to_rfc3339(),
         });
 
-        self.emit(EngineEvent::info(EventPhase::Inspect, "iso inspection complete"));
+        self.emit(EngineEvent::info(
+            EventPhase::Inspect,
+            "iso inspection complete",
+        ));
         Ok(value)
     }
 

@@ -170,7 +170,10 @@ async fn main() -> anyhow::Result<()> {
             if json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else {
-                println!("bios={} uefi={} passed={}", result.bios, result.uefi, result.passed);
+                println!(
+                    "bios={} uefi={} passed={}",
+                    result.bios, result.uefi, result.passed
+                );
             }
         }
         Commands::Report { build, format } => {
@@ -192,7 +195,10 @@ fn parse_distro(raw: &str) -> anyhow::Result<Distro> {
         "mint" => Ok(Distro::Mint),
         "fedora" => Ok(Distro::Fedora),
         "arch" => Ok(Distro::Arch),
-        _ => anyhow::bail!("unsupported distro '{}': expected ubuntu|mint|fedora|arch", raw),
+        _ => anyhow::bail!(
+            "unsupported distro '{}': expected ubuntu|mint|fedora|arch",
+            raw
+        ),
     }
 }
 

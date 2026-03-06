@@ -71,7 +71,9 @@ fn enforce_ubuntu_lts(release: &str) -> EngineResult<()> {
 }
 
 fn enforce_mint_lts(release: &str) -> EngineResult<()> {
-    let allowed = ["20", "20.1", "20.2", "20.3", "21", "21.1", "21.2", "21.3", "22"];
+    let allowed = [
+        "20", "20.1", "20.2", "20.3", "21", "21.1", "21.2", "21.3", "22",
+    ];
     if allowed.contains(&release) {
         Ok(())
     } else {
@@ -150,10 +152,8 @@ mod tests {
     #[test]
     fn arch_must_not_be_future() {
         let future = Utc::now().date_naive() + Duration::days(1);
-        assert!(enforce_release_policy(
-            &Distro::Arch,
-            &future.format("%Y.%m.%d").to_string()
-        )
-        .is_err());
+        assert!(
+            enforce_release_policy(&Distro::Arch, &future.format("%Y.%m.%d").to_string()).is_err()
+        );
     }
 }

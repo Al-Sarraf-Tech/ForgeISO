@@ -34,9 +34,7 @@ impl SeverityCount {
             Severity::Critical => self.critical > 0,
             Severity::High => self.critical > 0 || self.high > 0,
             Severity::Medium => self.critical > 0 || self.high > 0 || self.medium > 0,
-            Severity::Low => {
-                self.critical > 0 || self.high > 0 || self.medium > 0 || self.low > 0
-            }
+            Severity::Low => self.critical > 0 || self.high > 0 || self.medium > 0 || self.low > 0,
         }
     }
 }
@@ -59,7 +57,11 @@ pub struct ScanSummary {
     pub strict_failed: bool,
 }
 
-pub async fn run_scans(target: &Path, out_dir: &Path, policy: &ScanPolicy) -> EngineResult<ScanSummary> {
+pub async fn run_scans(
+    target: &Path,
+    out_dir: &Path,
+    policy: &ScanPolicy,
+) -> EngineResult<ScanSummary> {
     fs::create_dir_all(out_dir).await?;
 
     let mut summary = ScanSummary {
@@ -98,7 +100,11 @@ pub async fn run_scans(target: &Path, out_dir: &Path, policy: &ScanPolicy) -> En
     if policy.enable_syft_grype {
         let syft = run_external_or_stub(
             "syft",
-            vec![target.display().to_string(), "-o".to_string(), "json".to_string()],
+            vec![
+                target.display().to_string(),
+                "-o".to_string(),
+                "json".to_string(),
+            ],
             out_dir.join("syft.json"),
         )
         .await?;
@@ -106,7 +112,11 @@ pub async fn run_scans(target: &Path, out_dir: &Path, policy: &ScanPolicy) -> En
 
         let grype = run_external_or_stub(
             "grype",
-            vec![target.display().to_string(), "-o".to_string(), "json".to_string()],
+            vec![
+                target.display().to_string(),
+                "-o".to_string(),
+                "json".to_string(),
+            ],
             out_dir.join("grype.json"),
         )
         .await?;
@@ -195,7 +205,11 @@ async fn write_simple_sbom(target: &Path, out: &Path, format: &str) -> EngineRes
     Ok(())
 }
 
-async fn run_external_or_stub(tool: &str, args: Vec<String>, output: PathBuf) -> EngineResult<ToolReport> {
+async fn run_external_or_stub(
+    tool: &str,
+    args: Vec<String>,
+    output: PathBuf,
+) -> EngineResult<ToolReport> {
     if which::which(tool).is_err() {
         fs::write(
             &output,

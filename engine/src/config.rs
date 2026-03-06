@@ -254,7 +254,9 @@ impl BuildConfig {
 
     pub fn validate(&self) -> EngineResult<()> {
         if self.name.trim().is_empty() {
-            return Err(EngineError::InvalidConfig("name cannot be empty".to_string()));
+            return Err(EngineError::InvalidConfig(
+                "name cannot be empty".to_string(),
+            ));
         }
 
         if self.release.version.trim().is_empty() {
@@ -286,7 +288,9 @@ impl BuildConfig {
         }
 
         if self.ssh.port == 0 {
-            return Err(EngineError::InvalidConfig("ssh.port cannot be 0".to_string()));
+            return Err(EngineError::InvalidConfig(
+                "ssh.port cannot be 0".to_string(),
+            ));
         }
 
         if self.ssh.max_auth_tries == 0 {
@@ -302,15 +306,24 @@ impl BuildConfig {
         }
 
         if self.remote_agent.enabled {
-            if self.remote_agent.endpoint.as_ref().is_none_or(|v| v.trim().is_empty()) {
+            if self
+                .remote_agent
+                .endpoint
+                .as_ref()
+                .is_none_or(|v| v.trim().is_empty())
+            {
                 return Err(EngineError::InvalidConfig(
                     "remote_agent.endpoint is required when remote_agent.enabled=true".to_string(),
                 ));
             }
-            if self.remote_agent.job_token.as_ref().is_none_or(|v| v.trim().is_empty()) {
+            if self
+                .remote_agent
+                .job_token
+                .as_ref()
+                .is_none_or(|v| v.trim().is_empty())
+            {
                 return Err(EngineError::InvalidConfig(
-                    "remote_agent.job_token is required when remote_agent.enabled=true"
-                        .to_string(),
+                    "remote_agent.job_token is required when remote_agent.enabled=true".to_string(),
                 ));
             }
         }
