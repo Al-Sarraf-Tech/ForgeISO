@@ -246,15 +246,27 @@ jobs:
           - platform: windows-x86_64
             runner: windows-2022
             exe_suffix: ".exe"
+            rust_target: x86_64-pc-windows-msvc
+            goos: windows
+            goarch: amd64
           - platform: macos-x86_64
-            runner: macos-13
+            runner: macos-14
             exe_suffix: ""
+            rust_target: x86_64-apple-darwin
+            goos: darwin
+            goarch: amd64
           - platform: macos-arm64
             runner: macos-14
             exe_suffix: ""
+            rust_target: aarch64-apple-darwin
+            goos: darwin
+            goarch: arm64
     env:
       VERSION: ${{ needs.release_gate.outputs.version }}
       EXE_SUFFIX: ${{ matrix.exe_suffix }}
+      RUST_TARGET: ${{ matrix.rust_target }}
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
     defaults:
       run:
         shell: bash
@@ -262,6 +274,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust target
+        run: rustup target add "${RUST_TARGET}"
 
       - uses: actions/setup-go@v5
         with:
@@ -285,12 +300,12 @@ jobs:
           key: release-cargo-${{ matrix.platform }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build Rust CLI/TUI
-        run: cargo build --release -p forgeiso-cli -p forgeiso-tui
+        run: cargo build --release --target "${RUST_TARGET}" -p forgeiso-cli -p forgeiso-tui
 
       - name: Build Go agent
         run: |
           cd agent
-          go build -trimpath -ldflags="-s -w" -o ../target/release/forgeiso-agent${EXE_SUFFIX} ./cmd/forgeiso-agent
+          GOOS="${GOOS}" GOARCH="${GOARCH}" go build -trimpath -ldflags="-s -w" -o ../target/release/forgeiso-agent${EXE_SUFFIX} ./cmd/forgeiso-agent
 
       - name: Build GUI backend/frontend
         run: |
@@ -298,16 +313,18 @@ jobs:
           npm ci
           npm run build
           cd src-tauri
-          cargo build --release
+          cargo build --release --target "${RUST_TARGET}"
 
       - name: Stage platform binaries
         run: |
           out_dir="dist/artifacts/${{ matrix.platform }}"
+          target_dir="target/${RUST_TARGET}/release"
+          gui_target_dir="gui/src-tauri/target/${RUST_TARGET}/release"
           mkdir -p "${out_dir}"
-          cp "target/release/forgeiso${EXE_SUFFIX}" "${out_dir}/forgeiso${EXE_SUFFIX}"
-          cp "target/release/forgeiso-tui${EXE_SUFFIX}" "${out_dir}/forgeiso-tui${EXE_SUFFIX}"
+          cp "${target_dir}/forgeiso${EXE_SUFFIX}" "${out_dir}/forgeiso${EXE_SUFFIX}"
+          cp "${target_dir}/forgeiso-tui${EXE_SUFFIX}" "${out_dir}/forgeiso-tui${EXE_SUFFIX}"
           cp "target/release/forgeiso-agent${EXE_SUFFIX}" "${out_dir}/forgeiso-agent${EXE_SUFFIX}"
-          cp "gui/src-tauri/target/release/forgeiso-gui${EXE_SUFFIX}" "${out_dir}/forgeiso-gui${EXE_SUFFIX}"
+          cp "${gui_target_dir}/forgeiso-gui${EXE_SUFFIX}" "${out_dir}/forgeiso-gui${EXE_SUFFIX}"
           {
             echo "version=${VERSION}"
             echo "commit=${GITHUB_SHA}"

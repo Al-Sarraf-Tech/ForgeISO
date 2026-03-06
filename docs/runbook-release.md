@@ -26,8 +26,8 @@ The release workflow builds and publishes:
 - GUI build artifact (platform dependent)
 - `forgeiso-binaries-<version>-linux-x86_64.tar.gz`
 - `forgeiso-binaries-<version>-windows-x86_64.zip`
-- `forgeiso-binaries-<version>-macos-x86_64.tar.gz`
 - `forgeiso-binaries-<version>-macos-arm64.tar.gz`
+- `forgeiso-binaries-<version>-macos-x86_64.tar.gz`
 - `forgeiso-<version>-linux-x86_64.tar.gz`
 - `forgeiso-<version>-linux-x86_64.tar.zst`
 - `forgeiso_<version>_amd64.deb` (APT)
