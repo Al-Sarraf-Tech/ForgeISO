@@ -436,12 +436,11 @@ jobs:
             apt-utils \
             dpkg-dev \
             createrepo-c \
-            gnupg
-          if apt-cache show pacman-package-manager >/dev/null 2>&1; then
-            sudo apt-get install -y pacman-package-manager
-          else
-            sudo apt-get install -y pacman
-          fi
+            gnupg \
+            libarchive-tools \
+            makepkg \
+            fakeroot \
+            pacman-package-manager
 
       - name: Prepare clean release directory
         run: scripts/release/clean-release-dir.sh
