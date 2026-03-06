@@ -3,6 +3,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
+clean_path() {
+  local path="$1"
+  if [[ -e "$path" ]]; then
+    chmod -R u+w "$path" 2>/dev/null || true
+    rm -rf "$path"
+  fi
+}
+
 cargo test -p forgeiso-engine --offline
 
 mkdir -p artifacts/integration
@@ -11,6 +19,8 @@ cargo run -p forgeiso-cli --offline -- inspect --source README.md > artifacts/in
 
 if command -v grub2-mkrescue >/dev/null 2>&1 || command -v grub-mkrescue >/dev/null 2>&1; then
   smoke_dir="artifacts/integration/smoke"
+  clean_path "$smoke_dir/out"
+  clean_path "$smoke_dir/extract"
   eval "$(scripts/test/make-smoke-iso.sh "$smoke_dir")"
 
   cargo run -p forgeiso-cli --offline -- inspect --source "$ISO" --json > "$smoke_dir/inspect.json"

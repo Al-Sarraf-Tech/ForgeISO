@@ -3,6 +3,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
+clean_path() {
+  local path="$1"
+  if [[ -e "$path" ]]; then
+    chmod -R u+w "$path" 2>/dev/null || true
+    rm -rf "$path"
+  fi
+}
+
 mkdir -p artifacts/e2e
 
 fake_iso=artifacts/e2e/fake.iso
@@ -19,6 +27,7 @@ fi
 
 if command -v qemu-system-x86_64 >/dev/null 2>&1 && { command -v grub2-mkrescue >/dev/null 2>&1 || command -v grub-mkrescue >/dev/null 2>&1; }; then
   smoke_dir="artifacts/e2e/smoke"
+  clean_path "$smoke_dir/out"
   eval "$(scripts/test/make-smoke-iso.sh "$smoke_dir")"
 
   cargo run -p forgeiso-cli --offline -- build \
