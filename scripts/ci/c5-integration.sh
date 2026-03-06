@@ -1,8 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /workspace
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT_DIR"
 
-cargo test -p forgeiso-engine
+cargo test -p forgeiso-engine --offline
 
 mkdir -p artifacts/integration
-cargo run -p forgeiso-cli -- doctor --json > artifacts/integration/doctor.json
+cargo run -p forgeiso-cli --offline -- doctor --json > artifacts/integration/doctor.json
+cargo run -p forgeiso-cli --offline -- inspect --source README.md > artifacts/integration/inspect-invalid.txt || true
+
+if command -v grub2-mkrescue >/dev/null 2>&1 || command -v grub-mkrescue >/dev/null 2>&1; then
+  smoke_dir="artifacts/integration/smoke"
+  eval "$(scripts/test/make-smoke-iso.sh "$smoke_dir")"
+
+  cargo run -p forgeiso-cli --offline -- inspect --source "$ISO" --json > "$smoke_dir/inspect.json"
+  cargo run -p forgeiso-cli --offline -- build \
+    --source "$ISO" \
+    --out "$smoke_dir/out" \
+    --name ci-integration \
+    --overlay "$OVERLAY" \
+    --profile minimal \
+    --json > "$smoke_dir/build.json"
+  cargo run -p forgeiso-cli --offline -- report --build "$smoke_dir/out" --format html > "$smoke_dir/report-path.txt"
+
+  extract_dir="$smoke_dir/extract"
+  mkdir -p "$extract_dir"
+  xorriso -osirrox on -indev "$smoke_dir/out/ci-integration.iso" -extract / "$extract_dir" >/dev/null 2>&1
+  test -f "$extract_dir/forgeiso-build.json"
+  test -f "$extract_dir/LOCAL-OVERLAY.txt"
+fi

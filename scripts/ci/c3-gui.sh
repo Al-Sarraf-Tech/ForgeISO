@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /workspace/gui
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT_DIR/gui"
 
-npm ci
+if [[ ! -d node_modules ]]; then
+  npm ci --offline
+fi
 npm run lint
 npm run build
 
-cd /workspace/gui/src-tauri
-cargo check
+cd "$ROOT_DIR/gui/src-tauri"
+cargo check --offline
