@@ -1,6 +1,6 @@
 SHELL := /usr/bin/env bash
 
-.PHONY: dev test build release package ci-local fmt lint clean
+.PHONY: dev test build release package package-repos ci-local fmt lint clean
 
 dev:
 	@echo "Starting ForgeISO developer workflow"
@@ -28,6 +28,11 @@ package:
 	scripts/release/package-rpm.sh
 	scripts/release/package-deb.sh
 	scripts/release/package-pacman.sh
+	scripts/release/build-repos.sh
+
+package-repos:
+	@echo "Generating repository metadata for apt, dnf/yum, and pacman"
+	scripts/release/build-repos.sh
 
 ci-local:
 	docker compose -f docker-compose.ci.yml up --build --abort-on-container-exit --exit-code-from c1
