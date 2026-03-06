@@ -100,6 +100,20 @@ Release packaging outputs include:
 - `.deb` package for APT-based systems
 - `.rpm` package for DNF/YUM-based systems
 - `.pkg.tar.zst` package for Pacman-based systems
+- generated repo metadata bundle: `forgeiso-repos-<version>.tar.gz` for apt/dnf/pacman feeds
+
+Install from released artifacts:
+
+```bash
+# Debian/Ubuntu/Mint
+sudo apt install ./forgeiso_<version>_amd64.deb
+
+# Fedora/RHEL family
+sudo dnf install ./forgeiso-<version>-1*.rpm
+
+# Arch family
+sudo pacman -U ./forgeiso-<version>-1-x86_64.pkg.tar.zst
+```
 
 ## Enterprise operations
 

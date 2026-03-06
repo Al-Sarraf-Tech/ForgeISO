@@ -2,7 +2,7 @@ name: forgeiso-ci
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
     tags:
       - "v*.*.*"
   pull_request:
@@ -95,7 +95,7 @@ jobs:
           docker run --rm \
             -v "$PWD:/workspace" \
             forgeiso-${{ matrix.id }} \
-            bash -lc "${{ matrix.script }}"
+            bash -c "${{ matrix.script }}"
 
       - name: Upload artifacts
         if: always()
@@ -123,7 +123,11 @@ jobs:
           sudo apt-get install -y \
             rpm \
             dpkg-dev \
+            apt-utils \
+            createrepo-c \
+            pacman-package-manager \
             ruby-full \
+            gnupg \
             pkg-config \
             libssl-dev \
             libgtk-3-dev \
@@ -165,6 +169,7 @@ jobs:
           scripts/release/package-rpm.sh "${VERSION}" "1"
           scripts/release/package-deb.sh "${VERSION}"
           scripts/release/package-pacman.sh "${VERSION}"
+          scripts/release/build-repos.sh "${VERSION}"
           cp gui/src-tauri/target/release/forgeiso-gui dist/release/ || true
           sha256sum dist/release/* > dist/release/checksums.txt
 

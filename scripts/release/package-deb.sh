@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if ! command -v dpkg-deb >/dev/null 2>&1; then
+  echo "dpkg-deb is required" >&2
+  exit 1
+fi
+
 VERSION="${1:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo 0.1.0)}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PKG_DIR="${ROOT_DIR}/dist/deb/forgeiso_${VERSION}_amd64"
