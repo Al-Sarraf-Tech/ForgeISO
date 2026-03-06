@@ -148,7 +148,8 @@ fn enrich_with_xorriso(path: &Path, info: &mut IsoMetadata) -> EngineResult<()> 
 }
 
 fn extract_optional_file(path: &Path, iso_path: &str) -> EngineResult<Option<String>> {
-    let tmp = std::env::temp_dir().join(format!("forgeiso-extract-{}", uuid::Uuid::new_v4()));
+    let tmp = crate::orchestrator::cache_subdir("extract")?
+        .join(format!("forgeiso-extract-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&tmp)?;
     let out = tmp.join("extract.txt");
     let result = crate::orchestrator::run_command_capture(

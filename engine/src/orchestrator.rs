@@ -122,7 +122,13 @@ impl ForgeIsoEngine {
             EventPhase::Inspect,
             format!("resolving ISO source {source}"),
         ));
-        let cache_root = cache_dir.unwrap_or_else(|| Path::new("."));
+        let owned_cache_root;
+        let cache_root = if let Some(cache_dir) = cache_dir {
+            cache_dir
+        } else {
+            owned_cache_root = default_cache_root()?;
+            owned_cache_root.as_path()
+        };
         let resolved = self
             .resolve_source(&IsoSource::from_raw(source.to_string()), cache_root)
             .await?;
@@ -452,6 +458,36 @@ impl ForgeIsoEngine {
             }
         }
     }
+}
+
+pub fn default_cache_root() -> EngineResult<PathBuf> {
+    if let Ok(path) = std::env::var("FORGEISO_CACHE_DIR") {
+        let path = PathBuf::from(path);
+        std::fs::create_dir_all(&path)?;
+        return Ok(path);
+    }
+
+    if let Ok(path) = std::env::var("XDG_CACHE_HOME") {
+        let path = PathBuf::from(path).join("forgeiso");
+        std::fs::create_dir_all(&path)?;
+        return Ok(path);
+    }
+
+    if let Ok(home) = std::env::var("HOME") {
+        let path = PathBuf::from(home).join(".cache").join("forgeiso");
+        std::fs::create_dir_all(&path)?;
+        return Ok(path);
+    }
+
+    let path = std::env::current_dir()?.join(".forgeiso-cache");
+    std::fs::create_dir_all(&path)?;
+    Ok(path)
+}
+
+pub fn cache_subdir(name: &str) -> EngineResult<PathBuf> {
+    let path = default_cache_root()?.join(name);
+    std::fs::create_dir_all(&path)?;
+    Ok(path)
 }
 
 pub fn run_command_capture(

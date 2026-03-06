@@ -28,9 +28,8 @@ async fn doctor(engine: State<'_, ForgeIsoEngine>) -> Result<serde_json::Value, 
 
 #[tauri::command]
 async fn inspect_source(engine: State<'_, ForgeIsoEngine>, source: String) -> Result<serde_json::Value, String> {
-    let cache = std::env::temp_dir().join("forgeiso-gui-inspect");
     let value = engine
-        .inspect_source(&source, Some(&cache))
+        .inspect_source(&source, None)
         .await
         .map_err(|e| e.to_string())?;
     serde_json::to_value(value).map_err(|e| e.to_string())

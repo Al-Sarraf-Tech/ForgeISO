@@ -164,8 +164,7 @@ impl App {
             self.status = "Source is required".to_string();
             return;
         }
-        let cache = std::env::temp_dir().join("forgeiso-tui-inspect");
-        match engine.inspect_source(&self.source, Some(&cache)).await {
+        match engine.inspect_source(&self.source, None).await {
             Ok(info) => {
                 self.inspection = vec![
                     format!("Source path: {}", info.source_path.display()),
