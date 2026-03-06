@@ -90,8 +90,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::Inspect { source, json } => {
-            let cache_dir = std::env::temp_dir().join("forgeiso-inspect-cache");
-            let info = engine.inspect_source(&source, Some(&cache_dir)).await?;
+            let info = engine.inspect_source(&source, None).await?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&info)?);
             } else {
