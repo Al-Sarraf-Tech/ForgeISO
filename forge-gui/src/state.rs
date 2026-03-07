@@ -112,6 +112,11 @@ pub struct InjectState {
     pub firewall_policy: String,
     pub allow_ports: String,
     pub deny_ports: String,
+    // User / access
+    pub user_groups: String, // newline-separated
+    // Services
+    pub enable_services: String,  // newline-separated
+    pub disable_services: String, // newline-separated
     // Containers
     pub docker: bool,
     pub podman: bool,
@@ -157,6 +162,9 @@ impl Default for InjectState {
             firewall_policy: String::new(),
             allow_ports: String::new(),
             deny_ports: String::new(),
+            user_groups: String::new(),
+            enable_services: String::new(),
+            disable_services: String::new(),
             docker: false,
             podman: false,
             swap_size_mb: String::new(),

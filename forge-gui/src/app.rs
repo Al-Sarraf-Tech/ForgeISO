@@ -1476,6 +1476,66 @@ impl ForgeApp {
                     ui.separator();
                     ui.add_space(8.0);
 
+                    // User & Services
+                    ui.label(
+                        RichText::new("User & Services")
+                            .strong()
+                            .size(14.0)
+                            .color(TEXT),
+                    );
+                    ui.add_space(4.0);
+                    egui::Grid::new("user_svc_grid")
+                        .num_columns(3)
+                        .spacing([16.0, 6.0])
+                        .show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new("Extra groups (one/line)")
+                                        .size(12.0)
+                                        .color(MUTED),
+                                );
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::multiline(&mut self.inject.user_groups)
+                                        .hint_text("docker\nsudo")
+                                        .desired_rows(3)
+                                        .desired_width(f32::INFINITY),
+                                );
+                            });
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new("Enable services (one/line)")
+                                        .size(12.0)
+                                        .color(MUTED),
+                                );
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::multiline(&mut self.inject.enable_services)
+                                        .hint_text("docker\nnginx")
+                                        .desired_rows(3)
+                                        .desired_width(f32::INFINITY),
+                                );
+                            });
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new("Disable services (one/line)")
+                                        .size(12.0)
+                                        .color(MUTED),
+                                );
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::multiline(&mut self.inject.disable_services)
+                                        .hint_text("snapd\ncup.socket")
+                                        .desired_rows(3)
+                                        .desired_width(f32::INFINITY),
+                                );
+                            });
+                            ui.end_row();
+                        });
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(8.0);
+
                     // Firewall & Containers
                     ui.label(
                         RichText::new("Firewall & Containers")
@@ -2805,15 +2865,18 @@ fn build_inject_config(inject: &InjectState) -> InjectConfig {
         wallpaper: opt(&inject.wallpaper_path).map(PathBuf::from),
         extra_late_commands: lines(&inject.late_commands),
         no_user_interaction: inject.no_user_interaction,
-        user: UserConfig::default(),
+        user: UserConfig {
+            groups: lines(&inject.user_groups),
+            ..Default::default()
+        },
         firewall: FirewallConfig {
             enabled: inject.firewall_enabled,
             default_policy: opt(&inject.firewall_policy),
             allow_ports: lines(&inject.allow_ports),
             deny_ports: lines(&inject.deny_ports),
         },
-        enable_services: Vec::new(),
-        disable_services: Vec::new(),
+        enable_services: lines(&inject.enable_services),
+        disable_services: lines(&inject.disable_services),
         sysctl: Vec::new(),
         swap: inject
             .swap_size_mb

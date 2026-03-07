@@ -111,6 +111,8 @@ enum Commands {
         #[arg(long)]
         ssh_password_auth: bool,
         #[arg(long)]
+        no_ssh_password_auth: bool,
+        #[arg(long)]
         ssh_install_server: bool,
         #[arg(long)]
         no_ssh_install_server: bool,
@@ -449,6 +451,7 @@ async fn main() -> anyhow::Result<()> {
             ssh_key,
             ssh_key_file,
             ssh_password_auth,
+            no_ssh_password_auth,
             ssh_install_server,
             no_ssh_install_server,
             dns,
@@ -532,12 +535,20 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
-            // Parse sysctl "key=value" pairs
+            // Parse sysctl "key=value" pairs — warn on malformed entries
             let sysctl_pairs: Vec<(String, String)> = sysctl
                 .iter()
                 .filter_map(|s| {
                     let mut parts = s.splitn(2, '=');
-                    Some((parts.next()?.to_string(), parts.next()?.to_string()))
+                    match (parts.next(), parts.next()) {
+                        (Some(k), Some(v)) => Some((k.to_string(), v.to_string())),
+                        _ => {
+                            eprintln!(
+                                "WARNING: --sysctl {s:?} ignored (expected key=value format)"
+                            );
+                            None
+                        }
+                    }
                 })
                 .collect();
 
@@ -552,7 +563,13 @@ async fn main() -> anyhow::Result<()> {
                 realname,
                 ssh: SshConfig {
                     authorized_keys: all_ssh_keys,
-                    allow_password_auth: if ssh_password_auth { Some(true) } else { None },
+                    allow_password_auth: if ssh_password_auth {
+                        Some(true)
+                    } else if no_ssh_password_auth {
+                        Some(false)
+                    } else {
+                        None
+                    },
                     install_server: if ssh_install_server {
                         Some(true)
                     } else if no_ssh_install_server {
@@ -596,11 +613,21 @@ async fn main() -> anyhow::Result<()> {
                 enable_services: enable_service,
                 disable_services: disable_service,
                 sysctl: sysctl_pairs,
-                swap: swap_size.map(|mb| SwapConfig {
-                    size_mb: mb,
-                    filename: swap_file,
-                    swappiness,
-                }),
+                swap: {
+                    if swap_size.is_none() {
+                        if swap_file.is_some() {
+                            eprintln!("WARNING: --swap-file ignored without --swap-size");
+                        }
+                        if swappiness.is_some() {
+                            eprintln!("WARNING: --swappiness ignored without --swap-size");
+                        }
+                    }
+                    swap_size.map(|mb| SwapConfig {
+                        size_mb: mb,
+                        filename: swap_file,
+                        swappiness,
+                    })
+                },
                 apt_repos: apt_repo,
                 containers: ContainerConfig {
                     docker,
