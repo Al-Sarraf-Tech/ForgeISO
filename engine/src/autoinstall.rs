@@ -380,6 +380,10 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
         layout_map.insert("name".into(), serde_yaml::Value::String(layout.clone()));
         if cfg.encrypt {
             if let Some(passphrase) = &cfg.encrypt_passphrase {
+                // NOTE: Ubuntu cloud-init autoinstall requires the LUKS passphrase in
+                // plaintext — there is no pre-hashing option for the storage.layout
+                // password field. The caller must treat this ISO as sensitive material
+                // and restrict access accordingly (chmod 600, encrypted transport, etc.).
                 layout_map.insert(
                     "password".into(),
                     serde_yaml::Value::String(passphrase.clone()),
@@ -664,6 +668,10 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
         layout_map.insert("name".into(), serde_yaml::Value::String(layout.clone()));
         if cfg.encrypt {
             if let Some(passphrase) = &cfg.encrypt_passphrase {
+                // NOTE: Ubuntu cloud-init autoinstall requires the LUKS passphrase in
+                // plaintext — there is no pre-hashing option for the storage.layout
+                // password field. The caller must treat this ISO as sensitive material
+                // and restrict access accordingly (chmod 600, encrypted transport, etc.).
                 layout_map.insert(
                     "password".into(),
                     serde_yaml::Value::String(passphrase.clone()),
