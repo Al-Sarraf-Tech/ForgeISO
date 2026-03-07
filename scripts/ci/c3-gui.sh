@@ -5,20 +5,15 @@ mkdir -p "$ROOT_DIR/.cargo-tmp"
 export TMPDIR="$ROOT_DIR/.cargo-tmp"
 cd "$ROOT_DIR/gui"
 
-offline_flag=()
-if [[ "${CI:-false}" != "true" ]]; then
-  offline_flag+=(--offline)
-fi
-
-if [[ ! -d node_modules ]]; then
-  if [[ "${CI:-false}" == "true" ]]; then
-    npm ci
-  else
-    npm ci --offline
-  fi
+if [[ "${CI:-false}" == "true" ]]; then
+  # In CI the node_modules volume is always a fresh named volume (empty mount
+  # point); the -d check passes even when empty, so always install here.
+  npm ci
+elif [[ ! -f node_modules/.bin/tsc ]]; then
+  npm ci --offline
 fi
 npm run lint
 npm run build
 
 cd "$ROOT_DIR/gui/src-tauri"
-cargo check "${offline_flag[@]}"
+cargo check
