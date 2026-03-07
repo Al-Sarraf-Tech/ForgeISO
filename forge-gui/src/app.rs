@@ -1500,6 +1500,11 @@ impl ForgeApp {
                                         .size(12.0)
                                         .color(MUTED),
                                 );
+                                ui.label(
+                                    RichText::new("Runs early, before packages install")
+                                        .size(10.0)
+                                        .color(MUTED),
+                                );
                                 ui.add_enabled(
                                     !running,
                                     egui::TextEdit::multiline(&mut self.inject.run_commands)
@@ -1512,6 +1517,11 @@ impl ForgeApp {
                                 ui.label(
                                     RichText::new("Late commands (one/line)")
                                         .size(12.0)
+                                        .color(MUTED),
+                                );
+                                ui.label(
+                                    RichText::new("Runs post-install via curtin in-target")
+                                        .size(10.0)
                                         .color(MUTED),
                                 );
                                 ui.add_enabled(
