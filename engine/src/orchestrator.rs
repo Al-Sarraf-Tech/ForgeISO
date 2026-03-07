@@ -1361,18 +1361,8 @@ fn get_iso_file_list(iso_path: &Path) -> EngineResult<std::collections::HashMap<
 fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> serde_json::Value {
     use serde_json::{json, Value};
 
-    let packages: Value = cfg
-        .extra_packages
-        .iter()
-        .cloned()
-        .collect::<Vec<_>>()
-        .into();
-    let services: Value = cfg
-        .enable_services
-        .iter()
-        .cloned()
-        .collect::<Vec<_>>()
-        .into();
+    let packages: Value = cfg.extra_packages.to_vec().into();
+    let services: Value = cfg.enable_services.to_vec().into();
 
     let mut map = serde_json::Map::new();
     if let Some(h) = &cfg.hostname {
