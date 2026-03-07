@@ -1094,6 +1094,7 @@ impl ForgeApp {
                     .color(TEXT),
             );
             ui.add_space(8.0);
+            let col2_w = (ui.available_width() - 16.0) / 2.0;
             egui::Grid::new("inject_grid")
                 .num_columns(2)
                 .spacing([16.0, 8.0])
@@ -1105,7 +1106,7 @@ impl ForgeApp {
                                 !running,
                                 egui::TextEdit::singleline(&mut self.inject.source)
                                     .hint_text("/path/to/ubuntu.iso or https://…")
-                                    .desired_width(ui.available_width() - 34.0),
+                                    .desired_width(col2_w - 42.0),
                             );
                             if ui
                                 .add_enabled(!running, egui::Button::new("📂"))
@@ -1123,7 +1124,7 @@ impl ForgeApp {
                                 !running,
                                 egui::TextEdit::singleline(&mut self.inject.output_dir)
                                     .hint_text("~/.cache/forgeiso")
-                                    .desired_width(ui.available_width() - 34.0),
+                                    .desired_width(col2_w - 42.0),
                             );
                             if ui.add_enabled(!running, egui::Button::new("📂")).clicked() {
                                 worker::pick_folder(PickTarget::InjectOutputDir, self.tx.clone());
@@ -1137,7 +1138,7 @@ impl ForgeApp {
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.out_name)
                                 .hint_text("forgeiso-local.iso")
-                                .desired_width(ui.available_width()),
+                                .desired_width(col2_w),
                         );
                     });
                     ui.vertical(|ui| {
@@ -1146,7 +1147,7 @@ impl ForgeApp {
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.output_label)
                                 .hint_text("FORGEISO")
-                                .desired_width(ui.available_width()),
+                                .desired_width(col2_w),
                         );
                     });
                     ui.end_row();
@@ -1170,7 +1171,7 @@ impl ForgeApp {
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.expected_sha256)
                                 .hint_text("abcdef… (leave blank to skip check)")
-                                .desired_width(ui.available_width()),
+                                .desired_width(col2_w),
                         );
                     });
                     ui.end_row();
@@ -1179,6 +1180,7 @@ impl ForgeApp {
             ui.add_space(12.0);
             ui.label(RichText::new("Identity").strong().size(15.0).color(TEXT));
             ui.add_space(6.0);
+            let col2_w = (ui.available_width() - 16.0) / 2.0;
             egui::Grid::new("identity_grid")
                 .num_columns(2)
                 .spacing([16.0, 8.0])
@@ -1189,7 +1191,7 @@ impl ForgeApp {
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.hostname)
                                 .hint_text("my-server")
-                                .desired_width(ui.available_width()),
+                                .desired_width(col2_w),
                         );
                     });
                     ui.vertical(|ui| {
@@ -1198,7 +1200,7 @@ impl ForgeApp {
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.username)
                                 .hint_text("admin")
-                                .desired_width(ui.available_width()),
+                                .desired_width(col2_w),
                         );
                     });
                     ui.end_row();
@@ -1209,7 +1211,7 @@ impl ForgeApp {
                             egui::TextEdit::singleline(&mut self.inject.password)
                                 .password(true)
                                 .hint_text("•••••")
-                                .desired_width(ui.available_width()),
+                                .desired_width(col2_w),
                         );
                     });
                     ui.vertical(|ui| {
@@ -1223,7 +1225,7 @@ impl ForgeApp {
                             egui::TextEdit::singleline(&mut self.inject.password_confirm)
                                 .password(true)
                                 .hint_text("•••••")
-                                .desired_width(ui.available_width()),
+                                .desired_width(col2_w),
                         );
                         if mismatch {
                             ui.label(
@@ -1240,7 +1242,7 @@ impl ForgeApp {
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.realname)
                                 .hint_text("John Doe")
-                                .desired_width(ui.available_width()),
+                                .desired_width(col2_w),
                         );
                     });
                     ui.end_row();
@@ -1281,6 +1283,7 @@ impl ForgeApp {
                     // Network
                     ui.label(RichText::new("Network").strong().size(14.0).color(TEXT));
                     ui.add_space(4.0);
+                    let col2_w = (ui.available_width() - 16.0) / 2.0;
                     egui::Grid::new("net_grid")
                         .num_columns(2)
                         .spacing([16.0, 6.0])
@@ -1296,7 +1299,7 @@ impl ForgeApp {
                                     egui::TextEdit::multiline(&mut self.inject.dns_servers)
                                         .hint_text("1.1.1.1\n8.8.8.8")
                                         .desired_rows(2)
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.vertical(|ui| {
@@ -1310,7 +1313,7 @@ impl ForgeApp {
                                     egui::TextEdit::multiline(&mut self.inject.ntp_servers)
                                         .hint_text("pool.ntp.org")
                                         .desired_rows(2)
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.end_row();
@@ -1320,7 +1323,7 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.static_ip)
                                         .hint_text("192.168.1.10/24")
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.vertical(|ui| {
@@ -1329,12 +1332,12 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.gateway)
                                         .hint_text("192.168.1.1")
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.end_row();
                         });
-                    ui.end_row();
+                    ui.add_space(6.0);
                     ui.vertical(|ui| {
                         ui.label(RichText::new("HTTP proxy").size(12.0).color(MUTED));
                         ui.add_enabled(
@@ -1369,6 +1372,7 @@ impl ForgeApp {
                     // System
                     ui.label(RichText::new("System").strong().size(14.0).color(TEXT));
                     ui.add_space(4.0);
+                    let col2_w = (ui.available_width() - 16.0) / 2.0;
                     egui::Grid::new("sys_grid")
                         .num_columns(2)
                         .spacing([16.0, 6.0])
@@ -1379,7 +1383,7 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.timezone)
                                         .hint_text("America/New_York")
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.vertical(|ui| {
@@ -1388,7 +1392,7 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.locale)
                                         .hint_text("en_US.UTF-8")
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.end_row();
@@ -1398,7 +1402,7 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.keyboard_layout)
                                         .hint_text("us")
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.vertical(|ui| {
@@ -1407,7 +1411,7 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.apt_mirror)
                                         .hint_text("http://archive.ubuntu.com/ubuntu")
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.end_row();
@@ -1441,7 +1445,7 @@ impl ForgeApp {
                                         !running,
                                         egui::TextEdit::singleline(&mut self.inject.wallpaper_path)
                                             .hint_text("/path/to/wallpaper.png")
-                                            .desired_width(ui.available_width() - 34.0),
+                                            .desired_width(col2_w - 42.0),
                                     );
                                     if ui.add_enabled(!running, egui::Button::new("📂")).clicked()
                                     {
@@ -1466,6 +1470,7 @@ impl ForgeApp {
                             .color(TEXT),
                     );
                     ui.add_space(4.0);
+                    let col2_w = (ui.available_width() - 16.0) / 2.0;
                     egui::Grid::new("pkg_grid")
                         .num_columns(2)
                         .spacing([16.0, 6.0])
@@ -1481,7 +1486,7 @@ impl ForgeApp {
                                     egui::TextEdit::multiline(&mut self.inject.packages)
                                         .hint_text("curl\nvim\ngit")
                                         .desired_rows(3)
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.vertical(|ui| {
@@ -1495,7 +1500,7 @@ impl ForgeApp {
                                     egui::TextEdit::multiline(&mut self.inject.apt_repos)
                                         .hint_text("ppa:user/repo\ndeb [arch=amd64] https://example.com/repo focal main")
                                         .desired_rows(3)
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.end_row();
@@ -1515,7 +1520,7 @@ impl ForgeApp {
                                     egui::TextEdit::multiline(&mut self.inject.run_commands)
                                         .hint_text("echo hello")
                                         .desired_rows(3)
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.vertical(|ui| {
@@ -1534,7 +1539,7 @@ impl ForgeApp {
                                     egui::TextEdit::multiline(&mut self.inject.late_commands)
                                         .hint_text("curtin in-target -- apt-get upgrade -y")
                                         .desired_rows(3)
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col2_w),
                                 );
                             });
                             ui.end_row();
@@ -1551,6 +1556,7 @@ impl ForgeApp {
                             .color(TEXT),
                     );
                     ui.add_space(4.0);
+                    let col3_w = (ui.available_width() - 32.0) / 3.0;
                     egui::Grid::new("user_svc_grid")
                         .num_columns(3)
                         .spacing([16.0, 6.0])
@@ -1566,7 +1572,7 @@ impl ForgeApp {
                                     egui::TextEdit::multiline(&mut self.inject.user_groups)
                                         .hint_text("docker\nsudo")
                                         .desired_rows(3)
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col3_w),
                                 );
                             });
                             ui.vertical(|ui| {
@@ -1580,7 +1586,7 @@ impl ForgeApp {
                                     egui::TextEdit::multiline(&mut self.inject.enable_services)
                                         .hint_text("docker\nnginx")
                                         .desired_rows(3)
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col3_w),
                                 );
                             });
                             ui.vertical(|ui| {
@@ -1594,7 +1600,7 @@ impl ForgeApp {
                                     egui::TextEdit::multiline(&mut self.inject.disable_services)
                                         .hint_text("snapd\ncup.socket")
                                         .desired_rows(3)
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(col3_w),
                                 );
                             });
                             ui.end_row();
@@ -1634,6 +1640,7 @@ impl ForgeApp {
                                 });
                         });
                         ui.add_space(4.0);
+                        let col2_w = (ui.available_width() - 16.0) / 2.0;
                         egui::Grid::new("fw_grid")
                             .num_columns(2)
                             .spacing([16.0, 6.0])
@@ -1649,7 +1656,7 @@ impl ForgeApp {
                                         egui::TextEdit::multiline(&mut self.inject.allow_ports)
                                             .hint_text("22/tcp\n80/tcp")
                                             .desired_rows(2)
-                                            .desired_width(ui.available_width()),
+                                            .desired_width(col2_w),
                                     );
                                 });
                                 ui.vertical(|ui| {
@@ -1663,7 +1670,7 @@ impl ForgeApp {
                                         egui::TextEdit::multiline(&mut self.inject.deny_ports)
                                             .hint_text("23/tcp")
                                             .desired_rows(2)
-                                            .desired_width(ui.available_width()),
+                                            .desired_width(col2_w),
                                     );
                                 });
                                 ui.end_row();
@@ -1705,6 +1712,7 @@ impl ForgeApp {
                     // GRUB
                     ui.label(RichText::new("GRUB").strong().size(14.0).color(TEXT));
                     ui.add_space(4.0);
+                    let grub_cmdline_w = (ui.available_width() - 80.0 - 160.0 - 16.0).max(120.0);
                     egui::Grid::new("inject_grub_grid")
                         .num_columns(3)
                         .spacing([8.0, 6.0])
@@ -1747,7 +1755,7 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.grub_cmdline)
                                         .hint_text("quiet splash")
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(grub_cmdline_w),
                                 );
                             });
                             ui.end_row();
@@ -2175,6 +2183,7 @@ impl ForgeApp {
                     .color(MUTED),
             );
             ui.add_space(10.0);
+            let diff_col2_w = (ui.available_width() - 16.0) / 2.0;
             egui::Grid::new("diff_grid")
                 .num_columns(2)
                 .spacing([16.0, 8.0])
@@ -2186,7 +2195,7 @@ impl ForgeApp {
                                 !running,
                                 egui::TextEdit::singleline(&mut self.diff.base)
                                     .hint_text("/path/to/original.iso")
-                                    .desired_width(ui.available_width() - 34.0),
+                                    .desired_width(diff_col2_w - 42.0),
                             );
                             if ui.add_enabled(!running, egui::Button::new("📂")).clicked() {
                                 worker::pick_iso(PickTarget::DiffBase, self.tx.clone());
@@ -2200,7 +2209,7 @@ impl ForgeApp {
                                 !running,
                                 egui::TextEdit::singleline(&mut self.diff.target)
                                     .hint_text("/path/to/modified.iso")
-                                    .desired_width(ui.available_width() - 34.0),
+                                    .desired_width(diff_col2_w - 42.0),
                             );
                             if ui.add_enabled(!running, egui::Button::new("📂")).clicked() {
                                 worker::pick_iso(PickTarget::DiffTarget, self.tx.clone());
@@ -2451,6 +2460,9 @@ impl ForgeApp {
                             .color(TEXT),
                     );
                     ui.add_space(8.0);
+                    // col_w is the parent vertical's max width (half panel).
+                    // Card inner_margin is 16 each side → content width = col_w - 32.
+                    let build_cell_w = ((col_w - 32.0) - 12.0) / 2.0;
                     egui::Grid::new("build_grid")
                         .num_columns(2)
                         .spacing([12.0, 8.0])
@@ -2464,7 +2476,7 @@ impl ForgeApp {
                                         !running,
                                         egui::TextEdit::singleline(&mut self.build.source)
                                             .hint_text("/path/to/ubuntu.iso or https://…")
-                                            .desired_width(ui.available_width() - 34.0),
+                                            .desired_width(build_cell_w - 42.0),
                                     );
                                     if ui.add_enabled(!running, egui::Button::new("📂")).clicked()
                                     {
@@ -2481,7 +2493,7 @@ impl ForgeApp {
                                         !running,
                                         egui::TextEdit::singleline(&mut self.build.output_dir)
                                             .hint_text("./artifacts")
-                                            .desired_width(ui.available_width() - 34.0),
+                                            .desired_width(build_cell_w - 42.0),
                                     );
                                     if ui.add_enabled(!running, egui::Button::new("📂")).clicked()
                                     {
@@ -2499,7 +2511,7 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.build.build_name)
                                         .hint_text("forgeiso-local")
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(build_cell_w),
                                 );
                             });
                             ui.vertical(|ui| {
@@ -2508,7 +2520,7 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.build.output_label)
                                         .hint_text("FORGEISO")
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(build_cell_w),
                                 );
                             });
                             ui.end_row();
@@ -2521,7 +2533,7 @@ impl ForgeApp {
                                         !running,
                                         egui::TextEdit::singleline(&mut self.build.overlay_dir)
                                             .hint_text("/path/to/overlay")
-                                            .desired_width(ui.available_width() - 34.0),
+                                            .desired_width(build_cell_w - 42.0),
                                     );
                                     if ui.add_enabled(!running, egui::Button::new("📂")).clicked()
                                     {
@@ -2560,7 +2572,7 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.build.expected_sha256)
                                         .hint_text("abcdef… (leave blank to skip check)")
-                                        .desired_width(ui.available_width()),
+                                        .desired_width(build_cell_w),
                                 );
                             });
                             ui.end_row();
