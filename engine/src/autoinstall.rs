@@ -1,6 +1,6 @@
 use sha_crypt::{sha512_simple, Sha512Params};
 
-use crate::config::InjectConfig;
+use crate::config::{Distro, InjectConfig};
 use crate::error::{EngineError, EngineResult};
 
 /// Build all feature-specific late-commands in canonical order.
@@ -64,22 +64,28 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
     }
 
     // 4. Proxy
+    // /etc/environment is distro-agnostic; APT proxy config is Ubuntu-only.
+    let is_ubuntu = !matches!(cfg.distro, Some(Distro::Fedora) | Some(Distro::Arch));
     if cfg.proxy.http_proxy.is_some() || cfg.proxy.https_proxy.is_some() {
         if let Some(hp) = &cfg.proxy.http_proxy {
             cmds.push(format!(
                 "echo 'http_proxy=\"{hp}\"' >> /target/etc/environment"
             ));
-            cmds.push(format!(
-                "printf 'Acquire::http::Proxy \"{hp}\";\n' > /target/etc/apt/apt.conf.d/99proxy"
-            ));
+            if is_ubuntu {
+                cmds.push(format!(
+                    "printf 'Acquire::http::Proxy \"{hp}\";\n' > /target/etc/apt/apt.conf.d/99proxy"
+                ));
+            }
         }
         if let Some(sp) = &cfg.proxy.https_proxy {
             cmds.push(format!(
                 "echo 'https_proxy=\"{sp}\"' >> /target/etc/environment"
             ));
-            cmds.push(format!(
-                "printf 'Acquire::https::Proxy \"{sp}\";\n' >> /target/etc/apt/apt.conf.d/99proxy"
-            ));
+            if is_ubuntu {
+                cmds.push(format!(
+                    "printf 'Acquire::https::Proxy \"{sp}\";\n' >> /target/etc/apt/apt.conf.d/99proxy"
+                ));
+            }
         }
         if !cfg.proxy.no_proxy.is_empty() {
             let np = cfg.proxy.no_proxy.join(",");
@@ -124,8 +130,8 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
         }
     }
 
-    // 8. Firewall (UFW)
-    if cfg.firewall.enabled {
+    // 8. Firewall — UFW is Ubuntu/Debian-specific; skip on other distros.
+    if cfg.firewall.enabled && is_ubuntu {
         if let Some(policy) = &cfg.firewall.default_policy {
             cmds.push(format!("chroot /target ufw default {policy} incoming"));
         }
@@ -139,22 +145,24 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
         cmds.push("chroot /target systemctl enable ufw".to_string());
     }
 
-    // 9. APT repos
-    for repo in &cfg.apt_repos {
-        if repo.starts_with("ppa:") {
-            cmds.push(format!("chroot /target add-apt-repository -y '{repo}'"));
-        } else {
-            cmds.push(format!(
-                "echo '{repo}' >> /target/etc/apt/sources.list.d/forgeiso-extra.list"
-            ));
+    // 9. APT repos — Ubuntu/Debian only.
+    if is_ubuntu {
+        for repo in &cfg.apt_repos {
+            if repo.starts_with("ppa:") {
+                cmds.push(format!("chroot /target add-apt-repository -y '{repo}'"));
+            } else {
+                cmds.push(format!(
+                    "echo '{repo}' >> /target/etc/apt/sources.list.d/forgeiso-extra.list"
+                ));
+            }
+        }
+        if !cfg.apt_repos.is_empty() {
+            cmds.push("chroot /target apt-get update".to_string());
         }
     }
-    if !cfg.apt_repos.is_empty() {
-        cmds.push("chroot /target apt-get update".to_string());
-    }
 
-    // 10. Docker
-    if cfg.containers.docker {
+    // 10. Docker — Ubuntu apt-based install only; Fedora adds docker-ce via dnf separately.
+    if cfg.containers.docker && is_ubuntu {
         cmds.push("install -m 0755 -d /target/etc/apt/keyrings".to_string());
         cmds.push(
             "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /target/etc/apt/keyrings/docker.gpg".to_string()
@@ -1867,5 +1875,51 @@ autoinstall:
             "encryption password in storage section"
         );
         assert!(yaml.contains("secret"), "passphrase should be in YAML");
+    }
+
+    #[test]
+    fn late_commands_omit_apt_and_ufw_for_fedora() {
+        let cfg = InjectConfig {
+            source: crate::config::IsoSource::from_raw("/tmp/fedora.iso"),
+            out_name: "out.iso".to_string(),
+            distro: Some(crate::config::Distro::Fedora),
+            apt_repos: vec!["ppa:user/ppa".to_string()],
+            containers: crate::config::ContainerConfig {
+                docker: true,
+                podman: false,
+                docker_users: vec![],
+            },
+            firewall: crate::config::FirewallConfig {
+                enabled: true,
+                default_policy: Some("deny".to_string()),
+                allow_ports: vec!["22/tcp".to_string()],
+                deny_ports: vec![],
+            },
+            proxy: crate::config::ProxyConfig {
+                http_proxy: Some("http://proxy.corp:3128".to_string()),
+                https_proxy: None,
+                no_proxy: vec![],
+            },
+            expected_sha256: None,
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(
+            !all.contains("apt"),
+            "apt commands must not appear for Fedora"
+        );
+        assert!(
+            !all.contains("ufw"),
+            "ufw commands must not appear for Fedora"
+        );
+        assert!(
+            all.contains("http_proxy"),
+            "/etc/environment proxy should still be set"
+        );
+        assert!(
+            !all.contains("apt.conf.d"),
+            "APT proxy config must not appear for Fedora"
+        );
     }
 }
