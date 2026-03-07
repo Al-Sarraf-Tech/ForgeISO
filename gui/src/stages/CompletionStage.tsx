@@ -1,6 +1,6 @@
 import type React from 'react';
 import type { Dispatch } from 'react';
-import type { BuildResult, InjectResult, IsoDiff, VerifyResult } from '../types';
+import type { BuildResult, InjectResult, Iso9660Compliance, IsoDiff, VerifyResult } from '../types';
 import type { AppAction } from '../store';
 
 function ArtifactItem({ icon, path }: { icon: string; path: string }) {
@@ -37,14 +37,16 @@ export function CompletionStage({
   injectResult,
   verifyResult,
   diffResult,
+  iso9660Result,
 }: {
   dispatch: Dispatch<AppAction>;
   buildResult: BuildResult | null;
   injectResult: InjectResult | null;
   verifyResult: VerifyResult | null;
   diffResult: IsoDiff | null;
+  iso9660Result: Iso9660Compliance | null;
 }) {
-  const hasAnything = buildResult || injectResult || verifyResult || diffResult;
+  const hasAnything = buildResult || injectResult || verifyResult || diffResult || iso9660Result;
 
   const resetAll = () => {
     dispatch({ type: 'SET_STAGE', stage: 'build' });
@@ -125,6 +127,35 @@ export function CompletionStage({
               <div className="verify-match-sub">{verifyResult.filename}</div>
             </div>
           </div>
+        </SummaryCard>
+      )}
+
+      {/* ISO-9660 compliance result */}
+      {iso9660Result && (
+        <SummaryCard title="ISO-9660 Compliance" color={iso9660Result.compliant ? 'green' : 'amber'}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', marginBottom: 'var(--sp-3)' }}>
+            <span style={{ fontSize: 22 }}>{iso9660Result.compliant ? '✅' : '❌'}</span>
+            <div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                {iso9660Result.compliant ? 'Compliant' : 'Non-Compliant'}
+              </div>
+              {iso9660Result.volume_id && (
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                  Volume: <span className="mono">{iso9660Result.volume_id}</span>
+                </div>
+              )}
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--sp-2)' }}>
+              {iso9660Result.boot_bios && <span className="badge badge-blue">BIOS</span>}
+              {iso9660Result.boot_uefi && <span className="badge badge-blue">UEFI</span>}
+            </div>
+          </div>
+          {iso9660Result.error && (
+            <div className="alert alert-red" style={{ marginTop: 'var(--sp-2)' }}>
+              <span className="alert-icon">✗</span>
+              <span>{iso9660Result.error}</span>
+            </div>
+          )}
         </SummaryCard>
       )}
 

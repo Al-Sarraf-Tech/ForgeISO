@@ -1,0 +1,170 @@
+# ForgeISO Distro×Version×Profile Validation Matrix
+#
+# Each service is one cell: distro × version × profile.
+# All cells run in parallel, fully isolated. Volumes are ephemeral — destroyed by:
+#   docker compose -f docker-compose.matrix.yml down -v --remove-orphans
+#
+# Usage:
+#   make matrix          — smoke tier (fast, no QEMU)
+#   make matrix-full     — full tier (includes QEMU boot if KVM available)
+#   scripts/matrix/run-matrix.sh --tier smoke
+#   scripts/matrix/run-matrix.sh --tier full --cell ubuntu-2404-minimal
+
+x-matrix-base: &matrix-base
+  build:
+    context: .
+    dockerfile: containers/matrix.Dockerfile
+  command: ["bash", "-c", "scripts/matrix/run-cell.sh"]
+  volumes:
+    - .:/workspace
+
+services:
+  # ── Ubuntu 24.04 ─────────────────────────────────────────────────────────────
+  ubuntu-2404-minimal:
+    <<: *matrix-base
+    build:
+      context: .
+      dockerfile: containers/matrix.Dockerfile
+      args:
+        DISTRO_LABEL: ubuntu
+        VERSION_LABEL: "24.04"
+        PROFILE_LABEL: minimal
+    volumes:
+      - .:/workspace
+      - ubuntu-2404-minimal-target:/ci-target
+      - ubuntu-2404-minimal-cargo:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - MATRIX_DISTRO=ubuntu
+      - MATRIX_VERSION=24.04
+      - MATRIX_PROFILE=minimal
+      - MATRIX_TIER=${MATRIX_TIER:-smoke}
+
+  ubuntu-2404-desktop:
+    <<: *matrix-base
+    build:
+      context: .
+      dockerfile: containers/matrix.Dockerfile
+      args:
+        DISTRO_LABEL: ubuntu
+        VERSION_LABEL: "24.04"
+        PROFILE_LABEL: desktop
+    volumes:
+      - .:/workspace
+      - ubuntu-2404-desktop-target:/ci-target
+      - ubuntu-2404-desktop-cargo:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - MATRIX_DISTRO=ubuntu
+      - MATRIX_VERSION=24.04
+      - MATRIX_PROFILE=desktop
+      - MATRIX_TIER=${MATRIX_TIER:-smoke}
+
+  ubuntu-2204-minimal:
+    <<: *matrix-base
+    build:
+      context: .
+      dockerfile: containers/matrix.Dockerfile
+      args:
+        DISTRO_LABEL: ubuntu
+        VERSION_LABEL: "22.04"
+        PROFILE_LABEL: minimal
+    volumes:
+      - .:/workspace
+      - ubuntu-2204-minimal-target:/ci-target
+      - ubuntu-2204-minimal-cargo:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - MATRIX_DISTRO=ubuntu
+      - MATRIX_VERSION=22.04
+      - MATRIX_PROFILE=minimal
+      - MATRIX_TIER=${MATRIX_TIER:-smoke}
+
+  # ── Fedora 40 ─────────────────────────────────────────────────────────────────
+  fedora-40-minimal:
+    <<: *matrix-base
+    build:
+      context: .
+      dockerfile: containers/matrix.Dockerfile
+      args:
+        DISTRO_LABEL: fedora
+        VERSION_LABEL: "40"
+        PROFILE_LABEL: minimal
+    volumes:
+      - .:/workspace
+      - fedora-40-minimal-target:/ci-target
+      - fedora-40-minimal-cargo:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - MATRIX_DISTRO=fedora
+      - MATRIX_VERSION=40
+      - MATRIX_PROFILE=minimal
+      - MATRIX_TIER=${MATRIX_TIER:-smoke}
+
+  # ── Arch Linux ────────────────────────────────────────────────────────────────
+  arch-rolling-minimal:
+    <<: *matrix-base
+    build:
+      context: .
+      dockerfile: containers/matrix.Dockerfile
+      args:
+        DISTRO_LABEL: arch
+        VERSION_LABEL: rolling
+        PROFILE_LABEL: minimal
+    volumes:
+      - .:/workspace
+      - arch-rolling-minimal-target:/ci-target
+      - arch-rolling-minimal-cargo:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - MATRIX_DISTRO=arch
+      - MATRIX_VERSION=rolling
+      - MATRIX_PROFILE=minimal
+      - MATRIX_TIER=${MATRIX_TIER:-smoke}
+
+  # ── Linux Mint 22 ─────────────────────────────────────────────────────────────
+  mint-22-minimal:
+    <<: *matrix-base
+    build:
+      context: .
+      dockerfile: containers/matrix.Dockerfile
+      args:
+        DISTRO_LABEL: mint
+        VERSION_LABEL: "22"
+        PROFILE_LABEL: minimal
+    volumes:
+      - .:/workspace
+      - mint-22-minimal-target:/ci-target
+      - mint-22-minimal-cargo:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - MATRIX_DISTRO=mint
+      - MATRIX_VERSION=22
+      - MATRIX_PROFILE=minimal
+      - MATRIX_TIER=${MATRIX_TIER:-smoke}
+
+volumes:
+  ubuntu-2404-minimal-target:
+  ubuntu-2404-minimal-cargo:
+  ubuntu-2404-desktop-target:
+  ubuntu-2404-desktop-cargo:
+  ubuntu-2204-minimal-target:
+  ubuntu-2204-minimal-cargo:
+  fedora-40-minimal-target:
+  fedora-40-minimal-cargo:
+  arch-rolling-minimal-target:
+  arch-rolling-minimal-cargo:
+  mint-22-minimal-target:
+  mint-22-minimal-cargo:

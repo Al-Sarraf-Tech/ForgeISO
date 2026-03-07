@@ -22,6 +22,6 @@ pub use events::{EngineEvent, EventLevel, EventPhase};
 pub use iso::{BootSupport, IsoMetadata, SourceKind};
 pub use kickstart::generate_kickstart_cfg;
 pub use orchestrator::{
-    BuildResult, DiffEntry, DoctorReport, ForgeIsoEngine, IsoDiff, ScanResult, TestResult,
-    VerifyResult,
+    BuildResult, DiffEntry, DoctorReport, ForgeIsoEngine, Iso9660Compliance, IsoDiff, ScanResult,
+    TestResult, VerifyResult,
 };

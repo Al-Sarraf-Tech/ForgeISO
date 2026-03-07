@@ -80,6 +80,11 @@ export function App() {
     ? 'Error'
     : 'Ready';
 
+  // Compact system pill text for top bar
+  const sysOs   = state.doctor?.host_os   ?? '…';
+  const sysArch = state.doctor?.host_arch ?? '…';
+  const sysOk   = state.doctor?.linux_supported ?? false;
+
   return (
     <div className="app-shell">
       {/* Top bar */}
@@ -87,9 +92,27 @@ export function App() {
         <div className="topbar-brand">
           <div className="topbar-logo">F</div>
           <span className="topbar-name">ForgeISO</span>
-          <span className="topbar-subtitle">ISO Build & Configuration Pipeline</span>
+          <span className="topbar-subtitle">Build, inject, verify, and compare Linux ISOs locally on bare metal.</span>
         </div>
         <div className="topbar-spacer" />
+
+        {/* Compact SYSTEM card */}
+        <div className="topbar-system-card">
+          <span className="topbar-system-platform">
+            <span className={`topbar-system-dot${sysOk ? '' : ' warn'}`} />
+            {sysOs} / {sysArch}
+          </span>
+          {state.doctor && (
+            <div className="topbar-system-tools">
+              {Object.entries(state.doctor.tooling)
+                .filter(([, ok]) => ok)
+                .map(([tool]) => (
+                  <span key={tool} className="topbar-tool-pill">{tool}</span>
+                ))}
+            </div>
+          )}
+        </div>
+
         <div className={`topbar-status-chip ${chipStatus}`}>
           <div className="topbar-status-dot" />
           {chipLabel}
@@ -108,6 +131,7 @@ export function App() {
         <BuildStage
           dispatch={dispatch}
           isRunning={state.isRunning}
+          progress={state.progress}
           lastSourceIso={state.lastSourceIso}
           lastOutputDir={state.lastOutputDir}
           buildResult={state.buildResult}
@@ -117,6 +141,7 @@ export function App() {
         <InjectStage
           dispatch={dispatch}
           isRunning={state.isRunning}
+          progress={state.progress}
           lastSourceIso={state.lastSourceIso}
           lastOutputDir={state.lastOutputDir}
           injectResult={state.injectResult}
@@ -126,14 +151,17 @@ export function App() {
         <VerifyStage
           dispatch={dispatch}
           isRunning={state.isRunning}
+          progress={state.progress}
           lastInjectedIso={state.lastInjectedIso}
           verifyResult={state.verifyResult}
+          iso9660Result={state.iso9660Result}
         />
       )}
       {state.activeStage === 'diff' && (
         <DiffStage
           dispatch={dispatch}
           isRunning={state.isRunning}
+          progress={state.progress}
           lastSourceIso={state.lastSourceIso}
           lastInjectedIso={state.lastInjectedIso}
           diffResult={state.diffResult}
@@ -146,6 +174,7 @@ export function App() {
           injectResult={state.injectResult}
           verifyResult={state.verifyResult}
           diffResult={state.diffResult}
+          iso9660Result={state.iso9660Result}
         />
       )}
 

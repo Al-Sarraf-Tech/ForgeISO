@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Dispatch } from 'react';
-import type { IsoDiff } from '../types';
+import type { IsoDiff, JobProgress } from '../types';
 import type { AppAction } from '../store';
 import { Field, TextInput } from '../components/forms';
+import { JobProgressCard } from '../components/JobProgress';
 
 type Filter = 'all' | 'added' | 'removed' | 'modified';
 
@@ -17,12 +18,14 @@ function fmtSize(bytes?: number): string {
 export function DiffStage({
   dispatch,
   isRunning,
+  progress,
   lastSourceIso,
   lastInjectedIso,
   diffResult,
 }: {
   dispatch: Dispatch<AppAction>;
   isRunning: boolean;
+  progress: JobProgress | null;
   lastSourceIso: string;
   lastInjectedIso: string;
   diffResult: IsoDiff | null;
@@ -84,6 +87,15 @@ export function DiffStage({
 
   return (
     <div className="main-content">
+      {/* Inline progress */}
+      {isRunning && progress && <JobProgressCard progress={progress} />}
+
+      {/* Stage guidance */}
+      <div className="stage-guidance">
+        <span className="stage-guidance-step">Step 4</span>
+        Compare the original and injected ISOs to see exactly what changed — added, removed, and modified files.
+      </div>
+
       <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
         <div className="card-header">
           <div>

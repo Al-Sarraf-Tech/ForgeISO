@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Dispatch } from 'react';
-import type { BuildResult, Inspection } from '../types';
+import type { BuildResult, Inspection, JobProgress } from '../types';
 import type { AppAction } from '../store';
 import { DISTRO_FAMILIES, capabilityClass, capabilityLabel } from '../distro';
 import { Field, TextInput } from '../components/forms';
+import { JobProgressCard } from '../components/JobProgress';
 
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
@@ -15,15 +16,24 @@ function MetaRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
 export function BuildStage({
   dispatch,
   isRunning,
+  progress,
   lastSourceIso,
   lastOutputDir,
   buildResult,
 }: {
   dispatch: Dispatch<AppAction>;
   isRunning: boolean;
+  progress: JobProgress | null;
   lastSourceIso: string;
   lastOutputDir: string;
   buildResult: BuildResult | null;
@@ -129,8 +139,20 @@ export function BuildStage({
 
   return (
     <div className="main-content">
+      {/* Inline progress — shown when a job is running */}
+      {isRunning && progress && (
+        <JobProgressCard progress={progress} />
+      )}
+
+      {/* Stage guidance */}
+      <div className="stage-guidance">
+        <span className="stage-guidance-step">Step 1</span>
+        Select a Linux distribution and source ISO. Optionally inspect the image before building,
+        then click <strong>Build ISO</strong> to package it.
+      </div>
+
       {/* Distro selector */}
-      <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
+      <div className="card">
         <div className="card-header">
           <div>
             <h2>Target Distribution</h2>
@@ -185,109 +207,149 @@ export function BuildStage({
         </table>
       </div>
 
-      {/* Build config */}
-      <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
-        <div className="card-header">
-          <div>
-            <h2>Build Configuration</h2>
-            <p>Fetch and package a base ISO from path or URL.</p>
-          </div>
-        </div>
-
-        <div className="field-grid" style={{ marginBottom: 'var(--sp-4)' }}>
-          <Field label="Source ISO path or URL *" className="span-2">
-            <TextInput
-              value={source}
-              onChange={setSource}
-              placeholder="/path/to/ubuntu.iso or https://releases.ubuntu.com/24.04/ubuntu-24.04-live-server-amd64.iso"
-              disabled={isRunning}
-            />
-          </Field>
-          <Field label="Output directory *">
-            <TextInput value={outputDir} onChange={setOutputDir} placeholder="./artifacts" disabled={isRunning} />
-          </Field>
-          <Field label="Build name">
-            <TextInput value={buildName} onChange={setBuildName} disabled={isRunning} />
-          </Field>
-          <Field label="Overlay directory" hint="Optional filesystem overlay merged into ISO">
-            <TextInput value={overlayDir} onChange={setOverlayDir} placeholder="/path/to/overlay" disabled={isRunning} />
-          </Field>
-          <Field label="Volume label" hint="Optional ISO label (≤32 chars)">
-            <TextInput value={outputLabel} onChange={setOutputLabel} placeholder="FORGEISO" disabled={isRunning} />
-          </Field>
-          <Field label="Profile">
-            <select value={profile} onChange={(e) => setProfile(e.target.value)} disabled={isRunning}>
-              <option value="minimal">Minimal</option>
-              <option value="desktop">Desktop</option>
-            </select>
-          </Field>
-        </div>
-
-        <div className="btn-group" style={{ marginBottom: 'var(--sp-3)' }}>
-          <button className="btn" type="button" onClick={inspect} disabled={isRunning || !source.trim()}>
-            Inspect ISO
-          </button>
-          <button className="btn btn-primary btn-lg" type="button" onClick={build} disabled={isRunning || !canBuild}>
-            {isRunning ? <><span className="spinner" /> Building…</> : 'Build ISO'}
-          </button>
-          <button className="btn" type="button" onClick={scan} disabled={isRunning || !hasArtifact}>
-            Scan
-          </button>
-          <button className="btn" type="button" onClick={testIso} disabled={isRunning || !hasArtifact}>
-            Test Boot
-          </button>
-          <button className="btn btn-ghost" type="button" onClick={() => report('html')} disabled={isRunning || !buildResult}>
-            HTML Report
-          </button>
-          <button className="btn btn-ghost" type="button" onClick={() => report('json')} disabled={isRunning || !buildResult}>
-            JSON Report
-          </button>
-        </div>
-
-        {statusMsg && (
-          <p className={`status-line${statusKind === 'ok' ? ' ok' : statusKind === 'err' ? ' err' : ''}`}>
-            {statusMsg}
-          </p>
-        )}
-      </div>
-
-      {/* Inspection result */}
-      {inspection && (
-        <div className="card card-blue">
+      {/* Build config + Detected ISO — 2-column layout */}
+      <div className="build-two-col">
+        {/* Left: Build configuration form */}
+        <div className="card">
           <div className="card-header">
-            <h2>ISO Metadata</h2>
-          </div>
-          <div className="meta-grid">
-            <MetaRow label="Distro" value={inspection.distro ?? 'Unknown'} />
-            <MetaRow label="Release" value={inspection.release ?? 'Unknown'} />
-            <MetaRow label="Architecture" value={inspection.architecture ?? 'Unknown'} />
-            <MetaRow label="Volume ID" value={inspection.volume_id ?? 'Unknown'} />
-            <MetaRow label="SHA-256" value={inspection.sha256} />
-          </div>
-          {inspection.warnings.length > 0 && (
-            <div style={{ marginTop: 'var(--sp-3)' }}>
-              {inspection.warnings.map((w) => (
-                <div key={w} className="alert alert-amber" style={{ marginBottom: 'var(--sp-2)' }}>
-                  <span className="alert-icon">⚠</span>
-                  <span>{w}</span>
-                </div>
-              ))}
+            <div>
+              <h2>Build Configuration</h2>
+              <p>Fetch and package a base ISO from path or URL.</p>
             </div>
+          </div>
+
+          <div className="field-grid" style={{ marginBottom: 'var(--sp-4)' }}>
+            <Field label="Source ISO path or URL *" className="span-2">
+              <TextInput
+                value={source}
+                onChange={setSource}
+                placeholder="/path/to/ubuntu.iso or https://releases.ubuntu.com/…"
+                disabled={isRunning}
+              />
+            </Field>
+            <Field label="Output directory *">
+              <TextInput value={outputDir} onChange={setOutputDir} placeholder="./artifacts" disabled={isRunning} />
+            </Field>
+            <Field label="Build name">
+              <TextInput value={buildName} onChange={setBuildName} disabled={isRunning} />
+            </Field>
+            <Field label="Overlay directory" hint="Optional filesystem overlay merged into ISO">
+              <TextInput value={overlayDir} onChange={setOverlayDir} placeholder="/path/to/overlay" disabled={isRunning} />
+            </Field>
+            <Field label="Volume label" hint="Optional ISO label (≤32 chars)">
+              <TextInput value={outputLabel} onChange={setOutputLabel} placeholder="FORGEISO" disabled={isRunning} />
+            </Field>
+            <Field label="Profile" className="span-2">
+              <select value={profile} onChange={(e) => setProfile(e.target.value)} disabled={isRunning}>
+                <option value="minimal">Minimal</option>
+                <option value="desktop">Desktop</option>
+              </select>
+            </Field>
+          </div>
+
+          {/* Primary action */}
+          <div className="btn-group" style={{ marginBottom: 'var(--sp-3)' }}>
+            <button className="btn btn-primary btn-lg" type="button" onClick={build} disabled={isRunning || !canBuild}>
+              {isRunning ? <><span className="spinner" /> Building…</> : 'Build ISO'}
+            </button>
+            <button className="btn" type="button" onClick={inspect} disabled={isRunning || !source.trim()}>
+              Inspect
+            </button>
+          </div>
+
+          {/* Secondary actions */}
+          <div className="btn-group">
+            <button className="btn btn-ghost btn-sm" type="button" onClick={scan} disabled={isRunning || !hasArtifact}>
+              Scan
+            </button>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={testIso} disabled={isRunning || !hasArtifact}>
+              Test Boot
+            </button>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={() => report('html')} disabled={isRunning || !buildResult}>
+              HTML Report
+            </button>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={() => report('json')} disabled={isRunning || !buildResult}>
+              JSON Report
+            </button>
+          </div>
+
+          {statusMsg && (
+            <p className={`status-line${statusKind === 'ok' ? ' ok' : statusKind === 'err' ? ' err' : ''}`} style={{ marginTop: 'var(--sp-3)' }}>
+              {statusMsg}
+            </p>
           )}
         </div>
-      )}
+
+        {/* Right: Detected ISO metadata card */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="card-header">
+            <h2>Detected ISO</h2>
+          </div>
+
+          {!inspection && !buildResult?.iso ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">🔍</div>
+              <div className="empty-state-title">No ISO inspected yet</div>
+              <div className="empty-state-body">
+                Enter a source path or URL and click <strong>Inspect</strong> to see
+                image metadata including distro, release, architecture, and checksum.
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="meta-grid">
+                {(() => {
+                  const meta = inspection ?? buildResult?.iso;
+                  if (!meta) return null;
+                  return (
+                    <>
+                      <MetaRow label="Distro"   value={(meta as Inspection).distro ?? (buildResult?.iso?.distro ? String(buildResult.iso.distro) : 'Unknown')} />
+                      <MetaRow label="Release"  value={(meta as Inspection).release ?? 'Unknown'} />
+                      <MetaRow label="Arch"     value={(meta as Inspection).architecture ?? 'Unknown'} />
+                      <MetaRow label="Volume ID" value={(meta as Inspection).volume_id ?? '—'} />
+                      <MetaRow label="SHA-256"  value={(meta as Inspection).sha256} />
+                      {(meta as Inspection).size_bytes !== undefined && (
+                        <MetaRow label="Size" value={fmtBytes((meta as Inspection).size_bytes!)} />
+                      )}
+                      {(meta as Inspection).boot && (
+                        <MetaRow
+                          label="Boot"
+                          value={[
+                            (meta as Inspection).boot?.bios ? 'BIOS' : '',
+                            (meta as Inspection).boot?.uefi ? 'UEFI' : '',
+                          ].filter(Boolean).join(' / ') || 'Unknown'}
+                        />
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+              {inspection?.warnings && inspection.warnings.length > 0 && (
+                <div style={{ marginTop: 'var(--sp-3)' }}>
+                  {inspection.warnings.map((w) => (
+                    <div key={w} className="alert alert-amber" style={{ marginBottom: 'var(--sp-2)' }}>
+                      <span className="alert-icon">⚠</span>
+                      <span>{w}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Build result */}
       {buildResult && (
-        <div className="card card-green" style={{ marginTop: 'var(--sp-4)' }}>
+        <div className="card card-green">
           <div className="card-header">
             <h2>Build Complete</h2>
           </div>
           <div className="artifact-list">
             {buildResult.artifacts.map((a) => (
-              <div key={a} className="artifact-item">
+              <div key={String(a)} className="artifact-item">
                 <span className="artifact-icon">💿</span>
-                <span className="artifact-path">{a}</span>
+                <span className="artifact-path">{String(a)}</span>
               </div>
             ))}
           </div>

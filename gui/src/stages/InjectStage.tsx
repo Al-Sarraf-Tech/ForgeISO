@@ -1,10 +1,11 @@
 import { useReducer, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Dispatch } from 'react';
-import type { InjectResult, InjectState } from '../types';
+import type { InjectResult, InjectState, JobProgress } from '../types';
 import type { AppAction } from '../store';
 import { defaultInjectState, INJECT_PRESETS } from '../types';
 import { Field, TextInput, TextArea, Toggle, Accordion, useAccordion } from '../components/forms';
+import { JobProgressCard } from '../components/JobProgress';
 
 // ── Local form reducer ────────────────────────────────────────────────────────
 
@@ -31,12 +32,14 @@ const optNum = (s: string): number | null => {
 export function InjectStage({
   dispatch,
   isRunning,
+  progress,
   lastSourceIso,
   lastOutputDir,
   injectResult,
 }: {
   dispatch: Dispatch<AppAction>;
   isRunning: boolean;
+  progress: JobProgress | null;
   lastSourceIso: string;
   lastOutputDir: string;
   injectResult: InjectResult | null;
@@ -143,6 +146,16 @@ export function InjectStage({
 
   return (
     <div className="main-content">
+      {/* Inline progress */}
+      {isRunning && progress && <JobProgressCard progress={progress} />}
+
+      {/* Stage guidance */}
+      <div className="stage-guidance">
+        <span className="stage-guidance-step">Step 2</span>
+        Configure the unattended installation settings and inject them into the ISO.
+        Start with a preset template, then refine individual sections below.
+      </div>
+
       {/* Presets */}
       <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
         <div className="card-header">

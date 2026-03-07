@@ -8,6 +8,7 @@ import type {
   InjectResult,
   VerifyResult,
   IsoDiff,
+  Iso9660Compliance,
   DoctorReport,
   LogEntry,
 } from './types';
@@ -31,6 +32,7 @@ export const initialState: AppState = {
   injectResult:  null,
   verifyResult:  null,
   diffResult:    null,
+  iso9660Result: null,
   lastSourceIso:    '',
   lastOutputDir:    './artifacts',
   lastInjectedIso:  '',
@@ -51,6 +53,7 @@ export type AppAction =
   | { type: 'SET_INJECT_RESULT'; result: InjectResult; injectedIso: string }
   | { type: 'SET_VERIFY_RESULT'; result: VerifyResult }
   | { type: 'SET_DIFF_RESULT'; result: IsoDiff }
+  | { type: 'SET_ISO9660_RESULT'; result: Iso9660Compliance }
   | { type: 'ADVANCE_STAGE'; from: AppStage }
   | { type: 'RESET_STAGE'; stage: AppStage };
 
@@ -162,6 +165,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_DIFF_RESULT':
       return { ...state, diffResult: action.result };
 
+    case 'SET_ISO9660_RESULT':
+      return { ...state, iso9660Result: action.result };
+
     case 'ADVANCE_STAGE': {
       const next = nextStage(action.from);
       if (!next) return state;
@@ -175,7 +181,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'RESET_STAGE': {
       const newStatus = { ...state.stageStatus, [action.stage]: 'pending' as StageStatus };
-      return { ...state, stageStatus: newStatus, progress: null };
+      const extra = action.stage === 'verify' ? { iso9660Result: null } : {};
+      return { ...state, stageStatus: newStatus, progress: null, ...extra };
     }
 
     default:

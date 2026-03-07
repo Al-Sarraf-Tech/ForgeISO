@@ -2,6 +2,7 @@ SHELL := /usr/bin/env bash
 
 .PHONY: dev test build package \
         ci-local ci-parallel ci-base ci-clean \
+        matrix matrix-smoke matrix-full matrix-clean \
         lint clean
 
 # ── Development ───────────────────────────────────────────────────────────────
@@ -63,5 +64,27 @@ ci-clean:
 	docker image rm forgeiso-c1 forgeiso-c2 forgeiso-c3 \
 	               forgeiso-c4 forgeiso-c5 forgeiso-c6 2>/dev/null || true
 	@echo "All CI images and volumes removed."
+
+## Remove all ephemeral matrix volumes and images.
+matrix-clean:
+	bash scripts/matrix/run-matrix.sh --clean
+
+# ── Distro×Version×Profile matrix (ephemeral, parallel Docker) ────────────────
+#
+# matrix        Alias for matrix-smoke (fast, no QEMU)
+# matrix-smoke  Doctor + build + ISO-9660 check for all cells
+# matrix-full   Smoke + QEMU boot test if KVM is available
+# MATRIX_CELL   Optionally target one cell: make matrix MATRIX_CELL=ubuntu-2404-minimal
+
+## Fast matrix: doctor + build + ISO-9660 header validation.
+matrix-smoke:
+	bash scripts/matrix/run-matrix.sh --tier smoke $(if $(MATRIX_CELL),--cell $(MATRIX_CELL),)
+
+## Full matrix: smoke + QEMU boot test (requires KVM on host).
+matrix-full:
+	bash scripts/matrix/run-matrix.sh --tier full $(if $(MATRIX_CELL),--cell $(MATRIX_CELL),)
+
+## Alias for matrix-smoke.
+matrix: matrix-smoke
 
 comma := ,
