@@ -890,7 +890,14 @@ impl ForgeIsoEngine {
 
         // Repack ISO
         std::fs::create_dir_all(out)?;
-        let output_path = out.join(&cfg.out_name);
+        // Ensure the output always has an .iso extension regardless of what the
+        // caller passed — avoids producing unrecognised files from the GUI default.
+        let out_filename = if cfg.out_name.to_ascii_lowercase().ends_with(".iso") {
+            cfg.out_name.clone()
+        } else {
+            format!("{}.iso", cfg.out_name)
+        };
+        let output_path = out.join(&out_filename);
 
         let args = repack_iso_args(
             &resolved.source_path,

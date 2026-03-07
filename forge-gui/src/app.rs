@@ -559,7 +559,7 @@ impl ForgeApp {
                 scanning: Default::default(),
                 testing: Default::default(),
                 keep_workdir: false,
-                expected_sha256: None,
+                expected_sha256: opt(&b.expected_sha256),
             };
             match engine.build(&cfg, &out).await {
                 Ok(r) => {
@@ -769,7 +769,10 @@ impl ForgeApp {
                     }
 
                     ui.add_space(8.0);
-                    if !self.job_running && ui.button("Re-run check").clicked() {
+                    if ui
+                        .add_enabled(!self.job_running, egui::Button::new("Re-run check"))
+                        .clicked()
+                    {
                         self.spawn_doctor();
                     }
                     let ts_display = chrono::DateTime::parse_from_rfc3339(&r.timestamp)
@@ -786,7 +789,10 @@ impl ForgeApp {
                     );
                 } else {
                     ui.label(RichText::new("No results yet.").color(MUTED));
-                    if ui.button("Run check").clicked() {
+                    if ui
+                        .add_enabled(!self.job_running, egui::Button::new("Run check"))
+                        .clicked()
+                    {
                         self.spawn_doctor();
                     }
                 }
@@ -1125,6 +1131,7 @@ impl ForgeApp {
                         ui.add_enabled(
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.out_name)
+                                .hint_text("forgeiso-local.iso")
                                 .desired_width(f32::INFINITY),
                         );
                     });
@@ -1147,6 +1154,19 @@ impl ForgeApp {
                                     ui.selectable_value(&mut self.inject.distro, d.to_string(), *d);
                                 }
                             });
+                    });
+                    ui.vertical(|ui| {
+                        ui.label(
+                            RichText::new("Expected SHA-256 (optional)")
+                                .size(12.0)
+                                .color(MUTED),
+                        );
+                        ui.add_enabled(
+                            !running,
+                            egui::TextEdit::singleline(&mut self.inject.expected_sha256)
+                                .hint_text("abcdef… (leave blank to skip check)")
+                                .desired_width(f32::INFINITY),
+                        );
                     });
                     ui.end_row();
                 });
@@ -1187,6 +1207,28 @@ impl ForgeApp {
                                 .desired_width(f32::INFINITY),
                         );
                     });
+                    ui.vertical(|ui| {
+                        let mismatch = !self.inject.password.is_empty()
+                            && !self.inject.password_confirm.is_empty()
+                            && self.inject.password != self.inject.password_confirm;
+                        let lbl_col = if mismatch { RED } else { MUTED };
+                        ui.label(RichText::new("Confirm password").size(12.0).color(lbl_col));
+                        ui.add_enabled(
+                            !running,
+                            egui::TextEdit::singleline(&mut self.inject.password_confirm)
+                                .password(true)
+                                .hint_text("•••••")
+                                .desired_width(f32::INFINITY),
+                        );
+                        if mismatch {
+                            ui.label(
+                                RichText::new("Passwords do not match")
+                                    .size(11.0)
+                                    .color(RED),
+                            );
+                        }
+                    });
+                    ui.end_row();
                     ui.vertical(|ui| {
                         ui.label(RichText::new("Real name").size(12.0).color(MUTED));
                         ui.add_enabled(
@@ -1446,7 +1488,7 @@ impl ForgeApp {
                                 ui.add_enabled(
                                     !running,
                                     egui::TextEdit::multiline(&mut self.inject.apt_repos)
-                                        .hint_text("ppa:user/repo")
+                                        .hint_text("ppa:user/repo\ndeb [arch=amd64] https://example.com/repo focal main")
                                         .desired_rows(3)
                                         .desired_width(f32::INFINITY),
                                 );
@@ -1653,13 +1695,25 @@ impl ForgeApp {
                         .spacing([8.0, 6.0])
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
-                                ui.label(RichText::new("Timeout (s)").size(12.0).color(MUTED));
+                                let bad_timeout = !self.inject.grub_timeout.trim().is_empty()
+                                    && self.inject.grub_timeout.trim().parse::<u32>().is_err();
+                                let lbl_col = if bad_timeout { RED } else { MUTED };
+                                ui.label(
+                                    RichText::new("Timeout (s)").size(12.0).color(lbl_col),
+                                );
                                 ui.add_enabled(
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.grub_timeout)
-                                        .hint_text("5")
+                                        .hint_text("5  (empty = OS default)")
                                         .desired_width(80.0),
                                 );
+                                if bad_timeout {
+                                    ui.label(
+                                        RichText::new("Must be a whole number")
+                                            .size(10.0)
+                                            .color(RED),
+                                    );
+                                }
                             });
                             ui.vertical(|ui| {
                                 ui.label(RichText::new("Default entry").size(12.0).color(MUTED));
@@ -1690,6 +1744,11 @@ impl ForgeApp {
                     // Sysctl
                     ui.label(RichText::new("Sysctl").strong().size(14.0).color(TEXT));
                     ui.add_space(4.0);
+                    ui.label(
+                        RichText::new("One key=value per line (e.g. net.ipv4.ip_forward=1)")
+                            .size(11.0)
+                            .color(MUTED),
+                    );
                     ui.add_enabled(
                         !running,
                         egui::TextEdit::multiline(&mut self.inject.sysctl_pairs)
@@ -1697,11 +1756,45 @@ impl ForgeApp {
                             .desired_width(f32::INFINITY)
                             .desired_rows(3),
                     );
+                    let bad_sysctl = crate::state::lines(&self.inject.sysctl_pairs)
+                        .iter()
+                        .filter(|s| !s.contains('='))
+                        .count();
+                    if bad_sysctl > 0 {
+                        ui.label(
+                            RichText::new(format!(
+                                "⚠ {bad_sysctl} line{} missing '=' will be ignored",
+                                if bad_sysctl == 1 { "" } else { "s" }
+                            ))
+                            .size(11.0)
+                            .color(AMBER),
+                        );
+                    }
                 },
             );
 
             ui.add_space(16.0);
-            let can = !self.inject.source.trim().is_empty() && !running;
+
+            // Validate required fields and show inline errors before the button
+            let pw_mismatch = !self.inject.password.is_empty()
+                && !self.inject.password_confirm.is_empty()
+                && self.inject.password != self.inject.password_confirm;
+            let source_empty = self.inject.source.trim().is_empty();
+            if source_empty && !running {
+                ui.label(
+                    RichText::new("⚠ Source ISO is required")
+                        .size(12.0)
+                        .color(RED),
+                );
+            }
+            if pw_mismatch {
+                ui.label(
+                    RichText::new("⚠ Passwords do not match — cannot inject")
+                        .size(12.0)
+                        .color(RED),
+                );
+            }
+            let can = !source_empty && !pw_mismatch && !running;
             if primary_btn(
                 ui,
                 if running {
@@ -2379,6 +2472,7 @@ impl ForgeApp {
                                 ui.add_enabled(
                                     !running,
                                     egui::TextEdit::singleline(&mut self.build.build_name)
+                                        .hint_text("forgeiso-local")
                                         .desired_width(f32::INFINITY),
                                 );
                             });
@@ -2428,6 +2522,20 @@ impl ForgeApp {
                                             "Desktop",
                                         );
                                     });
+                            });
+                            ui.end_row();
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new("Expected SHA-256 (optional)")
+                                        .size(12.0)
+                                        .color(MUTED),
+                                );
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::singleline(&mut self.build.expected_sha256)
+                                        .hint_text("abcdef… (leave blank to skip check)")
+                                        .desired_width(f32::INFINITY),
+                                );
                             });
                             ui.end_row();
                         });
@@ -2989,6 +3097,6 @@ fn build_inject_config(inject: &InjectState) -> InjectConfig {
         mounts: Vec::new(),
         run_commands: lines(&inject.run_commands),
         distro,
-        expected_sha256: None,
+        expected_sha256: super::state::opt(&inject.expected_sha256),
     }
 }

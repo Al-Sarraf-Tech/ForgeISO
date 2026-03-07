@@ -70,7 +70,11 @@ pub enum PickTarget {
 
 // ── Inject form state ──────────────────────────────────────────────────────────
 
+/// All fields carry `#[serde(default)]` so that saved state from an older
+/// version (missing newly-added fields) deserializes without error rather
+/// than silently resetting the entire form.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct InjectState {
     // Required
     pub source: String,
@@ -83,6 +87,8 @@ pub struct InjectState {
     pub username: String,
     #[serde(skip)] // never persist passwords to disk
     pub password: String,
+    #[serde(skip)]
+    pub password_confirm: String,
     pub realname: String,
     // SSH
     pub ssh_keys: String, // newline-separated
@@ -132,6 +138,8 @@ pub struct InjectState {
     // Misc
     pub no_user_interaction: bool,
     pub wallpaper_path: String,
+    // Verification
+    pub expected_sha256: String, // hex SHA-256; empty = skip check
 }
 
 impl Default for InjectState {
@@ -140,12 +148,13 @@ impl Default for InjectState {
         Self {
             source: String::new(),
             output_dir: cache,
-            out_name: "forgeiso-local".into(),
+            out_name: "forgeiso-local.iso".into(),
             output_label: String::new(),
             distro: "ubuntu".into(),
             hostname: String::new(),
             username: String::new(),
             password: String::new(),
+            password_confirm: String::new(),
             realname: String::new(),
             ssh_keys: String::new(),
             ssh_password_auth: false,
@@ -182,6 +191,7 @@ impl Default for InjectState {
             sysctl_pairs: String::new(),
             no_user_interaction: false,
             wallpaper_path: String::new(),
+            expected_sha256: String::new(),
         }
     }
 }
@@ -214,6 +224,7 @@ pub enum DiffFilter {
 // ── Build form state ───────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct BuildState {
     pub source: String,
     pub output_dir: String,
@@ -221,6 +232,7 @@ pub struct BuildState {
     pub overlay_dir: String,
     pub output_label: String,
     pub profile: String,
+    pub expected_sha256: String, // hex SHA-256; empty = skip check
 }
 
 impl Default for BuildState {
@@ -232,6 +244,7 @@ impl Default for BuildState {
             overlay_dir: String::new(),
             output_label: String::new(),
             profile: "minimal".into(),
+            expected_sha256: String::new(),
         }
     }
 }
