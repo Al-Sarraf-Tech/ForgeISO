@@ -651,6 +651,8 @@ impl ForgeIsoEngine {
         cfg: &crate::config::InjectConfig,
         out: &Path,
     ) -> EngineResult<BuildResult> {
+        cfg.validate()?;
+
         self.emit(EngineEvent::info(
             EventPhase::Inject,
             "starting autoinstall injection",

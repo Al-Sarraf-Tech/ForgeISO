@@ -201,7 +201,6 @@ pub struct BuildState {
     pub overlay_dir: String,
     pub output_label: String,
     pub profile: String,
-    pub distro: String,
 }
 
 impl Default for BuildState {
@@ -213,7 +212,6 @@ impl Default for BuildState {
             overlay_dir: String::new(),
             output_label: String::new(),
             profile: "minimal".into(),
-            distro: "ubuntu".into(),
         }
     }
 }

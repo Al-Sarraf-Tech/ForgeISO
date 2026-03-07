@@ -2183,40 +2183,12 @@ impl ForgeApp {
                     .size(15.0)
                     .color(TEXT),
             );
-            ui.add_space(8.0);
-            ui.horizontal_wrapped(|ui| {
-                for (id, label, desc) in [
-                    ("ubuntu", "Ubuntu", "cloud-init"),
-                    ("fedora", "Fedora", "kickstart"),
-                    ("arch", "Arch", "archinstall"),
-                    ("mint", "Mint", "ubuntu-based"),
-                ] {
-                    let selected = self.build.distro == id;
-                    let resp = Frame::new()
-                        .fill(if selected {
-                            Color32::from_rgba_premultiplied(59, 130, 246, 30)
-                        } else {
-                            Color32::TRANSPARENT
-                        })
-                        .stroke(Stroke::new(
-                            if selected { 2.0 } else { 1.0 },
-                            if selected { ACCENT } else { CARD_BORDER },
-                        ))
-                        .inner_margin(12.0f32)
-                        .corner_radius(8.0f32)
-                        .show(ui, |ui| {
-                            ui.set_min_width(100.0);
-                            ui.vertical_centered(|ui| {
-                                ui.label(RichText::new(label).size(14.0).strong().color(TEXT));
-                                ui.label(RichText::new(desc).size(11.0).color(MUTED));
-                            });
-                        });
-                    if resp.response.interact(egui::Sense::click()).clicked() {
-                        self.build.distro = id.to_string();
-                    }
-                    ui.add_space(4.0);
-                }
-            });
+            ui.add_space(4.0);
+            ui.label(
+                RichText::new("Auto-detected from the source ISO")
+                    .size(12.0)
+                    .color(MUTED),
+            );
         });
 
         let avail = ui.available_width();
@@ -2810,16 +2782,8 @@ fn build_inject_config(inject: &InjectState) -> InjectConfig {
         realname: opt(&inject.realname),
         ssh: SshConfig {
             authorized_keys: lines(&inject.ssh_keys),
-            allow_password_auth: if inject.ssh_password_auth {
-                Some(true)
-            } else {
-                None
-            },
-            install_server: if inject.ssh_install_server {
-                Some(true)
-            } else {
-                None
-            },
+            allow_password_auth: Some(inject.ssh_password_auth),
+            install_server: Some(inject.ssh_install_server),
         },
         network: NetworkConfig {
             dns_servers: lines(&inject.dns_servers),
