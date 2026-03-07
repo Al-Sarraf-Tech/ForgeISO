@@ -1177,73 +1177,126 @@ impl ForgeApp {
                     ui.end_row();
                 });
 
-            ui.add_space(12.0);
-            ui.label(RichText::new("Identity").strong().size(15.0).color(TEXT));
-            ui.add_space(6.0);
+            ui.add_space(16.0);
+
+            // ── Identity ─────────────────────────────────────────────────────
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Identity").strong().size(15.0).color(TEXT));
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new("Configures the installed system's user account and hostname")
+                        .size(11.0)
+                        .color(MUTED),
+                );
+            });
+            ui.add_space(10.0);
+
+            // Hostname — full width, prominent
+            let full_w = ui.available_width();
+            ui.label(RichText::new("Hostname").size(13.0).color(MUTED));
+            ui.add_enabled(
+                !running,
+                egui::TextEdit::singleline(&mut self.inject.hostname)
+                    .hint_text("my-server  (e.g. web-01, dev-box)")
+                    .desired_width(full_w)
+                    .min_size(Vec2::new(full_w, 32.0))
+                    .font(egui::FontId::proportional(15.0)),
+            );
+            ui.add_space(10.0);
+
+            // Username + Real name — side by side
             let col2_w = (ui.available_width() - 16.0) / 2.0;
             egui::Grid::new("identity_grid")
                 .num_columns(2)
-                .spacing([16.0, 8.0])
+                .spacing([16.0, 10.0])
                 .show(ui, |ui| {
+                    // Username
                     ui.vertical(|ui| {
-                        ui.label(RichText::new("Hostname").size(12.0).color(MUTED));
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.hostname)
-                                .hint_text("my-server")
-                                .desired_width(col2_w),
-                        );
-                    });
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Username").size(12.0).color(MUTED));
+                        ui.label(RichText::new("Username  *").size(13.0).color(MUTED));
                         ui.add_enabled(
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.username)
                                 .hint_text("admin")
-                                .desired_width(col2_w),
+                                .desired_width(col2_w)
+                                .min_size(Vec2::new(col2_w, 32.0))
+                                .font(egui::FontId::proportional(15.0)),
+                        );
+                    });
+                    // Real name
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new("Real name").size(13.0).color(MUTED));
+                        ui.add_enabled(
+                            !running,
+                            egui::TextEdit::singleline(&mut self.inject.realname)
+                                .hint_text("Jane Smith")
+                                .desired_width(col2_w)
+                                .min_size(Vec2::new(col2_w, 32.0))
+                                .font(egui::FontId::proportional(15.0)),
                         );
                     });
                     ui.end_row();
+
+                    // Password
+                    let pw_mismatch_here = !self.inject.password.is_empty()
+                        && !self.inject.password_confirm.is_empty()
+                        && self.inject.password != self.inject.password_confirm;
                     ui.vertical(|ui| {
-                        ui.label(RichText::new("Password").size(12.0).color(MUTED));
+                        let lbl = if pw_mismatch_here {
+                            RichText::new("Password  *").size(13.0).color(RED)
+                        } else {
+                            RichText::new("Password  *").size(13.0).color(MUTED)
+                        };
+                        ui.label(lbl);
                         ui.add_enabled(
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.password)
                                 .password(true)
-                                .hint_text("•••••")
-                                .desired_width(col2_w),
+                                .hint_text("Enter password")
+                                .desired_width(col2_w)
+                                .min_size(Vec2::new(col2_w, 32.0))
+                                .font(egui::FontId::proportional(15.0)),
                         );
                     });
+                    // Confirm password
                     ui.vertical(|ui| {
-                        let mismatch = !self.inject.password.is_empty()
-                            && !self.inject.password_confirm.is_empty()
-                            && self.inject.password != self.inject.password_confirm;
-                        let lbl_col = if mismatch { RED } else { MUTED };
-                        ui.label(RichText::new("Confirm password").size(12.0).color(lbl_col));
+                        let lbl = if pw_mismatch_here {
+                            RichText::new("Confirm password  *").size(13.0).color(RED)
+                        } else {
+                            RichText::new("Confirm password  *").size(13.0).color(MUTED)
+                        };
+                        ui.label(lbl);
                         ui.add_enabled(
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.password_confirm)
                                 .password(true)
-                                .hint_text("•••••")
-                                .desired_width(col2_w),
+                                .hint_text("Re-enter password")
+                                .desired_width(col2_w)
+                                .min_size(Vec2::new(col2_w, 32.0))
+                                .font(egui::FontId::proportional(15.0)),
                         );
-                        if mismatch {
-                            ui.label(
-                                RichText::new("Passwords do not match")
-                                    .size(11.0)
-                                    .color(RED),
-                            );
+                        if pw_mismatch_here {
+                            ui.add_space(2.0);
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new("⚠").color(RED).size(12.0));
+                                ui.label(
+                                    RichText::new("Passwords do not match")
+                                        .size(12.0)
+                                        .color(RED),
+                                );
+                            });
+                        } else if !self.inject.password.is_empty()
+                            && self.inject.password == self.inject.password_confirm
+                        {
+                            ui.add_space(2.0);
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new("✓").color(GREEN).size(12.0));
+                                ui.label(
+                                    RichText::new("Passwords match")
+                                        .size(12.0)
+                                        .color(GREEN),
+                                );
+                            });
                         }
-                    });
-                    ui.end_row();
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Real name").size(12.0).color(MUTED));
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.realname)
-                                .hint_text("John Doe")
-                                .desired_width(col2_w),
-                        );
                     });
                     ui.end_row();
                 });
