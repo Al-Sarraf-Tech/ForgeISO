@@ -289,7 +289,7 @@ fn infer_architecture(input: &str) -> Option<String> {
     }
 }
 
-fn read_primary_volume_id(path: &Path) -> EngineResult<Option<String>> {
+pub(crate) fn read_primary_volume_id(path: &Path) -> EngineResult<Option<String>> {
     let mut file = std::fs::File::open(path)?;
     file.seek(SeekFrom::Start(16 * 2048))?;
 

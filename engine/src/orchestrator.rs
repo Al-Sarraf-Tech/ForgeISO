@@ -77,6 +77,30 @@ pub struct IsoDiff {
     pub unchanged: usize,
 }
 
+/// ISO-9660 compliance check result.
+/// `compliant` is true only when the CD001 primary volume descriptor signature
+/// is confirmed at the standard sector-16 offset. El Torito boot presence is
+/// checked via xorriso when available.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Iso9660Compliance {
+    /// True if the CD001 ISO-9660 signature was found at sector 16.
+    pub compliant: bool,
+    /// Primary volume descriptor volume ID label (may be None if empty).
+    pub volume_id: Option<String>,
+    /// File size in bytes.
+    pub size_bytes: u64,
+    /// El Torito BIOS boot entry detected (requires xorriso).
+    pub boot_bios: bool,
+    /// El Torito UEFI boot entry detected (requires xorriso).
+    pub boot_uefi: bool,
+    /// Any El Torito boot catalog present.
+    pub el_torito_present: bool,
+    /// Method used: "iso9660_header" or "iso9660_header+xorriso".
+    pub check_method: String,
+    /// Error message if the check failed (compliant will be false).
+    pub error: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct ForgeIsoEngine {
     events: broadcast::Sender<EngineEvent>,
@@ -923,6 +947,115 @@ impl ForgeIsoEngine {
             removed,
             modified,
             unchanged,
+        })
+    }
+
+    /// Validate ISO-9660 compliance for a local file.
+    ///
+    /// Returns a structured `Iso9660Compliance` result without emitting errors —
+    /// failure information is encoded in the result's `compliant` and `error` fields.
+    pub async fn validate_iso9660(&self, path_str: &str) -> EngineResult<Iso9660Compliance> {
+        use crate::iso::read_primary_volume_id;
+
+        let path = std::path::Path::new(path_str);
+
+        self.emit(EngineEvent::info(
+            EventPhase::Verify,
+            format!("checking ISO-9660 compliance: {}", path.display()),
+        ));
+
+        if !path.exists() {
+            return Ok(Iso9660Compliance {
+                compliant: false,
+                volume_id: None,
+                size_bytes: 0,
+                boot_bios: false,
+                boot_uefi: false,
+                el_torito_present: false,
+                check_method: "iso9660_header".into(),
+                error: Some(format!("File not found: {}", path.display())),
+            });
+        }
+
+        let size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+
+        // Check CD001 primary volume descriptor at sector 16.
+        let volume_id = match read_primary_volume_id(path) {
+            Ok(vid) => vid,
+            Err(e) => {
+                self.emit(EngineEvent::warn(
+                    EventPhase::Verify,
+                    format!("ISO-9660 compliance failed: {e}"),
+                ));
+                return Ok(Iso9660Compliance {
+                    compliant: false,
+                    volume_id: None,
+                    size_bytes,
+                    boot_bios: false,
+                    boot_uefi: false,
+                    el_torito_present: false,
+                    check_method: "iso9660_header".into(),
+                    error: Some(e.to_string()),
+                });
+            }
+        };
+
+        // Enrich with El Torito boot detection via xorriso when available.
+        let mut boot_bios = false;
+        let mut boot_uefi = false;
+        let mut el_torito_present = false;
+        let mut check_method = "iso9660_header".to_string();
+
+        if which::which("xorriso").is_ok() {
+            check_method = "iso9660_header+xorriso".to_string();
+            // xorriso may exit non-zero on some ISOs even when useful output is produced;
+            // use the lossy runner so we still get stdout/stderr.
+            if let Ok(result) = run_command_lossy(
+                "xorriso",
+                &[
+                    "-indev".to_string(),
+                    path.display().to_string(),
+                    "-report_el_torito".to_string(),
+                    "plain".to_string(),
+                ],
+                None,
+            ) {
+                let report = format!(
+                    "{}\n{}",
+                    result.stdout.to_lowercase(),
+                    result.stderr.to_lowercase()
+                );
+                el_torito_present = report.contains("el torito")
+                    || report.contains("boot catalog")
+                    || report.contains("boot img");
+                boot_bios = report.contains("pltf  bios")
+                    || report.contains("boot img :   1  bios")
+                    || report.contains("platform id: 0x00")
+                    || report.contains("platform id :  0 = 80x86");
+                boot_uefi = report.contains("pltf  uefi")
+                    || report.contains("boot img :   2  uefi")
+                    || report.contains("platform id: 0xef")
+                    || report.contains("platform id :  0xef = efi");
+            }
+        }
+
+        self.emit(EngineEvent::info(
+            EventPhase::Verify,
+            format!(
+                "ISO-9660 compliant — volume_id={:?} boot_bios={} boot_uefi={}",
+                volume_id, boot_bios, boot_uefi
+            ),
+        ));
+
+        Ok(Iso9660Compliance {
+            compliant: true,
+            volume_id,
+            size_bytes,
+            boot_bios,
+            boot_uefi,
+            el_torito_present,
+            check_method,
+            error: None,
         })
     }
 }

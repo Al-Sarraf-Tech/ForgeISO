@@ -336,6 +336,18 @@ async fn verify_iso(
 }
 
 #[tauri::command]
+async fn validate_iso9660(
+    engine: State<'_, ForgeIsoEngine>,
+    path: String,
+) -> Result<serde_json::Value, String> {
+    let result = engine
+        .validate_iso9660(&path)
+        .await
+        .map_err(|e| e.to_string())?;
+    serde_json::to_value(result).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn diff_isos(
     engine: State<'_, ForgeIsoEngine>,
     base: String,
@@ -405,6 +417,7 @@ fn main() {
             render_report,
             inject_iso,
             verify_iso,
+            validate_iso9660,
             diff_isos,
             start_event_stream,
         ])

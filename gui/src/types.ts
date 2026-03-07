@@ -11,6 +11,11 @@ export type LogEntry = {
   bytesTotal?: number | null;
 };
 
+export type BootSupport = {
+  bios: boolean;
+  uefi: boolean;
+};
+
 export type Inspection = {
   source_path: string;
   distro?: string | null;
@@ -18,7 +23,28 @@ export type Inspection = {
   architecture?: string | null;
   volume_id?: string | null;
   sha256: string;
+  size_bytes?: number;
+  boot?: BootSupport;
   warnings: string[];
+};
+
+/** Result of ISO-9660 structural compliance check. */
+export type Iso9660Compliance = {
+  /** True only when the CD001 signature was confirmed at sector 16. */
+  compliant: boolean;
+  /** Primary volume descriptor label (may be null). */
+  volume_id: string | null;
+  size_bytes: number;
+  /** El Torito BIOS boot entry present (requires xorriso). */
+  boot_bios: boolean;
+  /** El Torito UEFI boot entry present (requires xorriso). */
+  boot_uefi: boolean;
+  /** Any El Torito boot catalog detected. */
+  el_torito_present: boolean;
+  /** Validation method: "iso9660_header" or "iso9660_header+xorriso". */
+  check_method: string;
+  /** Non-null when compliance check failed. */
+  error: string | null;
 };
 
 export type BuildResult = {
@@ -104,6 +130,7 @@ export type AppState = {
   injectResult: InjectResult | null;
   verifyResult: VerifyResult | null;
   diffResult: IsoDiff | null;
+  iso9660Result: Iso9660Compliance | null;
 
   // Remembered source paths (so stages pre-fill intelligently)
   lastSourceIso: string;
