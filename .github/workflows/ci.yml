@@ -8,6 +8,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Restrict default GITHUB_TOKEN to read-only; release job escalates to write.
+permissions:
+  contents: read
+
 # ── CI: 6 stages, all run in parallel ephemeral containers ───────────────────
 #
 # Each matrix entry spins up its own GitHub-hosted runner (ubuntu-latest).
@@ -166,8 +170,12 @@ jobs:
             xorriso \
             libarchive-tools
           sudo gem install fpm --no-document
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
-            | sudo sh -s -- -b /usr/local/bin || true
+          SYFT_VERSION=v1.42.1
+          curl -sSfL "https://raw.githubusercontent.com/anchore/syft/${SYFT_VERSION}/install.sh" \
+            -o /tmp/install-syft.sh \
+            && sudo sh /tmp/install-syft.sh -b /usr/local/bin "${SYFT_VERSION}" \
+            && rm -f /tmp/install-syft.sh \
+            || echo "WARNING: syft installation failed, continuing without SBOM"
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -205,9 +213,18 @@ jobs:
       - name: Verify packages
         run: |
           cd dist/release
+          echo "Verifying SHA-256 checksums..."
           sha256sum -c checksums.txt
-          rpm -qip forgeiso-*.rpm 2>/dev/null | grep -E "Name|Version|Arch"
-          dpkg-deb --info forgeiso_*.deb 2>/dev/null | grep -E "Package|Version|Arch"
+          if ls forgeiso-*.rpm 1>/dev/null 2>&1; then
+            rpm -qip forgeiso-*.rpm | grep -E "Name|Version|Arch"
+          else
+            echo "WARNING: no RPM packages found"
+          fi
+          if ls forgeiso_*.deb 1>/dev/null 2>&1; then
+            dpkg-deb --info forgeiso_*.deb | grep -E "Package|Version|Arch"
+          else
+            echo "WARNING: no DEB packages found"
+          fi
 
       - name: Generate SBOM
         run: |

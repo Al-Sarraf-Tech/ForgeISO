@@ -539,6 +539,94 @@ impl InjectConfig {
             }
         }
 
+        // Sudo commands — these are written into sudoers, so block metacharacters
+        // that could break sudoers syntax or inject shell commands.
+        for cmd in &self.user.sudo_commands {
+            if cmd
+                .chars()
+                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "sudo_command contains shell metacharacters: {cmd:?}"
+                )));
+            }
+        }
+
+        // APT repos — written via echo into sources.list files
+        for repo in &self.apt_repos {
+            if repo
+                .chars()
+                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "apt_repo contains shell metacharacters: {repo:?}"
+                )));
+            }
+        }
+
+        // Mount entries — written into fstab via echo
+        for entry in &self.mounts {
+            if entry
+                .chars()
+                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "mount entry contains shell metacharacters: {entry:?}"
+                )));
+            }
+        }
+
+        // APT mirror — used in YAML and potentially late-commands
+        if let Some(mirror) = &self.apt_mirror {
+            if mirror
+                .chars()
+                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "apt_mirror contains shell metacharacters: {mirror:?}"
+                )));
+            }
+        }
+
+        // Proxy URLs — written to /etc/environment via echo
+        for (field, val) in [
+            ("http_proxy", &self.proxy.http_proxy),
+            ("https_proxy", &self.proxy.https_proxy),
+        ] {
+            if let Some(url) = val {
+                if url
+                    .chars()
+                    .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n'))
+                {
+                    return Err(EngineError::InvalidConfig(format!(
+                        "{field} contains shell metacharacters: {url:?}"
+                    )));
+                }
+            }
+        }
+
+        // no_proxy entries — written to /etc/environment
+        for entry in &self.proxy.no_proxy {
+            if entry
+                .chars()
+                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "no_proxy contains shell metacharacters: {entry:?}"
+                )));
+            }
+        }
+
+        // DNS servers — used in cloud-init YAML and potentially resolv.conf commands
+        for dns in &self.network.dns_servers {
+            is_safe_identifier(dns, "dns_server")?;
+        }
+
+        // NTP servers — used in printf commands for timesyncd.conf
+        for ntp in &self.network.ntp_servers {
+            is_safe_identifier(ntp, "ntp_server")?;
+        }
+
         // Container users
         for u in &self.containers.docker_users {
             is_safe_identifier(u, "docker_user")?;
@@ -551,25 +639,27 @@ impl InjectConfig {
             }
         }
 
-        // GRUB — default_entry is a menu label (may contain spaces/commas), not a
-        // shell argument, so only block actual shell metacharacters.
+        // GRUB — default_entry and cmdline_extra are interpolated into sed s///
+        // patterns, so block shell metacharacters AND the sed delimiter (/).
         if let Some(entry) = &self.grub.default_entry {
-            if entry
-                .chars()
-                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n'))
-            {
+            if entry.chars().any(|c| {
+                matches!(
+                    c,
+                    ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n' | '/'
+                )
+            }) {
                 return Err(EngineError::InvalidConfig(format!(
-                    "grub_default contains shell metacharacters: {entry:?}"
+                    "grub_default contains shell/sed metacharacters: {entry:?}"
                 )));
             }
         }
         for param in &self.grub.cmdline_extra {
             if param
                 .chars()
-                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '\\' | '\n'))
+                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '\\' | '\n' | '/'))
             {
                 return Err(EngineError::InvalidConfig(format!(
-                    "grub_cmdline contains shell metacharacters: {param:?}"
+                    "grub_cmdline contains shell/sed metacharacters: {param:?}"
                 )));
             }
         }
@@ -671,6 +761,153 @@ mod tests {
             ..Default::default()
         };
         assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn grub_default_rejects_sed_delimiter() {
+        // Forward slash breaks the sed s/// delimiter and can inject sed commands
+        let cfg = InjectConfig {
+            grub: GrubConfig {
+                default_entry: Some("foo/e cat /etc/shadow".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn grub_cmdline_rejects_sed_delimiter() {
+        let cfg = InjectConfig {
+            grub: GrubConfig {
+                cmdline_extra: vec!["quiet/e id".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn grub_cmdline_accepts_valid_params() {
+        let cfg = InjectConfig {
+            grub: GrubConfig {
+                cmdline_extra: vec![
+                    "quiet".into(),
+                    "splash".into(),
+                    "nomodeset".into(),
+                    "intel_iommu=on".into(),
+                ],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn inject_rejects_shell_metachar_in_sudo_command() {
+        let cfg = InjectConfig {
+            user: UserConfig {
+                sudo_commands: vec!["ALL; rm -rf /".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_rejects_shell_metachar_in_apt_repo() {
+        let cfg = InjectConfig {
+            apt_repos: vec!["ppa:user/repo'; echo pwned".into()],
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_rejects_shell_metachar_in_mount() {
+        let cfg = InjectConfig {
+            mounts: vec!["/dev/sda1 /mnt ext4 defaults 0 0; whoami".into()],
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_rejects_shell_metachar_in_apt_mirror() {
+        let cfg = InjectConfig {
+            apt_mirror: Some("http://mirror.example.com$(id)".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_rejects_shell_metachar_in_proxy() {
+        let cfg = InjectConfig {
+            proxy: ProxyConfig {
+                http_proxy: Some("http://proxy.example.com; cat /etc/passwd".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_rejects_unsafe_dns_server() {
+        let cfg = InjectConfig {
+            network: NetworkConfig {
+                dns_servers: vec!["8.8.8.8; rm -rf /".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_rejects_unsafe_ntp_server() {
+        let cfg = InjectConfig {
+            network: NetworkConfig {
+                ntp_servers: vec!["ntp.example.com$(id)".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_accepts_valid_sudo_commands() {
+        let cfg = InjectConfig {
+            user: UserConfig {
+                sudo_commands: vec!["/usr/bin/apt".into(), "/usr/sbin/reboot".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn inject_accepts_valid_apt_repos() {
+        let cfg = InjectConfig {
+            apt_repos: vec!["deb http://archive.ubuntu.com/ubuntu noble main".into()],
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn inject_accepts_valid_mount_entries() {
+        let cfg = InjectConfig {
+            mounts: vec!["/dev/sda1 /mnt ext4 defaults 0 0".into()],
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok());
     }
 
     #[test]

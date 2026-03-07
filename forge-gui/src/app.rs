@@ -1795,6 +1795,10 @@ impl ForgeApp {
                 && !self.inject.password_confirm.is_empty()
                 && self.inject.password != self.inject.password_confirm;
             let source_empty = self.inject.source.trim().is_empty();
+            let sha_invalid = {
+                let s = self.inject.expected_sha256.trim();
+                !s.is_empty() && (s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()))
+            };
             if source_empty && !running {
                 ui.label(
                     RichText::new("⚠ Source ISO is required")
@@ -1809,7 +1813,14 @@ impl ForgeApp {
                         .color(RED),
                 );
             }
-            let can = !source_empty && !pw_mismatch && !running;
+            if sha_invalid {
+                ui.label(
+                    RichText::new("⚠ SHA-256 must be a 64-character hex string")
+                        .size(12.0)
+                        .color(RED),
+                );
+            }
+            let can = !source_empty && !pw_mismatch && !sha_invalid && !running;
             if primary_btn(
                 ui,
                 if running {
@@ -2556,8 +2567,21 @@ impl ForgeApp {
                         });
                     ui.add_space(12.0);
                     ui.horizontal(|ui| {
+                        let build_sha_invalid = {
+                            let s = self.build.expected_sha256.trim();
+                            !s.is_empty()
+                                && (s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()))
+                        };
+                        if build_sha_invalid {
+                            ui.label(
+                                RichText::new("⚠ SHA-256 must be a 64-character hex string")
+                                    .size(12.0)
+                                    .color(RED),
+                            );
+                        }
                         let can_build = !self.build.source.trim().is_empty()
                             && !self.build.output_dir.trim().is_empty()
+                            && !build_sha_invalid
                             && !running;
                         if primary_btn(
                             ui,

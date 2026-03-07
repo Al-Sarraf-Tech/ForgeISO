@@ -66,12 +66,24 @@ echo "▶ [5/6] Generating checksums..."
 CHECKSUM_FILE="${RELEASE_DIR}/checksums.txt"
 (
   cd "${RELEASE_DIR}"
-  sha256sum \
+  checksum_files=()
+  for f in \
     "forgeiso-${VERSION}-1.x86_64.rpm" \
     "forgeiso_${VERSION}-1_amd64.deb" \
     "forgeiso-${VERSION}-1-x86_64.pkg.tar.zst" \
-    "forgeiso-${VERSION}-linux-x86_64.tar.gz" \
-    2>/dev/null > "${CHECKSUM_FILE}" || true
+    "forgeiso-${VERSION}-linux-x86_64.tar.gz"; do
+    if [[ -f "$f" ]]; then
+      checksum_files+=("$f")
+    else
+      echo "  WARNING: expected package not found: $f" >&2
+    fi
+  done
+  if (( ${#checksum_files[@]} > 0 )); then
+    sha256sum "${checksum_files[@]}" > "${CHECKSUM_FILE}"
+  else
+    echo "ERROR: no release packages found to checksum" >&2
+    exit 1
+  fi
 )
 echo "  SHA-256 checksums:"
 while IFS= read -r line; do

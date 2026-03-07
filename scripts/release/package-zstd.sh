@@ -13,18 +13,16 @@ TARBALL_PATH="${OUT_DIR}/forgeiso-${VERSION}-linux-x86_64.tar.zst"
 
 forgeiso_require_binary "${BIN_DIR}" "forgeiso"
 forgeiso_require_binary "${BIN_DIR}" "forgeiso-tui"
-forgeiso_require_binary "${BIN_DIR}" "forgeiso-agent"
 
 mkdir -p "${OUT_DIR}"
 rm -rf "${STAGE_DIR}"
 rm -f "${TARBALL_PATH}"
-mkdir -p "${STAGE_DIR}/bin" "${STAGE_DIR}/docs"
+mkdir -p "${STAGE_DIR}/bin"
 
 cp "${BIN_DIR}/forgeiso" "${STAGE_DIR}/bin/"
 cp "${BIN_DIR}/forgeiso-tui" "${STAGE_DIR}/bin/"
-cp "${BIN_DIR}/forgeiso-agent" "${STAGE_DIR}/bin/"
-cp "${ROOT_DIR}/README.md" "${ROOT_DIR}/LICENSE" "${STAGE_DIR}/"
-cp -r "${ROOT_DIR}/docs"/* "${STAGE_DIR}/docs/"
+cp "${ROOT_DIR}/README.md" "${STAGE_DIR}/"
+printf '%s\n' "${VERSION}" > "${STAGE_DIR}/VERSION"
 
 tar -C "${OUT_DIR}" --zstd -cf "${TARBALL_PATH}" "forgeiso-${VERSION}-linux-x86_64"
 rm -rf "${STAGE_DIR}"

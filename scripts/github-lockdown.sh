@@ -18,7 +18,7 @@ cat > /tmp/forgeiso-branch-protection.json <<'JSON'
     "strict": true,
     "contexts": [
       "C1 Rust",
-      "C2 Go",
+      "C2 SBOM + Audit",
       "C3 GUI",
       "C4 Security",
       "C5 Integration",

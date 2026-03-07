@@ -1,4 +1,4 @@
-FROM rust:1-bookworm
+FROM rust:1.93-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libgtk-3-dev \

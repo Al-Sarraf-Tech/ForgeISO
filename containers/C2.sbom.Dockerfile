@@ -16,7 +16,11 @@ RUN cargo install cargo-deny --version "0.16" --locked 2>/dev/null \
 RUN cargo install cargo-audit --locked
 
 # Install syft for SBOM generation (CycloneDX + SPDX)
-RUN curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
-    | sh -s -- -b /usr/local/bin
+# Pinned to a tagged release to reduce supply chain risk.
+ARG SYFT_VERSION=v1.42.1
+RUN curl -sSfL "https://raw.githubusercontent.com/anchore/syft/${SYFT_VERSION}/install.sh" \
+    -o /tmp/install-syft.sh \
+    && sh /tmp/install-syft.sh -b /usr/local/bin "${SYFT_VERSION}" \
+    && rm -f /tmp/install-syft.sh
 
 WORKDIR /workspace

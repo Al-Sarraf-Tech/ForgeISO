@@ -796,6 +796,7 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::IsoSource;
 
     #[test]
     fn test_hash_password_format() {
@@ -1920,6 +1921,97 @@ autoinstall:
         assert!(
             !all.contains("apt.conf.d"),
             "APT proxy config must not appear for Fedora"
+        );
+    }
+
+    #[test]
+    fn test_ntp_servers_appear_in_late_commands() {
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "test.iso".to_string(),
+            network: crate::config::NetworkConfig {
+                ntp_servers: vec![
+                    "ntp1.example.com".to_string(),
+                    "ntp2.example.com".to_string(),
+                ],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(all.contains("ntp1.example.com"), "NTP server 1 expected");
+        assert!(all.contains("ntp2.example.com"), "NTP server 2 expected");
+        assert!(all.contains("timesyncd"), "timesyncd config expected");
+    }
+
+    #[test]
+    fn test_sudo_commands_in_late_commands() {
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "test.iso".to_string(),
+            username: Some("admin".to_string()),
+            user: crate::config::UserConfig {
+                sudo_commands: vec!["/usr/bin/apt".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(
+            all.contains("/usr/bin/apt"),
+            "sudo command should appear in late-commands"
+        );
+    }
+
+    #[test]
+    fn test_proxy_env_in_late_commands() {
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "test.iso".to_string(),
+            proxy: crate::config::ProxyConfig {
+                http_proxy: Some("http://proxy:3128".to_string()),
+                https_proxy: Some("http://proxy:3128".to_string()),
+                no_proxy: vec!["localhost".to_string(), "127.0.0.1".to_string()],
+            },
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(all.contains("http_proxy"), "http_proxy env expected");
+        assert!(all.contains("https_proxy"), "https_proxy env expected");
+        assert!(all.contains("no_proxy"), "no_proxy env expected");
+    }
+
+    #[test]
+    fn test_mount_entries_in_late_commands() {
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "test.iso".to_string(),
+            mounts: vec!["/dev/sda2 /data ext4 defaults 0 2".to_string()],
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(all.contains("fstab"), "fstab entry expected");
+        assert!(all.contains("/dev/sda2"), "mount device expected");
+        assert!(all.contains("mkdir"), "mountpoint mkdir expected");
+    }
+
+    #[test]
+    fn test_apt_repos_in_late_commands() {
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "test.iso".to_string(),
+            apt_repos: vec!["deb http://archive.ubuntu.com/ubuntu noble main".to_string()],
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(
+            all.contains("archive.ubuntu.com"),
+            "APT repo URL expected in late commands"
         );
     }
 }
