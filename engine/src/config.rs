@@ -551,9 +551,17 @@ impl InjectConfig {
             }
         }
 
-        // GRUB
+        // GRUB — default_entry is a menu label (may contain spaces/commas), not a
+        // shell argument, so only block actual shell metacharacters.
         if let Some(entry) = &self.grub.default_entry {
-            is_safe_identifier(entry, "grub_default")?;
+            if entry
+                .chars()
+                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "grub_default contains shell metacharacters: {entry:?}"
+                )));
+            }
         }
         for param in &self.grub.cmdline_extra {
             if param
@@ -637,6 +645,32 @@ mod tests {
             ..Default::default()
         };
         assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn grub_default_allows_spaces_and_commas() {
+        // GRUB menu titles routinely contain spaces and commas, e.g.
+        // "Ubuntu, with Linux 6.x-generic" — these must not be rejected.
+        let cfg = InjectConfig {
+            grub: GrubConfig {
+                default_entry: Some("Ubuntu, with Linux 6.x-generic".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn grub_default_rejects_shell_metachar() {
+        let cfg = InjectConfig {
+            grub: GrubConfig {
+                default_entry: Some("Ubuntu$(rm -rf /)".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
     }
 
     #[test]
