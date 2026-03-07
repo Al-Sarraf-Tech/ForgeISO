@@ -1460,44 +1460,86 @@ impl From<TestResult> for TestSummary {
     }
 }
 
+/// List all files in an ISO with their sizes.
+///
+/// Tries two methods in order:
+///  1. `lsdl` exec action (no arg)  — all xorriso versions >= 1.5.4
+///     Output: `perms nlinks uid gid size month day time/year 'path'`
+///     Note: `.` and `{}` path tokens are NOT accepted by xorriso 1.5.6 `-find -exec`
+///  2. plain `-find / -type f`      — last resort, paths only with size = 0
 fn get_iso_file_list(iso_path: &Path) -> EngineResult<std::collections::HashMap<String, u64>> {
     use std::process::Command;
 
-    let output = Command::new("xorriso")
+    let iso_str = iso_path.to_string_lossy();
+
+    // ── Method 1: lsdl exec (works on xorriso 1.5.4–1.5.7+) ─────────────────
+    // `-exec lsdl` with NO path argument applies lsdl to each found file.
+    // xorriso 1.5.6 rejects `.` and `{}` after the exec action name.
+    if let Ok(out) = Command::new("xorriso")
         .args([
-            "-indev",
-            iso_path.to_str().unwrap(),
-            "-find",
-            "/",
-            "-type",
-            "f",
-            "-exec",
-            "stat_lstat",
-            ".",
+            "-indev", &iso_str, "-find", "/", "-type", "f", "-exec", "lsdl",
         ])
-        .output()?;
-
-    if !output.status.success() {
-        return Err(EngineError::Runtime(format!(
-            "xorriso failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-
-    let mut files = std::collections::HashMap::new();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    for line in stdout.lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let Ok(size) = parts[0].parse::<u64>() {
-                let path = parts[1..].join(" ");
-                files.insert(path, size);
-            }
+        .output()
+    {
+        let text = String::from_utf8_lossy(&out.stdout);
+        let files = parse_lsdl_output(&text);
+        if !files.is_empty() {
+            return Ok(files);
         }
     }
 
-    Ok(files)
+    // ── Method 2: paths only, no sizes (minimum viable diff) ─────────────────
+    let out = Command::new("xorriso")
+        .args(["-indev", &iso_str, "-find", "/", "-type", "f"])
+        .output()
+        .map_err(|e| EngineError::Runtime(format!("xorriso not found: {e}")))?;
+
+    if !out.status.success() {
+        return Err(EngineError::Runtime(format!(
+            "xorriso failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        )));
+    }
+
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter(|l| l.starts_with('/') || l.starts_with("'/"))
+        .map(|l| {
+            let path = l.trim_matches('\'').to_string();
+            (path, 0u64)
+        })
+        .collect())
+}
+
+fn parse_lsdl_output(text: &str) -> std::collections::HashMap<String, u64> {
+    // xorriso -find / -type f -exec lsdl output format (1.5.x):
+    // `-rwxr--r--    1 1000     1000       966664 Aug 13  2024 '/EFI/boot/bootx64.efi'`
+    // Fields: [0]perms [1]nlinks [2]uid [3]gid [4]size [5]month [6]day [7]year/time [8+]'path'
+    let mut files = std::collections::HashMap::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        // File entries start with permission chars (-, d, l, etc.)
+        let first = line.chars().next().unwrap_or(' ');
+        if !matches!(first, '-' | 'd' | 'l' | 'c' | 'b' | 'p' | 's') {
+            continue;
+        }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        // Need at least: perms nlinks uid gid size month day time/year path
+        if parts.len() >= 9 {
+            if let Ok(size) = parts[4].parse::<u64>() {
+                // Path is the last fields joined, strip surrounding single quotes
+                let raw_path = parts[8..].join(" ");
+                let path = raw_path.trim_matches('\'').to_string();
+                if path.starts_with('/') {
+                    files.insert(path, size);
+                }
+            }
+        }
+    }
+    files
 }
 
 /// Build a minimal archinstall JSON config from InjectConfig fields.

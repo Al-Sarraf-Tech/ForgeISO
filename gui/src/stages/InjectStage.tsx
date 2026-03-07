@@ -4,7 +4,7 @@ import type { Dispatch } from 'react';
 import type { InjectResult, InjectState, JobProgress } from '../types';
 import type { AppAction } from '../store';
 import { defaultInjectState, INJECT_PRESETS } from '../types';
-import { Field, TextInput, TextArea, Toggle, Accordion, useAccordion } from '../components/forms';
+import { Field, TextInput, FileInput, TextArea, Toggle, Accordion, useAccordion } from '../components/forms';
 import { JobProgressCard } from '../components/JobProgress';
 import { useStageAutoAdvance } from '../hooks';
 
@@ -204,10 +204,10 @@ export function InjectStage({
       <Accordion id="basic" icon="📁" title="Basic" summary="Source, output paths" open={is('basic')} onToggle={toggle}>
         <div className="field-grid">
           <Field label="Source ISO path or URL *" className="span-2">
-            <TextInput value={inj.source} onChange={set('source')} placeholder="/path/to/ubuntu.iso" disabled={isRunning} />
+            <FileInput value={inj.source} onChange={set('source')} placeholder="/path/to/ubuntu.iso" disabled={isRunning} mode="iso" />
           </Field>
           <Field label="Output directory *">
-            <TextInput value={inj.outputDir} onChange={set('outputDir')} placeholder="./artifacts" disabled={isRunning} />
+            <FileInput value={inj.outputDir} onChange={set('outputDir')} placeholder="./artifacts" disabled={isRunning} mode="folder" />
           </Field>
           <Field label="Output ISO name *">
             <TextInput value={inj.outName} onChange={set('outName')} placeholder="forgeiso-autoinstall" disabled={isRunning} />
@@ -306,11 +306,12 @@ export function InjectStage({
       <Accordion id="wallpaper" icon="🖼️" title="Wallpaper" summary="Custom desktop wallpaper" open={is('wallpaper')} onToggle={toggle}>
         <div className="field-grid">
           <Field label="Wallpaper image path (PNG or JPG — injected into ISO)" className="span-2">
-            <TextInput
+            <FileInput
               value={inj.wallpaperPath}
               onChange={set('wallpaperPath')}
               placeholder="/path/to/wallpaper.png"
               disabled={isRunning}
+              mode="file"
             />
           </Field>
         </div>

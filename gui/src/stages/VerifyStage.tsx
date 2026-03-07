@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Dispatch } from 'react';
 import type { Iso9660Compliance, JobProgress, VerifyResult } from '../types';
 import type { AppAction } from '../store';
-import { Field, TextInput } from '../components/forms';
+import { Field, FileInput } from '../components/forms';
 import { JobProgressCard } from '../components/JobProgress';
 import { useStageAutoAdvance } from '../hooks';
 
@@ -124,17 +124,19 @@ export function VerifyStage({
 
         <div className="field-grid" style={{ marginBottom: 'var(--sp-4)' }}>
           <Field label="ISO path *" className="span-2">
-            <TextInput
+            <FileInput
               value={source}
               onChange={setSource}
               placeholder="/path/to/ubuntu.iso or https://…/ubuntu.iso"
               disabled={isRunning}
+              mode="iso"
             />
           </Field>
           <Field label="SHA256SUMS URL (optional — auto-detected for Ubuntu)" className="span-2">
-            <TextInput
+            <input
+              type="text"
               value={sumsUrl}
-              onChange={setSumsUrl}
+              onChange={(e) => setSumsUrl(e.target.value)}
               placeholder="https://releases.ubuntu.com/24.04/SHA256SUMS"
               disabled={isRunning}
             />

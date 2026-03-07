@@ -4,7 +4,7 @@ import type { Dispatch } from 'react';
 import type { BuildResult, Inspection, JobProgress } from '../types';
 import type { AppAction } from '../store';
 import { DISTRO_FAMILIES, capabilityClass, capabilityLabel } from '../distro';
-import { Field, TextInput } from '../components/forms';
+import { Field, TextInput, FileInput } from '../components/forms';
 import { JobProgressCard } from '../components/JobProgress';
 import { useStageAutoAdvance } from '../hooks';
 
@@ -237,21 +237,22 @@ export function BuildStage({
 
           <div className="field-grid" style={{ marginBottom: 'var(--sp-4)' }}>
             <Field label="Source ISO path or URL *" className="span-2">
-              <TextInput
+              <FileInput
                 value={source}
                 onChange={setSource}
                 placeholder="/path/to/ubuntu.iso or https://releases.ubuntu.com/…"
                 disabled={isRunning}
+                mode="iso"
               />
             </Field>
             <Field label="Output directory *">
-              <TextInput value={outputDir} onChange={setOutputDir} placeholder="./artifacts" disabled={isRunning} />
+              <FileInput value={outputDir} onChange={setOutputDir} placeholder="./artifacts" disabled={isRunning} mode="folder" />
             </Field>
             <Field label="Build name">
               <TextInput value={buildName} onChange={setBuildName} disabled={isRunning} />
             </Field>
             <Field label="Overlay directory" hint="Optional filesystem overlay merged into ISO">
-              <TextInput value={overlayDir} onChange={setOverlayDir} placeholder="/path/to/overlay" disabled={isRunning} />
+              <FileInput value={overlayDir} onChange={setOverlayDir} placeholder="/path/to/overlay" disabled={isRunning} mode="folder" />
             </Field>
             <Field label="Volume label" hint="Optional ISO label (≤32 chars)">
               <TextInput value={outputLabel} onChange={setOutputLabel} placeholder="FORGEISO" disabled={isRunning} />

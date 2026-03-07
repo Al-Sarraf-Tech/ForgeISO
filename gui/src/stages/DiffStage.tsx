@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Dispatch } from 'react';
 import type { IsoDiff, JobProgress } from '../types';
 import type { AppAction } from '../store';
-import { Field, TextInput } from '../components/forms';
+import { Field, FileInput } from '../components/forms';
 import { JobProgressCard } from '../components/JobProgress';
 import { useStageAutoAdvance } from '../hooks';
 
@@ -112,10 +112,10 @@ export function DiffStage({
 
         <div className="field-grid" style={{ marginBottom: 'var(--sp-4)' }}>
           <Field label="Base ISO path">
-            <TextInput value={base} onChange={setBase} placeholder="/path/to/original.iso" disabled={isRunning} />
+            <FileInput value={base} onChange={setBase} placeholder="/path/to/original.iso" disabled={isRunning} mode="iso" />
           </Field>
           <Field label="Target ISO path">
-            <TextInput value={target} onChange={setTarget} placeholder="/path/to/modified.iso" disabled={isRunning} />
+            <FileInput value={target} onChange={setTarget} placeholder="/path/to/modified.iso" disabled={isRunning} mode="iso" />
           </Field>
         </div>
 
