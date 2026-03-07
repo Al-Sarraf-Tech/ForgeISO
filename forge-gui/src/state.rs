@@ -95,6 +95,7 @@ pub struct InjectState {
     pub gateway: String,
     pub http_proxy: String,
     pub https_proxy: String,
+    pub no_proxy: String, // comma-separated
     // System
     pub timezone: String,
     pub locale: String,
@@ -122,6 +123,12 @@ pub struct InjectState {
     pub podman: bool,
     // Swap
     pub swap_size_mb: String,
+    // GRUB
+    pub grub_timeout: String, // seconds as string, empty = engine default
+    pub grub_cmdline: String, // extra kernel command-line args
+    pub grub_default: String, // default boot entry label
+    // Sysctl
+    pub sysctl_pairs: String, // newline-separated "key=value" entries
     // Misc
     pub no_user_interaction: bool,
     pub wallpaper_path: String,
@@ -149,6 +156,7 @@ impl Default for InjectState {
             gateway: String::new(),
             http_proxy: String::new(),
             https_proxy: String::new(),
+            no_proxy: String::new(),
             timezone: String::new(),
             locale: String::new(),
             keyboard_layout: String::new(),
@@ -168,6 +176,10 @@ impl Default for InjectState {
             docker: false,
             podman: false,
             swap_size_mb: String::new(),
+            grub_timeout: String::new(),
+            grub_cmdline: String::new(),
+            grub_default: String::new(),
+            sysctl_pairs: String::new(),
             no_user_interaction: false,
             wallpaper_path: String::new(),
         }

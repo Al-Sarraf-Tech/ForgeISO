@@ -42,6 +42,9 @@ enum Commands {
         volume_label: Option<String>,
         #[arg(long)]
         profile: Option<String>,
+        /// Expected SHA-256 hex digest of the source ISO; operation aborts if it does not match.
+        #[arg(long)]
+        expected_sha256: Option<String>,
         #[arg(long)]
         json: bool,
     },
@@ -88,6 +91,9 @@ enum Commands {
         name: Option<String>,
         #[arg(long)]
         volume_label: Option<String>,
+        /// Expected SHA-256 hex digest of the source ISO; operation aborts if it does not match.
+        #[arg(long)]
+        expected_sha256: Option<String>,
 
         // Identity
         #[arg(long)]
@@ -328,6 +334,7 @@ async fn main() -> anyhow::Result<()> {
             overlay,
             volume_label,
             profile,
+            expected_sha256,
             json,
         } => {
             let cfg = if let Some(project) = project {
@@ -347,6 +354,7 @@ async fn main() -> anyhow::Result<()> {
                     scanning: Default::default(),
                     testing: Default::default(),
                     keep_workdir: false,
+                    expected_sha256,
                 }
             };
 
@@ -497,6 +505,7 @@ async fn main() -> anyhow::Result<()> {
             mount,
             run_command,
             distro,
+            expected_sha256,
             json,
         } => {
             // Resolve password (priority: stdin > file > cli arg)
@@ -644,6 +653,7 @@ async fn main() -> anyhow::Result<()> {
                 mounts: mount,
                 run_commands: run_command,
                 distro: resolved_distro,
+                expected_sha256,
             };
             let result = engine.inject_autoinstall(&cfg, &out).await?;
             if json {

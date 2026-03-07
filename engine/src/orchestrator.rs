@@ -10,7 +10,7 @@ use tokio::process::Command;
 use tokio::sync::broadcast;
 use walkdir::WalkDir;
 
-use crate::autoinstall::{generate_autoinstall_yaml, merge_autoinstall_yaml};
+use crate::autoinstall::{generate_autoinstall_yaml, hash_password, merge_autoinstall_yaml};
 use crate::config::{BuildConfig, Distro, IsoSource};
 use crate::error::{EngineError, EngineResult};
 use crate::events::{EngineEvent, EventPhase};
@@ -221,6 +221,13 @@ impl ForgeIsoEngine {
 
         let workspace = Workspace::create(out_dir, &cfg.name)?;
         let resolved = self.resolve_source(&cfg.source, &workspace.input).await?;
+        if let Some(expected) = &cfg.expected_sha256 {
+            self.emit(EngineEvent::info(
+                EventPhase::Verify,
+                "verifying expected SHA-256 of source ISO",
+            ));
+            check_expected_sha256(&resolved.source_path, expected)?;
+        }
         let iso = inspect_iso(
             &resolved.source_path,
             resolved.source_kind,
@@ -664,6 +671,13 @@ impl ForgeIsoEngine {
 
         // Resolve the source ISO
         let resolved = self.resolve_source(&cfg.source, &work_dir).await?;
+        if let Some(expected) = &cfg.expected_sha256 {
+            self.emit(EngineEvent::info(
+                EventPhase::Verify,
+                "verifying expected SHA-256 of source ISO",
+            ));
+            check_expected_sha256(&resolved.source_path, expected)?;
+        }
         let metadata = inspect_iso(
             &resolved.source_path,
             resolved.source_kind,
@@ -704,7 +718,7 @@ impl ForgeIsoEngine {
             }
             Some(Distro::Arch) => {
                 // ── Arch Linux: archinstall JSON config ───────────────────────
-                let archinstall_cfg = build_archinstall_config(cfg);
+                let archinstall_cfg = build_archinstall_config(cfg)?;
                 let json_content = serde_json::to_string_pretty(&archinstall_cfg)
                     .map_err(|e| EngineError::Runtime(e.to_string()))?;
                 std::fs::write(work_dir.join("archinstall-config.json"), &json_content)?;
@@ -1177,6 +1191,21 @@ pub fn sha256_file(path: &Path) -> EngineResult<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+/// Verify a file against a caller-supplied expected SHA-256 hex digest.
+/// Returns an error if the digest does not match, allowing the operation to
+/// be aborted before any ISO content is trusted or modified.
+fn check_expected_sha256(path: &Path, expected: &str) -> EngineResult<()> {
+    let actual = sha256_file(path)?;
+    let expected_norm = expected.trim().to_ascii_lowercase();
+    if actual != expected_norm {
+        return Err(EngineError::Runtime(format!(
+            "SHA-256 mismatch for {}: expected {expected_norm}, got {actual}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
 fn ensure_linux_host() -> EngineResult<()> {
     if std::env::consts::OS != "linux" {
         return Err(EngineError::MissingTool(
@@ -1550,7 +1579,7 @@ fn parse_lsdl_output(text: &str) -> std::collections::HashMap<String, u64> {
 }
 
 /// Build a minimal archinstall JSON config from InjectConfig fields.
-fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> serde_json::Value {
+fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> EngineResult<serde_json::Value> {
     use serde_json::{json, Value};
 
     let packages: Value = cfg.extra_packages.to_vec().into();
@@ -1564,7 +1593,10 @@ fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> serde_json::Va
         map.insert("username".to_string(), json!(u));
     }
     if let Some(p) = &cfg.password {
-        map.insert("!password".to_string(), json!(p));
+        // Hash the password before embedding — storing plaintext in the ISO
+        // would allow anyone who mounts or extracts it to recover credentials.
+        let hashed = hash_password(p)?;
+        map.insert("!password".to_string(), json!(hashed));
     }
     if let Some(tz) = &cfg.timezone {
         map.insert("timezone".to_string(), json!(tz));
@@ -1586,7 +1618,7 @@ fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> serde_json::Va
     map.insert("services".to_string(), services);
     map.insert("script".to_string(), json!("stealth-installation"));
 
-    Value::Object(map)
+    Ok(Value::Object(map))
 }
 
 fn patch_boot_configs(extract_dir: &Path, kernel_append: &str) -> EngineResult<()> {
@@ -1654,5 +1686,40 @@ mod tests {
             stripped,
             vec!["--grub2-mbr".to_string(), "payload".to_string()]
         );
+    }
+
+    #[test]
+    fn check_expected_sha256_accepts_match() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().expect("temp file");
+        tmp.write_all(b"hello world").expect("write");
+        let path = tmp.path();
+        // Known SHA-256 of "hello world"
+        let expected = "b94d27b9934d3e08a52e52d7da7dabfac484efe04294e576d6b859e46fcdd6b0";
+        // Use sha256_file to get the actual hash of our temp content
+        let actual = sha256_file(path).expect("hash");
+        // Verify round-trip
+        assert!(check_expected_sha256(path, &actual).is_ok());
+        // Verify mismatch is rejected
+        assert!(check_expected_sha256(path, expected).is_err());
+    }
+
+    #[test]
+    fn build_archinstall_config_hashes_password() {
+        let cfg = crate::config::InjectConfig {
+            password: Some("mysecret".to_string()),
+            ..Default::default()
+        };
+        let val = build_archinstall_config(&cfg).expect("config");
+        let pw = val
+            .get("!password")
+            .and_then(|v| v.as_str())
+            .expect("!password key");
+        // Should be a SHA-512-crypt hash, not the plaintext
+        assert!(
+            pw.starts_with("$6$"),
+            "expected SHA-512 hash starting with $6$, got: {pw}"
+        );
+        assert_ne!(pw, "mysecret", "password must not be stored in plaintext");
     }
 }

@@ -559,6 +559,7 @@ impl ForgeApp {
                 scanning: Default::default(),
                 testing: Default::default(),
                 keep_workdir: false,
+                expected_sha256: None,
             };
             match engine.build(&cfg, &out).await {
                 Ok(r) => {
@@ -1305,6 +1306,15 @@ impl ForgeApp {
                                 .desired_width(f32::INFINITY),
                         );
                     });
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new("No proxy").size(12.0).color(MUTED));
+                        ui.add_enabled(
+                            !running,
+                            egui::TextEdit::singleline(&mut self.inject.no_proxy)
+                                .hint_text("localhost,127.0.0.1,10.0.0.0/8")
+                                .desired_width(f32::INFINITY),
+                        );
+                    });
                     ui.add_space(8.0);
                     ui.separator();
                     ui.add_space(8.0);
@@ -1631,6 +1641,62 @@ impl ForgeApp {
                             ui.label(RichText::new("Must be a number").size(11.0).color(RED));
                         }
                     });
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(8.0);
+
+                    // GRUB
+                    ui.label(RichText::new("GRUB").strong().size(14.0).color(TEXT));
+                    ui.add_space(4.0);
+                    egui::Grid::new("inject_grub_grid")
+                        .num_columns(3)
+                        .spacing([8.0, 6.0])
+                        .show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                ui.label(RichText::new("Timeout (s)").size(12.0).color(MUTED));
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::singleline(&mut self.inject.grub_timeout)
+                                        .hint_text("5")
+                                        .desired_width(80.0),
+                                );
+                            });
+                            ui.vertical(|ui| {
+                                ui.label(RichText::new("Default entry").size(12.0).color(MUTED));
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::singleline(&mut self.inject.grub_default)
+                                        .hint_text("Ubuntu")
+                                        .desired_width(160.0),
+                                );
+                            });
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new("Extra cmdline args").size(12.0).color(MUTED),
+                                );
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::singleline(&mut self.inject.grub_cmdline)
+                                        .hint_text("quiet splash")
+                                        .desired_width(f32::INFINITY),
+                                );
+                            });
+                            ui.end_row();
+                        });
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(8.0);
+
+                    // Sysctl
+                    ui.label(RichText::new("Sysctl").strong().size(14.0).color(TEXT));
+                    ui.add_space(4.0);
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.sysctl_pairs)
+                            .hint_text("net.ipv4.ip_forward=1\nvm.swappiness=10")
+                            .desired_width(f32::INFINITY)
+                            .desired_rows(3),
+                    );
                 },
             );
 
@@ -2854,7 +2920,12 @@ fn build_inject_config(inject: &InjectState) -> InjectConfig {
         proxy: ProxyConfig {
             http_proxy: opt(&inject.http_proxy),
             https_proxy: opt(&inject.https_proxy),
-            no_proxy: Vec::new(),
+            no_proxy: inject
+                .no_proxy
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect(),
         },
         timezone: opt(&inject.timezone),
         locale: opt(&inject.locale),
@@ -2877,7 +2948,16 @@ fn build_inject_config(inject: &InjectState) -> InjectConfig {
         },
         enable_services: lines(&inject.enable_services),
         disable_services: lines(&inject.disable_services),
-        sysctl: Vec::new(),
+        sysctl: lines(&inject.sysctl_pairs)
+            .iter()
+            .filter_map(|s| {
+                let mut parts = s.splitn(2, '=');
+                match (parts.next(), parts.next()) {
+                    (Some(k), Some(v)) => Some((k.trim().to_string(), v.trim().to_string())),
+                    _ => None,
+                }
+            })
+            .collect(),
         swap: inject
             .swap_size_mb
             .trim()
@@ -2895,11 +2975,20 @@ fn build_inject_config(inject: &InjectState) -> InjectConfig {
             podman: inject.podman,
             docker_users: Vec::new(),
         },
-        grub: GrubConfig::default(),
+        grub: GrubConfig {
+            timeout: inject.grub_timeout.trim().parse::<u32>().ok(),
+            cmdline_extra: inject
+                .grub_cmdline
+                .split_whitespace()
+                .map(String::from)
+                .collect(),
+            default_entry: super::state::opt(&inject.grub_default),
+        },
         encrypt: false,
         encrypt_passphrase: None,
         mounts: Vec::new(),
         run_commands: lines(&inject.run_commands),
         distro,
+        expected_sha256: None,
     }
 }

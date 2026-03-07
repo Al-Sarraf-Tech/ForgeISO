@@ -344,6 +344,7 @@ impl App {
             scanning: Default::default(),
             testing: Default::default(),
             keep_workdir: false,
+            expected_sha256: None,
         })
     }
 }

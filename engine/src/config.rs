@@ -133,6 +133,9 @@ pub struct BuildConfig {
     pub testing: TestingPolicy,
     #[serde(default)]
     pub keep_workdir: bool,
+    /// If set, the downloaded ISO's SHA-256 must match before any operation proceeds.
+    #[serde(default)]
+    pub expected_sha256: Option<String>,
 }
 
 impl BuildConfig {
@@ -309,6 +312,9 @@ pub struct InjectConfig {
     pub out_name: String,
     #[serde(default)]
     pub output_label: Option<String>,
+    /// If set, the downloaded ISO's SHA-256 must match before injection proceeds.
+    #[serde(default)]
+    pub expected_sha256: Option<String>,
 
     // Identity
     #[serde(default)]
@@ -587,6 +593,7 @@ mod tests {
             scanning: ScanPolicy::default(),
             testing: TestingPolicy::default(),
             keep_workdir: false,
+            expected_sha256: None,
         };
 
         assert!(cfg.validate().is_err());
