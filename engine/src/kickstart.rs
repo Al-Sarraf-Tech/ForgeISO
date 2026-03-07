@@ -56,8 +56,9 @@ pub fn generate_kickstart_cfg(cfg: &InjectConfig) -> EngineResult<String> {
     if let Some(static_ip) = &cfg.static_ip {
         // Parse CIDR notation: "10.0.0.5/24" → ip=10.0.0.5 netmask=255.255.255.0
         let (ip, mask) = parse_cidr(static_ip);
-        let mut net_line =
-            format!("network --bootproto=static --device=link --onboot=on --ip={ip} --netmask={mask}");
+        let mut net_line = format!(
+            "network --bootproto=static --device=link --onboot=on --ip={ip} --netmask={mask}"
+        );
         if let Some(gw) = &cfg.gateway {
             net_line.push_str(&format!(" --gateway={gw}"));
         }
@@ -69,8 +70,7 @@ pub fn generate_kickstart_cfg(cfg: &InjectConfig) -> EngineResult<String> {
         }
         lines.push(net_line);
     } else {
-        let mut net_line =
-            "network --bootproto=dhcp --device=link --onboot=on".to_string();
+        let mut net_line = "network --bootproto=dhcp --device=link --onboot=on".to_string();
         if !cfg.network.dns_servers.is_empty() {
             net_line.push_str(&format!(
                 " --nameserver={}",

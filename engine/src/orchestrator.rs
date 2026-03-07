@@ -12,10 +12,10 @@ use walkdir::WalkDir;
 
 use crate::autoinstall::{generate_autoinstall_yaml, merge_autoinstall_yaml};
 use crate::config::{BuildConfig, Distro, IsoSource};
-use crate::kickstart::generate_kickstart_cfg;
 use crate::error::{EngineError, EngineResult};
 use crate::events::{EngineEvent, EventPhase};
 use crate::iso::{inspect_iso, IsoMetadata, ResolvedIso, SourceKind};
+use crate::kickstart::generate_kickstart_cfg;
 use crate::report::{BuildReport, TestSummary};
 use crate::scanner::{run_scans, ScanSummary};
 use crate::workspace::Workspace;
@@ -754,7 +754,10 @@ impl ForgeIsoEngine {
                     let entry = entry?;
                     std::fs::copy(entry.path(), iso_nocloud.join(entry.file_name()))?;
                 }
-                self.emit(EngineEvent::info(EventPhase::Inject, "injected cloud-init files"));
+                self.emit(EngineEvent::info(
+                    EventPhase::Inject,
+                    "injected cloud-init files",
+                ));
 
                 // Wallpaper
                 if let Some(src) = &cfg.wallpaper {
@@ -771,7 +774,10 @@ impl ForgeIsoEngine {
             Some(Distro::Fedora) => {
                 // Copy ks.cfg to ISO root
                 std::fs::copy(work_dir.join("ks.cfg"), extract_dir.join("ks.cfg"))?;
-                self.emit(EngineEvent::info(EventPhase::Inject, "injected ks.cfg into ISO root"));
+                self.emit(EngineEvent::info(
+                    EventPhase::Inject,
+                    "injected ks.cfg into ISO root",
+                ));
 
                 // Patch Fedora boot entries to add inst.ks=cdrom:/ks.cfg
                 let kernel_append = " inst.ks=cdrom:/ks.cfg";
@@ -797,14 +803,17 @@ impl ForgeIsoEngine {
                     work_dir.join("run-archinstall.sh"),
                     arch_boot.join("run-archinstall.sh"),
                 )?;
-                self.emit(EngineEvent::info(EventPhase::Inject, "injected archinstall config"));
+                self.emit(EngineEvent::info(
+                    EventPhase::Inject,
+                    "injected archinstall config",
+                ));
 
                 // Patch syslinux/archiso_sys.conf or loader/entries/ to run the script
                 let syslinux_cfg = extract_dir.join("syslinux").join("archiso_sys.conf");
                 if syslinux_cfg.exists() {
                     let content = std::fs::read_to_string(&syslinux_cfg)?;
-                    let patched = content
-                        .replace("APPEND", "APPEND script=/root/run-archinstall.sh");
+                    let patched =
+                        content.replace("APPEND", "APPEND script=/root/run-archinstall.sh");
                     std::fs::write(&syslinux_cfg, patched)?;
                 }
 
@@ -1352,7 +1361,12 @@ fn get_iso_file_list(iso_path: &Path) -> EngineResult<std::collections::HashMap<
 fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> serde_json::Value {
     use serde_json::{json, Value};
 
-    let packages: Value = cfg.extra_packages.iter().cloned().collect::<Vec<_>>().into();
+    let packages: Value = cfg
+        .extra_packages
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>()
+        .into();
     let services: Value = cfg
         .enable_services
         .iter()
