@@ -520,26 +520,31 @@ impl ForgeIsoEngine {
             file.write_all(&chunk).await?;
             downloaded += chunk.len() as u64;
 
-            if downloaded % emit_interval == 0 || downloaded == total_size {
-                if total_size > 0 {
-                    let msg = format!("{}/{} bytes", downloaded, total_size);
-                    self.emit(EngineEvent::info(EventPhase::Download, msg));
-                }
+            if (downloaded.is_multiple_of(emit_interval) || downloaded == total_size)
+                && total_size > 0
+            {
+                let msg = format!("{}/{} bytes", downloaded, total_size);
+                self.emit(EngineEvent::info(EventPhase::Download, msg));
             }
         }
         file.flush().await?;
         Ok(())
     }
 
-    pub async fn verify(
-        &self,
-        source: &str,
-        sums_url: Option<&str>,
-    ) -> EngineResult<VerifyResult> {
-        self.emit(EngineEvent::info(EventPhase::Verify, "verifying ISO checksum"));
+    pub async fn verify(&self, source: &str, sums_url: Option<&str>) -> EngineResult<VerifyResult> {
+        self.emit(EngineEvent::info(
+            EventPhase::Verify,
+            "verifying ISO checksum",
+        ));
 
-        let resolved = self.resolve_source(&IsoSource::from_raw(source), &default_cache_root()?).await?;
-        let metadata = inspect_iso(&resolved.source_path, resolved.source_kind, resolved.source_value)?;
+        let resolved = self
+            .resolve_source(&IsoSource::from_raw(source), &default_cache_root()?)
+            .await?;
+        let metadata = inspect_iso(
+            &resolved.source_path,
+            resolved.source_kind,
+            resolved.source_value,
+        )?;
 
         let filename = resolved
             .source_path
@@ -565,12 +570,12 @@ impl ForgeIsoEngine {
             } else {
                 return Err(EngineError::InvalidConfig(
                     "Release information not available for auto-detection".to_string(),
-                ))
+                ));
             }
         } else {
             return Err(EngineError::InvalidConfig(
                 "sums_url must be provided or ISO must be recognized as Ubuntu".to_string(),
-            ))
+            ));
         };
 
         self.emit(EngineEvent::info(
@@ -578,10 +583,7 @@ impl ForgeIsoEngine {
             format!("fetching checksums from {}", effective_sums_url),
         ));
 
-        let sums_content = reqwest::get(&effective_sums_url)
-            .await?
-            .text()
-            .await?;
+        let sums_content = reqwest::get(&effective_sums_url).await?.text().await?;
 
         // Parse SHA256SUMS format: <hash>  <filename>
         let mut expected_hash = None;
@@ -597,9 +599,8 @@ impl ForgeIsoEngine {
             }
         }
 
-        let expected = expected_hash.ok_or_else(|| {
-            EngineError::NotFound(format!("No checksum found for {}", filename))
-        })?;
+        let expected = expected_hash
+            .ok_or_else(|| EngineError::NotFound(format!("No checksum found for {}", filename)))?;
 
         let matched = metadata.sha256 == expected;
         self.emit(EngineEvent::info(
@@ -634,10 +635,12 @@ impl ForgeIsoEngine {
         let work_dir = workspace.root;
 
         // Resolve the source ISO
-        let resolved = self
-            .resolve_source(&cfg.source, &work_dir)
-            .await?;
-        let metadata = inspect_iso(&resolved.source_path, resolved.source_kind, resolved.source_value)?;
+        let resolved = self.resolve_source(&cfg.source, &work_dir).await?;
+        let metadata = inspect_iso(
+            &resolved.source_path,
+            resolved.source_kind,
+            resolved.source_value,
+        )?;
 
         // Create overlay directory with cloud-init files
         let nocloud_dir = work_dir.join("overlay").join("nocloud");
@@ -661,8 +664,11 @@ impl ForgeIsoEngine {
         let output = run_command_lossy(
             "xorriso",
             &[
-                "-indev".to_string(), resolved.source_path.to_string_lossy().to_string(),
-                "-extract".to_string(), "/".to_string(), extract_dir.to_string_lossy().to_string(),
+                "-indev".to_string(),
+                resolved.source_path.to_string_lossy().to_string(),
+                "-extract".to_string(),
+                "/".to_string(),
+                extract_dir.to_string_lossy().to_string(),
             ],
             None,
         )?;
@@ -983,7 +989,6 @@ fn copy_dir_contents(from: &Path, to: &Path) -> EngineResult<()> {
     Ok(())
 }
 
-
 fn download_filename(url: &str) -> String {
     let fallback = format!("download-{}.iso", chrono::Utc::now().timestamp());
     url.rsplit('/')
@@ -1187,10 +1192,16 @@ fn get_iso_file_list(iso_path: &Path) -> EngineResult<std::collections::HashMap<
     use std::process::Command;
 
     let output = Command::new("xorriso")
-        .args(&[
-            "-indev", iso_path.to_str().unwrap(),
-            "-find", "/", "-type", "f",
-            "-exec", "stat_lstat", ".",
+        .args([
+            "-indev",
+            iso_path.to_str().unwrap(),
+            "-find",
+            "/",
+            "-type",
+            "f",
+            "-exec",
+            "stat_lstat",
+            ".",
         ])
         .output()?;
 
@@ -1233,10 +1244,7 @@ fn patch_boot_configs(extract_dir: &Path, kernel_append: &str) -> EngineResult<(
     let isolinux_path = extract_dir.join("isolinux").join("isolinux.cfg");
     if isolinux_path.exists() {
         let content = std::fs::read_to_string(&isolinux_path)?;
-        let patched = content.replace(
-            "/vmlinuz",
-            &format!("/vmlinuz{}", kernel_append),
-        );
+        let patched = content.replace("/vmlinuz", &format!("/vmlinuz{}", kernel_append));
         std::fs::write(&isolinux_path, patched)?;
     }
 

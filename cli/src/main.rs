@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use forgeiso_engine::{BuildConfig, EventPhase, ForgeIsoEngine, InjectConfig, IsoSource, ProfileKind};
+use forgeiso_engine::{
+    BuildConfig, EventPhase, ForgeIsoEngine, InjectConfig, IsoSource, ProfileKind,
+};
 
 #[derive(Debug, Parser)]
 #[command(name = "forgeiso", version, about = "ForgeISO local bare-metal CLI")]
@@ -263,7 +265,11 @@ async fn main() -> anyhow::Result<()> {
             let path = engine.report(&build, &format).await?;
             println!("{}", path.display());
         }
-        Commands::Verify { source, sums_url, json } => {
+        Commands::Verify {
+            source,
+            sums_url,
+            json,
+        } => {
             let result = engine.verify(&source, sums_url.as_deref()).await?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
@@ -291,10 +297,8 @@ async fn main() -> anyhow::Result<()> {
             let result = engine.inject_autoinstall(&cfg, &out).await?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
-            } else {
-                if let Some(iso) = result.artifacts.first() {
-                    println!("Injected ISO: {}", iso.display());
-                }
+            } else if let Some(iso) = result.artifacts.first() {
+                println!("Injected ISO: {}", iso.display());
             }
         }
         Commands::Diff { base, target, json } => {
@@ -321,7 +325,10 @@ async fn main() -> anyhow::Result<()> {
                 if !result.modified.is_empty() {
                     println!("Modified ({}):", result.modified.len());
                     for entry in &result.modified {
-                        println!("  ~ {} ({} → {})", entry.path, entry.base_size, entry.target_size);
+                        println!(
+                            "  ~ {} ({} → {})",
+                            entry.path, entry.base_size, entry.target_size
+                        );
                     }
                     println!();
                 }
