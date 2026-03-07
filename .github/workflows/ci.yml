@@ -109,24 +109,49 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             pkg-config \
-            libssl-dev
+            libssl-dev \
+            ruby \
+            ruby-dev \
+            rpm \
+            squashfs-tools \
+            mtools \
+            xorriso
+          sudo gem install fpm --no-document
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-release-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build Rust binaries
         run: |
           cargo build --release -p forgeiso-cli
           cargo build --release -p forgeiso-tui
 
-      - name: Build release packages
+      - name: Build all release packages
         run: |
-          scripts/release/package-tarball.sh
-          mkdir -p dist/release
-          cp dist/forgeiso-*-linux-x86_64.tar.gz dist/release/
-          sha256sum dist/release/* > dist/release/checksums.txt
+          VERSION="${GITHUB_REF_NAME#v}"
+          bash scripts/release/make-packages.sh "${VERSION}"
+
+      - name: Verify packages
+        run: |
+          cd dist/release
+          sha256sum -c checksums.txt
+          rpm -qip forgeiso-*.rpm 2>/dev/null | grep -E "Name|Version|Arch"
+          dpkg-deb --info forgeiso_*.deb 2>/dev/null | grep -E "Package|Version|Arch"
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/release/*
+            dist/release/forgeiso-*-1.x86_64.rpm
+            dist/release/forgeiso_*-1_amd64.deb
+            dist/release/forgeiso-*-linux-x86_64.tar.gz
+            dist/release/checksums.txt
+          generate_release_notes: false
