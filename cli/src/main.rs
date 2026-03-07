@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use forgeiso_engine::{BuildConfig, ForgeIsoEngine, IsoSource, ProfileKind};
+use forgeiso_engine::{BuildConfig, EventPhase, ForgeIsoEngine, InjectConfig, IsoSource, ProfileKind};
 
 #[derive(Debug, Parser)]
 #[command(name = "forgeiso", version, about = "ForgeISO local bare-metal CLI")]
@@ -64,12 +64,58 @@ enum Commands {
         #[arg(long)]
         format: String,
     },
+    Verify {
+        #[arg(long)]
+        source: String,
+        #[arg(long)]
+        sums_url: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    Inject {
+        #[arg(long)]
+        source: String,
+        #[arg(long)]
+        autoinstall: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        volume_label: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    Diff {
+        #[arg(long)]
+        base: PathBuf,
+        #[arg(long)]
+        target: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let engine = ForgeIsoEngine::new();
+
+    // Subscribe to engine events and spawn event handler
+    let mut rx = engine.subscribe();
+    let _event_task = tokio::spawn(async move {
+        while let Ok(event) = rx.recv().await {
+            match event.phase {
+                EventPhase::Download => {
+                    eprint!("\r[Download] {:<40}", event.message);
+                    let _ = std::io::Write::flush(&mut std::io::stderr());
+                }
+                _ => {
+                    eprintln!("[{:?}] {}", event.phase, event.message);
+                }
+            }
+        }
+    });
 
     match cli.command {
         Commands::Doctor { json } => {
@@ -216,6 +262,71 @@ async fn main() -> anyhow::Result<()> {
         Commands::Report { build, format } => {
             let path = engine.report(&build, &format).await?;
             println!("{}", path.display());
+        }
+        Commands::Verify { source, sums_url, json } => {
+            let result = engine.verify(&source, sums_url.as_deref()).await?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                println!("Verifying: {}", result.filename);
+                println!("Expected: {}", result.expected);
+                println!("Actual:   {}", result.actual);
+                println!("Match:    {}", result.matched);
+            }
+        }
+        Commands::Inject {
+            source,
+            autoinstall,
+            out,
+            name,
+            volume_label,
+            json,
+        } => {
+            let cfg = InjectConfig {
+                source: IsoSource::from_raw(source),
+                autoinstall_yaml: autoinstall,
+                out_name: name.unwrap_or_else(|| "injected.iso".to_string()),
+                output_label: volume_label,
+            };
+            let result = engine.inject_autoinstall(&cfg, &out).await?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                if let Some(iso) = result.artifacts.first() {
+                    println!("Injected ISO: {}", iso.display());
+                }
+            }
+        }
+        Commands::Diff { base, target, json } => {
+            let result = engine.diff_isos(&base, &target).await?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                println!("ISO Diff: {} vs {}", base.display(), target.display());
+                println!();
+                if !result.added.is_empty() {
+                    println!("Added ({}):", result.added.len());
+                    for file in &result.added {
+                        println!("  + {}", file);
+                    }
+                    println!();
+                }
+                if !result.removed.is_empty() {
+                    println!("Removed ({}):", result.removed.len());
+                    for file in &result.removed {
+                        println!("  - {}", file);
+                    }
+                    println!();
+                }
+                if !result.modified.is_empty() {
+                    println!("Modified ({}):", result.modified.len());
+                    for entry in &result.modified {
+                        println!("  ~ {} ({} → {})", entry.path, entry.base_size, entry.target_size);
+                    }
+                    println!();
+                }
+                println!("Unchanged: {}", result.unchanged);
+            }
         }
     }
 

@@ -8,9 +8,9 @@ pub mod scanner;
 pub mod workspace;
 
 pub use config::{
-    BuildConfig, Distro, IsoSource, ProfileKind, ScanPolicy, TestingPolicy, ToolStatus,
+    BuildConfig, Distro, IsoSource, ProfileKind, ScanPolicy, TestingPolicy, ToolStatus, InjectConfig,
 };
 pub use error::{EngineError, EngineResult};
 pub use events::{EngineEvent, EventLevel, EventPhase};
 pub use iso::{BootSupport, IsoMetadata, SourceKind};
-pub use orchestrator::{BuildResult, DoctorReport, ForgeIsoEngine, ScanResult, TestResult};
+pub use orchestrator::{BuildResult, DoctorReport, ForgeIsoEngine, ScanResult, TestResult, VerifyResult, IsoDiff, DiffEntry};

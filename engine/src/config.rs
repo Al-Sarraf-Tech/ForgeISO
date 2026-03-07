@@ -211,6 +211,15 @@ fn default_profile() -> ProfileKind {
     ProfileKind::Minimal
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InjectConfig {
+    pub source: IsoSource,
+    pub autoinstall_yaml: PathBuf,
+    pub out_name: String,
+    #[serde(default)]
+    pub output_label: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
