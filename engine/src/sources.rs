@@ -106,7 +106,7 @@ static ALL_PRESETS: &[IsoPreset] = &[
         strategy: AcquisitionStrategy::DirectUrl,
         official_page: "https://ubuntu.com/download/server",
         direct_url: Some(
-            "https://releases.ubuntu.com/noble/ubuntu-24.04.2-live-server-amd64.iso",
+            "https://releases.ubuntu.com/noble/ubuntu-24.04.4-live-server-amd64.iso",
         ),
         checksum_url: Some("https://releases.ubuntu.com/noble/SHA256SUMS"),
         filename_suffix: Some("-live-server-amd64.iso"),
@@ -121,7 +121,7 @@ static ALL_PRESETS: &[IsoPreset] = &[
         strategy: AcquisitionStrategy::DirectUrl,
         official_page: "https://ubuntu.com/download/desktop",
         direct_url: Some(
-            "https://releases.ubuntu.com/noble/ubuntu-24.04.2-desktop-amd64.iso",
+            "https://releases.ubuntu.com/noble/ubuntu-24.04.4-desktop-amd64.iso",
         ),
         checksum_url: Some("https://releases.ubuntu.com/noble/SHA256SUMS"),
         filename_suffix: Some("-desktop-amd64.iso"),
@@ -174,8 +174,10 @@ static ALL_PRESETS: &[IsoPreset] = &[
         architecture: "x86_64",
         strategy: AcquisitionStrategy::DirectUrl,
         official_page: "https://rockylinux.org/download",
+        // -latest- alias always tracks the current 9.x point release;
+        // avoids URL rot on every minor bump (9.5 → 9.6 → 9.7 …).
         direct_url: Some(
-            "https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9.5-x86_64-boot.iso",
+            "https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9-latest-x86_64-boot.iso",
         ),
         checksum_url: Some(
             "https://download.rockylinux.org/pub/rocky/9/isos/x86_64/CHECKSUM",
@@ -191,8 +193,10 @@ static ALL_PRESETS: &[IsoPreset] = &[
         architecture: "x86_64",
         strategy: AcquisitionStrategy::DirectUrl,
         official_page: "https://almalinux.org/get-almalinux/",
+        // -latest- alias always tracks the current 9.x point release;
+        // avoids URL rot on every minor bump (9.5 → 9.6 → 9.7 …).
         direct_url: Some(
-            "https://repo.almalinux.org/almalinux/9/isos/x86_64/AlmaLinux-9.5-x86_64-boot.iso",
+            "https://repo.almalinux.org/almalinux/9/isos/x86_64/AlmaLinux-9-latest-x86_64-boot.iso",
         ),
         checksum_url: Some(
             "https://repo.almalinux.org/almalinux/9/isos/x86_64/CHECKSUM",
