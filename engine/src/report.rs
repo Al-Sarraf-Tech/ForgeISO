@@ -114,3 +114,158 @@ fn html_escape(input: &str) -> String {
         .replace('"', "&quot;")
         .replace('\'', "&#x27;")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{BuildConfig, IsoSource, ProfileKind, ScanPolicy, TestingPolicy};
+    use crate::iso::{IsoMetadata, SourceKind};
+    use std::path::PathBuf;
+
+    fn minimal_build_config() -> BuildConfig {
+        BuildConfig {
+            name: "test-build".to_string(),
+            source: IsoSource::Path(PathBuf::from("/tmp/test.iso")),
+            overlay_dir: None,
+            output_label: None,
+            profile: ProfileKind::Minimal,
+            auto_scan: false,
+            auto_test: false,
+            scanning: ScanPolicy::default(),
+            testing: TestingPolicy::default(),
+            keep_workdir: false,
+            expected_sha256: None,
+        }
+    }
+
+    fn minimal_iso_metadata() -> IsoMetadata {
+        IsoMetadata {
+            source_path: PathBuf::from("/tmp/test.iso"),
+            source_kind: SourceKind::LocalPath,
+            source_value: "/tmp/test.iso".to_string(),
+            size_bytes: 1024,
+            sha256: "abcdef1234567890".to_string(),
+            volume_id: Some("TEST_ISO".to_string()),
+            distro: None,
+            release: None,
+            edition: None,
+            architecture: None,
+            rootfs_path: None,
+            boot: crate::iso::BootSupport::default(),
+            inspected_at: "2026-01-01T00:00:00Z".to_string(),
+            warnings: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn html_escape_ampersand() {
+        assert_eq!(html_escape("a & b"), "a &amp; b");
+    }
+
+    #[test]
+    fn html_escape_less_than() {
+        assert_eq!(html_escape("<script>"), "&lt;script&gt;");
+    }
+
+    #[test]
+    fn html_escape_double_quote() {
+        assert_eq!(html_escape(r#"say "hello""#), "say &quot;hello&quot;");
+    }
+
+    #[test]
+    fn html_escape_single_quote() {
+        assert_eq!(html_escape("it's"), "it&#x27;s");
+    }
+
+    #[test]
+    fn html_escape_no_change_for_clean_input() {
+        let clean = "Ubuntu 24.04 LTS server amd64";
+        assert_eq!(html_escape(clean), clean);
+    }
+
+    #[test]
+    fn build_report_new_captures_source_sha256() {
+        let cfg = minimal_build_config();
+        let iso = minimal_iso_metadata();
+        let report = BuildReport::new(&cfg, &iso);
+        assert_eq!(report.metadata.source_sha256, "abcdef1234567890");
+    }
+
+    #[test]
+    fn build_report_new_captures_volume_id() {
+        let cfg = minimal_build_config();
+        let iso = minimal_iso_metadata();
+        let report = BuildReport::new(&cfg, &iso);
+        assert_eq!(report.metadata.volume_id, Some("TEST_ISO".to_string()));
+    }
+
+    #[test]
+    fn build_report_write_json_produces_valid_json() {
+        let tmp = tempfile::NamedTempFile::new().expect("tmp file");
+        let cfg = minimal_build_config();
+        let iso = minimal_iso_metadata();
+        let mut report = BuildReport::new(&cfg, &iso);
+        report.artifacts.push("/tmp/out.iso".to_string());
+        report.write_json(tmp.path()).expect("write_json");
+        let content = std::fs::read_to_string(tmp.path()).expect("read json");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("must be valid JSON");
+        assert_eq!(
+            parsed["artifacts"][0].as_str(),
+            Some("/tmp/out.iso"),
+            "artifact path must round-trip through JSON"
+        );
+    }
+
+    #[test]
+    fn build_report_write_html_contains_sha256() {
+        let tmp = tempfile::NamedTempFile::new().expect("tmp file");
+        let cfg = minimal_build_config();
+        let iso = minimal_iso_metadata();
+        let report = BuildReport::new(&cfg, &iso);
+        report.write_html(tmp.path()).expect("write_html");
+        let content = std::fs::read_to_string(tmp.path()).expect("read html");
+        assert!(
+            content.contains("abcdef1234567890"),
+            "HTML must contain the SHA-256 hash"
+        );
+        assert!(
+            content.contains("ForgeISO Report"),
+            "HTML must contain the report title"
+        );
+    }
+
+    #[test]
+    fn build_report_write_html_escapes_xss_in_source() {
+        let tmp = tempfile::NamedTempFile::new().expect("tmp file");
+        let mut cfg = minimal_build_config();
+        cfg.source = IsoSource::Url("<script>alert(1)</script>".to_string());
+        let iso = minimal_iso_metadata();
+        let report = BuildReport::new(&cfg, &iso);
+        report.write_html(tmp.path()).expect("write_html");
+        let content = std::fs::read_to_string(tmp.path()).expect("read html");
+        assert!(
+            !content.contains("<script>alert(1)</script>"),
+            "raw XSS payload must not appear in HTML output"
+        );
+        assert!(
+            content.contains("&lt;script&gt;"),
+            "XSS payload must be HTML-escaped"
+        );
+    }
+
+    #[test]
+    fn build_report_warnings_appear_in_html() {
+        let tmp = tempfile::NamedTempFile::new().expect("tmp file");
+        let cfg = minimal_build_config();
+        let mut iso = minimal_iso_metadata();
+        iso.warnings
+            .push("squashfs not found; rootfs not modified".to_string());
+        let report = BuildReport::new(&cfg, &iso);
+        report.write_html(tmp.path()).expect("write_html");
+        let content = std::fs::read_to_string(tmp.path()).expect("read html");
+        assert!(
+            content.contains("squashfs not found"),
+            "warnings must be rendered in HTML output"
+        );
+    }
+}
