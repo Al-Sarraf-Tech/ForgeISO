@@ -1,0 +1,30 @@
+# ForgeISO inject example — Arch Linux (archinstall JSON config)
+# Usage: forgeiso inject --source archlinux-2024.01.01-x86_64.iso --out /tmp/out --distro arch
+# Or load via GUI/TUI
+#
+# NOTE: Arch uses archinstall triggered at boot via archiso_script=.
+# The archinstall config is placed in arch/boot/ on the ISO.
+# archiso_script= support requires archiso 2023+.
+# If the automatic trigger fails, run archinstall manually from the live environment.
+
+source: /srv/isos/archlinux-2024.01.01-x86_64.iso
+out_name: arch-custom
+distro: arch
+
+hostname: arch-server
+username: admin
+# password: changeme
+
+timezone: UTC
+locale: en_US.UTF-8
+keyboard_layout: us
+
+extra_packages:
+  - vim
+  - git
+  - base-devel
+  - openssh
+
+enable_services:
+  - sshd
+  - systemd-timesyncd

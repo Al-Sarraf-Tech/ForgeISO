@@ -276,4 +276,44 @@ mod tests {
             ("10.0.0.1".to_string(), "255.255.0.0".to_string())
         );
     }
+
+    #[test]
+    fn test_kickstart_with_dnf_mirror() {
+        let mut cfg = base_cfg();
+        cfg.dnf_mirror = Some("https://mirror.example.com/fedora".to_string());
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        // dnf_mirror should appear in the generated kickstart
+        assert!(
+            ks.contains("mirror.example.com"),
+            "dnf_mirror not found in kickstart: {ks}"
+        );
+    }
+
+    #[test]
+    fn test_kickstart_post_section_with_commands() {
+        // %post is only emitted when there are late commands
+        let mut cfg = base_cfg();
+        cfg.run_commands = vec!["echo hello".to_string()];
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        // With run_commands, %post must be present
+        assert!(
+            ks.contains("%post"),
+            "no %post section in kickstart when run_commands present"
+        );
+        assert!(ks.contains("%end"), "no %end after %post");
+        assert!(ks.contains("echo hello"), "run_command missing from %post");
+    }
+
+    #[test]
+    fn test_kickstart_services() {
+        let mut cfg = base_cfg();
+        cfg.enable_services = vec!["sshd".to_string(), "docker".to_string()];
+        cfg.disable_services = vec!["firewalld".to_string()];
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        assert!(
+            ks.contains("services --enabled=sshd,docker")
+                || ks.contains("sshd") && ks.contains("docker"),
+            "enabled services not found in kickstart: {ks}"
+        );
+    }
 }

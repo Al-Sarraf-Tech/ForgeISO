@@ -6,7 +6,20 @@
 [![Release](https://img.shields.io/github/v/release/jalsarraf0/ForgeISO)](https://github.com/jalsarraf0/ForgeISO/releases/latest)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-ForgeISO takes an Ubuntu ISO, injects a fully configured cloud-init autoinstall payload, and produces a new ISO that installs hands-free. It also inspects, verifies, diffs, scans, and smoke-tests ISOs — all from a single binary on your Linux host.
+ForgeISO injects fully automated installation configs into Linux ISOs (Ubuntu, Linux Mint, Fedora, Arch Linux) and produces bootable ISOs that install hands-free. It also inspects, verifies, diffs, scans, and smoke-tests ISOs — all from a single binary on your Linux host.
+
+---
+
+## Distro Support
+
+| Distro | Install method | Unattended | Notes |
+|---|---|---|---|
+| Ubuntu | cloud-init autoinstall | Full | CI-tested; fully supported |
+| Fedora | Kickstart (ks.cfg) | Full | CI-tested; fully supported |
+| Linux Mint | preseed.cfg (Calamares) | Full | Not CI-tested with real ISO; overlay remaster also supported |
+| Arch Linux | archinstall JSON config | Partial | Boot-time archinstall trigger via `archiso_script=`; not CI-tested with real ISO |
+
+See [docs/distro-support.md](docs/distro-support.md) for details.
 
 ---
 
@@ -16,20 +29,21 @@ Download the latest release from the **[Releases page](https://github.com/jalsar
 
 ### Fedora · RHEL · openSUSE
 ```bash
-sudo rpm -ivh forgeiso-0.3.2-1.x86_64.rpm
+sudo rpm -ivh forgeiso-2.0.0-1.x86_64.rpm
 ```
 
 ### Debian · Ubuntu · Linux Mint
 ```bash
-sudo dpkg -i forgeiso_0.3.2-1_amd64.deb
+sudo dpkg -i forgeiso_2.0.0-1_amd64.deb
 sudo apt-get install -f        # resolve xorriso, squashfs-tools, mtools if missing
 ```
 
 ### Any x86-64 Linux (tarball)
 ```bash
-tar -xzf forgeiso-0.3.2-linux-x86_64.tar.gz
-sudo install -m755 forgeiso-0.3.2-linux-x86_64/bin/forgeiso /usr/local/bin/
-sudo install -m755 forgeiso-0.3.2-linux-x86_64/bin/forgeiso-tui /usr/local/bin/
+tar -xzf forgeiso-2.0.0-linux-x86_64.tar.gz
+sudo install -m755 forgeiso-2.0.0-linux-x86_64/bin/forgeiso /usr/local/bin/
+sudo install -m755 forgeiso-2.0.0-linux-x86_64/bin/forgeiso-tui /usr/local/bin/
+sudo install -m755 forgeiso-2.0.0-linux-x86_64/bin/forge-gui /usr/local/bin/
 ```
 
 > **Dependencies:** `xorriso` · `squashfs-tools` · `mtools`
@@ -49,8 +63,8 @@ forgeiso doctor
 
 ## Quick start
 
+### Ubuntu (fully unattended cloud-init autoinstall)
 ```bash
-# Download an Ubuntu ISO and embed an autoinstall config
 forgeiso inject \
   --source ubuntu-24.04-server-amd64.iso \
   --out /tmp/out \
@@ -60,7 +74,38 @@ forgeiso inject \
   --docker --no-user-interaction
 ```
 
-Boot the output ISO. It installs Ubuntu completely hands-free with your configuration baked in.
+### Fedora (Kickstart)
+```bash
+forgeiso inject \
+  --source Fedora-Server-dvd-x86_64-40-1.14.iso \
+  --out /tmp/out \
+  --distro fedora \
+  --hostname fedora-server \
+  --username admin --password secret \
+  --no-user-interaction
+```
+
+### Linux Mint (preseed)
+```bash
+forgeiso inject \
+  --source linuxmint-21.3-xfce-64bit.iso \
+  --out /tmp/out \
+  --distro mint \
+  --hostname mint-workstation \
+  --username admin --password secret
+```
+
+### Arch Linux (archinstall)
+```bash
+forgeiso inject \
+  --source archlinux-2024.01.01-x86_64.iso \
+  --out /tmp/out \
+  --distro arch \
+  --hostname arch-server \
+  --username admin --password secret
+```
+
+Boot the output ISO. It installs your configuration hands-free (Ubuntu and Fedora) or triggers the configured installer at boot (Mint and Arch).
 
 ---
 
@@ -68,8 +113,8 @@ Boot the output ISO. It installs Ubuntu completely hands-free with your configur
 
 | Command | What it does |
 |---|---|
-| [`inject`](#inject) | Embed autoinstall config into an Ubuntu ISO |
-| [`verify`](#verify) | Check ISO SHA-256 against official Ubuntu checksums |
+| [`inject`](#inject) | Inject install config into an ISO (Ubuntu/Fedora/Mint/Arch) |
+| [`verify`](#verify) | Check ISO SHA-256 against official checksums |
 | [`inspect`](#inspect) | Read distro/release/arch/hash from an ISO or URL |
 | [`build`](#build) | Repack an ISO with a local overlay directory |
 | [`diff`](#diff) | Compare two ISOs — added, removed, modified files |
@@ -82,16 +127,26 @@ Boot the output ISO. It installs Ubuntu completely hands-free with your configur
 
 ## inject
 
-Generates a Ubuntu [cloud-init autoinstall](https://ubuntu.com/server/docs/install/autoinstall) payload and embeds it into the ISO. The installed system is fully configured before the first boot.
+Generates a distro-appropriate install config and embeds it into the ISO. Use `--distro` to specify the target distro (defaults to Ubuntu).
 
 ```bash
 forgeiso inject \
-  --source ubuntu-24.04-server-amd64.iso \
+  --source <path-or-url.iso> \
   --out /tmp/out \
+  --distro ubuntu|fedora|mint|arch \
   [OPTIONS]
 ```
 
-Pass `--autoinstall user-data.yaml` to merge flags into an existing YAML instead of generating from scratch.
+Pass `--autoinstall user-data.yaml` (Ubuntu only) to merge flags into an existing YAML instead of generating from scratch.
+
+### Distro selection
+
+| Flag | Description |
+|---|---|
+| `--distro ubuntu` | Ubuntu cloud-init autoinstall (default) |
+| `--distro fedora` | Fedora Kickstart (ks.cfg) |
+| `--distro mint` | Linux Mint preseed.cfg via Calamares |
+| `--distro arch` | Arch Linux archinstall JSON config |
 
 ### Identity
 
@@ -137,7 +192,7 @@ Pass `--autoinstall user-data.yaml` to merge flags into an existing YAML instead
 
 | Flag | Description |
 |---|---|
-| `--firewall` | Enable UFW |
+| `--firewall` | Enable firewall (UFW for Ubuntu/Mint, firewalld for Fedora) |
 | `--firewall-policy POLICY` | Default incoming policy: `allow` \| `deny` \| `reject` |
 | `--allow-port PORT` | Open port, e.g. `22/tcp`, `443` (repeatable) |
 | `--deny-port PORT` | Block port (repeatable) |
@@ -162,8 +217,9 @@ Pass `--autoinstall user-data.yaml` to merge flags into an existing YAML instead
 | `--timezone TZ` | e.g. `America/Chicago` |
 | `--locale LOCALE` | e.g. `en_US.UTF-8` |
 | `--keyboard-layout CODE` | e.g. `us` |
-| `--apt-mirror URL` | Custom APT mirror |
-| `--apt-repo REPO` | Add PPA or deb repo (repeatable) |
+| `--apt-mirror URL` | Custom APT mirror (Ubuntu/Mint) |
+| `--apt-repo REPO` | Add PPA or deb repo (repeatable; Ubuntu/Mint) |
+| `--dnf-mirror URL` | Custom DNF mirror base URL (Fedora) |
 | `--package NAME` | Extra package to install (repeatable) |
 
 ### Services & kernel
@@ -195,17 +251,18 @@ Pass `--autoinstall user-data.yaml` to merge flags into an existing YAML instead
 | Flag | Description |
 |---|---|
 | `--run-command CMD` | Run command post-install (repeatable) |
-| `--late-command CMD` | Cloud-init late-command (repeatable) |
+| `--late-command CMD` | Cloud-init late-command (repeatable; Ubuntu only) |
 | `--no-user-interaction` | Fully automated install, no prompts |
 | `--name NAME` | Output ISO filename (without `.iso`) |
 | `--volume-label LABEL` | ISO volume label |
+| `--expected-sha256 HASH` | Reject source ISO if SHA-256 does not match |
 | `--json` | Print result as JSON |
 
 ---
 
 ## verify
 
-Computes the SHA-256 of a local ISO and checks it against the official Ubuntu checksums file. Auto-detects the checksums URL from the ISO metadata.
+Computes the SHA-256 of a local ISO and checks it against the official checksums file. Auto-detects the checksums URL from the ISO metadata for Ubuntu ISOs.
 
 ```bash
 forgeiso verify --source ubuntu-24.04-server-amd64.iso
@@ -273,7 +330,7 @@ forgeiso scan --source custom.iso
 Boots the ISO in QEMU and verifies it reaches the boot menu. Requires `qemu-system-x86_64` and `ovmf`.
 
 ```bash
-forgeiso test --source custom.iso --bios --uefi
+forgeiso test --iso custom.iso --bios --uefi
 ```
 
 ---
@@ -295,7 +352,7 @@ forgeiso report --build ./artifacts --format json
 forgeiso doctor
 ```
 
-Reports availability of `xorriso`, `squashfs-tools`, `mtools`, `qemu-system-x86_64`, `ovmf`, `trivy`, `syft`, `grype`, and `oscap`.
+Reports availability of `xorriso`, `mtools`, `unsquashfs`, `mksquashfs`, `qemu-system-x86_64`, `trivy`, `syft`, `grype`, and `oscap`. Also shows per-distro inject readiness.
 
 ---
 
@@ -325,10 +382,16 @@ Run tests:
 cargo test --workspace
 ```
 
-GUI (Tauri + React):
+GUI (egui/eframe desktop app):
 ```bash
-cd gui && npm ci && npm run build
-cargo build --release --manifest-path gui/src-tauri/Cargo.toml
+cargo build --release -p forge-gui
+sudo install -m755 target/release/forge-gui /usr/local/bin/
+```
+
+TUI (ratatui terminal UI):
+```bash
+cargo build --release -p forgeiso-tui
+sudo install -m755 target/release/forgeiso-tui /usr/local/bin/
 ```
 
 ---

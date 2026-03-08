@@ -80,6 +80,7 @@ pub enum PickTarget {
 pub struct InjectState {
     // Required
     pub source: String,
+    pub source_preset: String, // preset ID (e.g. "ubuntu-server-lts"), "" = none
     pub output_dir: String,
     pub out_name: String,
     pub output_label: String,
@@ -153,6 +154,7 @@ impl Default for InjectState {
         let cache = dirs_cache();
         Self {
             source: String::new(),
+            source_preset: String::new(),
             output_dir: cache,
             out_name: "forgeiso-local.iso".into(),
             output_label: String::new(),
@@ -237,6 +239,7 @@ pub enum DiffFilter {
 #[serde(default)]
 pub struct BuildState {
     pub source: String,
+    pub source_preset: String, // preset ID, "" = none
     pub output_dir: String,
     pub build_name: String,
     pub overlay_dir: String,
@@ -249,6 +252,7 @@ impl Default for BuildState {
     fn default() -> Self {
         Self {
             source: String::new(),
+            source_preset: String::new(),
             output_dir: "./artifacts".into(),
             build_name: "forgeiso-local".into(),
             overlay_dir: String::new(),

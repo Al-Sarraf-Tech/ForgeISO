@@ -1,0 +1,61 @@
+# ForgeISO inject example — Ubuntu (cloud-init autoinstall)
+# Usage: forgeiso inject --source ubuntu-24.04-server-amd64.iso --out /tmp/out
+# Or load via GUI/TUI
+
+source: /srv/isos/ubuntu-24.04-server-amd64.iso
+out_name: ubuntu-custom
+distro: ubuntu
+
+hostname: web-server
+username: admin
+realname: "Admin User"
+# password is supplied via --password / --password-file / --password-stdin on CLI
+# Set it here for YAML-driven runs only (avoid committing real passwords)
+# password: changeme
+
+timezone: America/Chicago
+locale: en_US.UTF-8
+keyboard_layout: us
+
+ssh:
+  authorized_keys:
+    - "ssh-ed25519 AAAA... user@host"
+  allow_password_auth: false
+  install_server: true
+
+network:
+  dns_servers:
+    - "1.1.1.1"
+    - "8.8.8.8"
+  ntp_servers:
+    - "pool.ntp.org"
+
+user:
+  groups:
+    - sudo
+    - docker
+  sudo_nopasswd: false
+
+firewall:
+  enabled: true
+  default_policy: deny
+  allow_ports:
+    - "22/tcp"
+    - "80/tcp"
+    - "443/tcp"
+
+extra_packages:
+  - curl
+  - git
+  - htop
+
+containers:
+  docker: true
+  docker_users:
+    - admin
+
+storage_layout: lvm
+swap:
+  size_mb: 2048
+
+no_user_interaction: true

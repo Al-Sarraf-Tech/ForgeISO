@@ -3,8 +3,9 @@ use std::sync::{mpsc, Arc};
 
 use egui::{Color32, Frame, RichText, Stroke, Ui, Vec2};
 use forgeiso_engine::{
-    BuildConfig, ContainerConfig, Distro, FirewallConfig, ForgeIsoEngine, GrubConfig, InjectConfig,
-    IsoSource, NetworkConfig, ProfileKind, ProxyConfig, SshConfig, SwapConfig, UserConfig,
+    all_presets, find_preset_by_str, resolve_url, AcquisitionStrategy, BuildConfig,
+    ContainerConfig, Distro, FirewallConfig, ForgeIsoEngine, GrubConfig, InjectConfig, IsoSource,
+    NetworkConfig, ProfileKind, ProxyConfig, SshConfig, SwapConfig, UserConfig,
 };
 use serde::{Deserialize, Serialize};
 
@@ -976,6 +977,72 @@ impl ForgeApp {
             .id_salt("inject_scroll")
             .show(ui, |ui| {
                 ui.add_space(12.0);
+
+                // ── ISO Preset Picker ───────────────────────────────────────
+                lbl(ui, "Quick Preset  (optional — auto-fills URL below)");
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_salt("inject_preset")
+                        .selected_text(if self.inject.source_preset.is_empty() {
+                            "— choose a preset —"
+                        } else {
+                            &self.inject.source_preset
+                        })
+                        .width(ui.available_width() - 8.0)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.inject.source_preset,
+                                String::new(),
+                                "— none —",
+                            );
+                            for p in all_presets() {
+                                let label =
+                                    format!("{} — {}", p.id.as_str(), p.strategy.as_str());
+                                if ui
+                                    .selectable_value(
+                                        &mut self.inject.source_preset,
+                                        p.id.as_str().to_string(),
+                                        label,
+                                    )
+                                    .clicked()
+                                    && p.strategy == AcquisitionStrategy::DirectUrl
+                                {
+                                    if let Ok(Some(url)) = resolve_url(p) {
+                                        self.inject.source = url;
+                                    }
+                                }
+                            }
+                        });
+                });
+                // Show hint for non-direct-url presets
+                if !self.inject.source_preset.is_empty() {
+                    if let Some(p) = find_preset_by_str(&self.inject.source_preset) {
+                        match p.strategy {
+                            AcquisitionStrategy::DiscoveryPage => {
+                                ui.label(
+                                    RichText::new(format!(
+                                        "ℹ  Discovery page preset — visit {} to get the current ISO URL",
+                                        p.official_page
+                                    ))
+                                    .color(Color32::from_rgb(180, 140, 60))
+                                    .small(),
+                                );
+                            }
+                            AcquisitionStrategy::UserProvided => {
+                                ui.label(
+                                    RichText::new(format!(
+                                        "ℹ  User-provided preset — supply your own ISO path below. Info: {}",
+                                        p.official_page
+                                    ))
+                                    .color(Color32::from_rgb(180, 140, 60))
+                                    .small(),
+                                );
+                            }
+                            AcquisitionStrategy::DirectUrl => {}
+                        }
+                    }
+                }
+
+                ui.add_space(8.0);
 
                 // ── Source ISO ──────────────────────────────────────────────
                 lbl(ui, "Source ISO  (local path or URL)");
@@ -2502,6 +2569,59 @@ impl ForgeApp {
 
                 let full_w = ui.available_width();
                 let col_w = (full_w - 20.0) / 2.0;
+
+                lbl(ui, "Quick Preset  (optional — auto-fills URL below)");
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_salt("build_preset")
+                        .selected_text(if self.build.source_preset.is_empty() {
+                            "— choose a preset —"
+                        } else {
+                            &self.build.source_preset
+                        })
+                        .width(ui.available_width() - 8.0)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.build.source_preset,
+                                String::new(),
+                                "— none —",
+                            );
+                            for p in all_presets() {
+                                let label = format!("{} — {}", p.id.as_str(), p.strategy.as_str());
+                                if ui
+                                    .selectable_value(
+                                        &mut self.build.source_preset,
+                                        p.id.as_str().to_string(),
+                                        label,
+                                    )
+                                    .clicked()
+                                    && p.strategy == AcquisitionStrategy::DirectUrl
+                                {
+                                    if let Ok(Some(url)) = resolve_url(p) {
+                                        self.build.source = url;
+                                    }
+                                }
+                            }
+                        });
+                });
+                if !self.build.source_preset.is_empty() {
+                    if let Some(p) = find_preset_by_str(&self.build.source_preset) {
+                        match p.strategy {
+                            AcquisitionStrategy::DiscoveryPage
+                            | AcquisitionStrategy::UserProvided => {
+                                ui.label(
+                                    RichText::new(format!(
+                                        "ℹ  Visit {} to get the ISO URL or path",
+                                        p.official_page
+                                    ))
+                                    .color(Color32::from_rgb(180, 140, 60))
+                                    .small(),
+                                );
+                            }
+                            AcquisitionStrategy::DirectUrl => {}
+                        }
+                    }
+                }
+                ui.add_space(8.0);
 
                 lbl(ui, "Source ISO  (local path or URL)");
                 ui.horizontal(|ui| {

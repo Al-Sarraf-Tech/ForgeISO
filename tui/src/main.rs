@@ -8,7 +8,9 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use forgeiso_engine::{BuildConfig, ForgeIsoEngine, IsoSource, ProfileKind};
+use forgeiso_engine::{
+    BuildConfig, Distro, ForgeIsoEngine, InjectConfig, IsoSource, ProfileKind, SshConfig,
+};
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
@@ -22,6 +24,7 @@ use tokio::sync::mpsc;
 // Messages sent from background tasks back to the UI loop.
 enum WorkerMsg {
     InspectOk(Box<forgeiso_engine::IsoMetadata>),
+    InjectOk(Box<forgeiso_engine::BuildResult>),
     BuildOk(Box<forgeiso_engine::BuildResult>),
     ScanOk(String),
     TestOk(bool),
@@ -78,6 +81,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ];
                     app.status = "Inspection completed".into();
                 }
+                WorkerMsg::InjectOk(result) => {
+                    app.last_iso = result.artifacts.first().cloned();
+                    let label = result
+                        .artifacts
+                        .first()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|| result.output_dir.display().to_string());
+                    app.inspection = vec![
+                        format!("Injected ISO: {label}"),
+                        format!("Report JSON: {}", result.report_json.display()),
+                    ];
+                    app.status = format!("Inject completed: {label}");
+                }
                 WorkerMsg::BuildOk(result) => {
                     app.last_iso = result.artifacts.first().cloned();
                     let label = result
@@ -126,8 +142,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Up => app.previous_field(),
                     KeyCode::Down => app.next_field(),
                     KeyCode::Enter => app.editing = true,
+                    KeyCode::Char('d') => {
+                        app.cycle_distro();
+                    }
                     KeyCode::Char('i') if !app.busy => {
                         app.spawn_inspect(Arc::clone(&engine), tx.clone());
+                    }
+                    KeyCode::Char('n') if !app.busy => {
+                        app.spawn_inject(Arc::clone(&engine), tx.clone());
                     }
                     KeyCode::Char('b') if !app.busy => {
                         app.spawn_build(Arc::clone(&engine), tx.clone());
@@ -159,6 +181,11 @@ struct App {
     build_name: String,
     overlay_dir: String,
     profile: String,
+    // Inject fields
+    distro_idx: usize,
+    hostname: String,
+    username: String,
+    password: String,
     inspection: Vec<String>,
     logs: Vec<String>,
     status: String,
@@ -185,6 +212,10 @@ impl App {
             build_name: "forgeiso-local".to_string(),
             overlay_dir: String::new(),
             profile: "minimal".to_string(),
+            distro_idx: 0,
+            hostname: String::new(),
+            username: String::new(),
+            password: String::new(),
             inspection: vec!["No ISO inspected yet".to_string()],
             logs,
             status: "Ready".to_string(),
@@ -192,13 +223,28 @@ impl App {
         }
     }
 
-    fn fields(&self) -> [(&str, &str); 5] {
+    fn distros() -> [&'static str; 4] {
+        ["ubuntu", "fedora", "mint", "arch"]
+    }
+
+    fn current_distro(&self) -> &'static str {
+        Self::distros()[self.distro_idx % Self::distros().len()]
+    }
+
+    fn cycle_distro(&mut self) {
+        self.distro_idx = (self.distro_idx + 1) % Self::distros().len();
+    }
+
+    fn fields(&self) -> [(&str, &str); 8] {
         [
             ("Source", &self.source),
             ("Output", &self.output_dir),
             ("Name", &self.build_name),
             ("Overlay", &self.overlay_dir),
             ("Profile", &self.profile),
+            ("Hostname", &self.hostname),
+            ("Username", &self.username),
+            ("Password", &self.password),
         ]
     }
 
@@ -214,13 +260,61 @@ impl App {
         }
     }
 
+    fn spawn_inject(&mut self, engine: Arc<ForgeIsoEngine>, tx: mpsc::UnboundedSender<WorkerMsg>) {
+        if self.source.trim().is_empty() {
+            self.status = "Source is required".into();
+            return;
+        }
+        let distro = match self.current_distro() {
+            "fedora" => Some(Distro::Fedora),
+            "mint" => Some(Distro::Mint),
+            "arch" => Some(Distro::Arch),
+            _ => None,
+        };
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw(self.source.clone()),
+            out_name: self.build_name.clone(),
+            hostname: if self.hostname.is_empty() {
+                None
+            } else {
+                Some(self.hostname.clone())
+            },
+            username: if self.username.is_empty() {
+                None
+            } else {
+                Some(self.username.clone())
+            },
+            password: if self.password.is_empty() {
+                None
+            } else {
+                Some(self.password.clone())
+            },
+            ssh: SshConfig::default(),
+            distro,
+            ..Default::default()
+        };
+        self.busy = true;
+        self.status = format!("Injecting ({}) …", self.current_distro());
+        let out_dir = PathBuf::from(&self.output_dir);
+        tokio::spawn(async move {
+            let msg = match engine.inject_autoinstall(&cfg, &out_dir).await {
+                Ok(r) => WorkerMsg::InjectOk(Box::new(r)),
+                Err(e) => WorkerMsg::OpError(format!("Inject failed: {e}")),
+            };
+            let _ = tx.send(msg);
+        });
+    }
+
     fn current_mut(&mut self) -> &mut String {
         match self.selected_field {
             0 => &mut self.source,
             1 => &mut self.output_dir,
             2 => &mut self.build_name,
             3 => &mut self.overlay_dir,
-            _ => &mut self.profile,
+            4 => &mut self.profile,
+            5 => &mut self.hostname,
+            6 => &mut self.username,
+            _ => &mut self.password,
         }
     }
 
@@ -353,7 +447,8 @@ fn ui(frame: &mut ratatui::Frame<'_>, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(9),
+            Constraint::Length(3),
+            Constraint::Length(12),
             Constraint::Length(9),
             Constraint::Min(8),
             Constraint::Length(3),
@@ -379,10 +474,18 @@ fn ui(frame: &mut ratatui::Frame<'_>, app: &App) {
     } else {
         "Local Build Form"
     };
+    let distro_line = Line::from(format!(
+        " Distro: {} (press d to cycle: ubuntu|fedora|mint|arch)",
+        app.current_distro()
+    ));
+    let distro_para = Paragraph::new(vec![distro_line])
+        .block(Block::default().borders(Borders::ALL).title("Distro"));
+    frame.render_widget(distro_para, chunks[0]);
+
     let table = Table::new(rows, [Constraint::Length(10), Constraint::Min(30)])
         .block(Block::default().borders(Borders::ALL).title(form_title))
         .row_highlight_style(Style::default().bold());
-    frame.render_widget(table, chunks[0]);
+    frame.render_widget(table, chunks[1]);
 
     let inspect_lines = app
         .inspection
@@ -391,7 +494,7 @@ fn ui(frame: &mut ratatui::Frame<'_>, app: &App) {
         .collect::<Vec<_>>();
     let inspect = Paragraph::new(inspect_lines)
         .block(Block::default().borders(Borders::ALL).title("Inspection"));
-    frame.render_widget(inspect, chunks[1]);
+    frame.render_widget(inspect, chunks[2]);
 
     let log_lines = app
         .logs
@@ -400,20 +503,20 @@ fn ui(frame: &mut ratatui::Frame<'_>, app: &App) {
         .collect::<Vec<_>>();
     let logs =
         Paragraph::new(log_lines).block(Block::default().borders(Borders::ALL).title("Logs"));
-    frame.render_widget(logs, chunks[2]);
+    frame.render_widget(logs, chunks[3]);
 
     let help = Paragraph::new(vec![Line::from(
-        "Up/Down select, Enter edit, i inspect, b build, s scan, t test, q quit",
+        "Up/Down select, Enter edit, d distro, i inspect, n inject, b build, s scan, t test, q quit",
     )])
     .block(
         Block::default()
             .borders(Borders::ALL)
             .title(app.status.as_str()),
     );
-    frame.render_widget(help, chunks[3]);
+    frame.render_widget(help, chunks[4]);
 
     if app.editing {
-        let popup = centered_rect(60, 18, frame.area());
+        let popup = centered_rect(60, 18, frame.area()); // unchanged
         frame.render_widget(Clear, popup);
         let edit =
             Paragraph::new("Typing into selected field. Press Enter or Esc to stop editing.")

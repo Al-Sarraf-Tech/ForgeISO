@@ -1,10 +1,12 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use forgeiso_engine::sources::format_preset_detail;
 use forgeiso_engine::{
-    BuildConfig, ContainerConfig, Distro, EventPhase, FirewallConfig, ForgeIsoEngine, GrubConfig,
-    InjectConfig, IsoSource, NetworkConfig, ProfileKind, ProxyConfig, SshConfig, SwapConfig,
-    UserConfig,
+    all_presets, emit_launch, find_ovmf, find_preset_by_str, resolve_url, AcquisitionStrategy,
+    BuildConfig, ContainerConfig, Distro, EventPhase, FirewallConfig, FirmwareMode, ForgeIsoEngine,
+    GrubConfig, Hypervisor, InjectConfig, IsoSource, NetworkConfig, ProfileKind, ProxyConfig,
+    SshConfig, SwapConfig, UserConfig, VmLaunchSpec,
 };
 
 #[derive(Debug, Parser)]
@@ -28,8 +30,12 @@ enum Commands {
         json: bool,
     },
     Build {
-        #[arg(long)]
+        #[arg(long, conflicts_with = "preset")]
         source: Option<String>,
+        /// Use a built-in source preset instead of --source.
+        /// Run 'forgeiso sources list' to see available presets.
+        #[arg(long, conflicts_with = "source")]
+        preset: Option<String>,
         #[arg(long)]
         project: Option<PathBuf>,
         #[arg(long)]
@@ -81,8 +87,12 @@ enum Commands {
         json: bool,
     },
     Inject {
-        #[arg(long)]
-        source: String,
+        #[arg(long, conflicts_with = "preset")]
+        source: Option<String>,
+        /// Use a built-in source preset instead of --source.
+        /// Run 'forgeiso sources list' to see available presets.
+        #[arg(long, conflicts_with = "source")]
+        preset: Option<String>,
         #[arg(long)]
         autoinstall: Option<PathBuf>,
         #[arg(long)]
@@ -272,6 +282,70 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Work with built-in ISO source presets
+    Sources {
+        #[command(subcommand)]
+        command: SourcesCmd,
+    },
+    /// Generate VM hypervisor launch commands for a local ISO
+    Vm {
+        #[command(subcommand)]
+        command: VmCmd,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SourcesCmd {
+    /// List all built-in ISO source presets
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show details for a specific preset
+    Show {
+        /// Preset name, e.g. ubuntu-server-lts
+        preset: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Resolve the download URL for a preset
+    Resolve {
+        /// Preset name, e.g. ubuntu-server-lts
+        preset: String,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum VmCmd {
+    /// Emit hypervisor launch commands for testing an ISO in a VM
+    Emit {
+        /// Path to the ISO to boot
+        #[arg(long, value_name = "PATH")]
+        iso: PathBuf,
+        /// Hypervisor: qemu (default), virtualbox, vmware, hyperv, proxmox
+        #[arg(long, default_value = "qemu")]
+        hypervisor: String,
+        /// Firmware: bios (default) or uefi
+        #[arg(long, default_value = "bios")]
+        firmware: String,
+        /// RAM in MiB (default: 2048)
+        #[arg(long, default_value_t = 2048)]
+        ram: u32,
+        /// vCPUs (default: 2)
+        #[arg(long, default_value_t = 2)]
+        cpus: u8,
+        /// Disk size in GiB for QEMU disk image creation (default: 20)
+        #[arg(long, default_value_t = 20)]
+        disk: u32,
+        /// VM name (defaults to ISO stem)
+        #[arg(long)]
+        name: Option<String>,
+        /// Emit output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[tokio::main]
@@ -305,12 +379,21 @@ async fn main() -> anyhow::Result<()> {
                 println!("Host: {} {}", report.host_os, report.host_arch);
                 println!("Linux build support: {}", report.linux_supported);
                 println!("Tooling:");
-                for (name, available) in report.tooling {
-                    println!("  - {name}: {available}");
+                for (name, available) in &report.tooling {
+                    let marker = if *available { "ok" } else { "MISSING" };
+                    println!("  [{marker}] {name}");
                 }
-                for warning in report.warnings {
+                println!("Distro readiness:");
+                for (distro, ready) in &report.distro_readiness {
+                    let marker = if *ready { "ready" } else { "not ready" };
+                    println!("  [{marker}] {distro}");
+                }
+                for warning in &report.warnings {
                     println!("warning: {warning}");
                 }
+                println!("Source presets:");
+                println!("  {} built-in presets available", all_presets().len());
+                println!("  Run 'forgeiso sources list' to see all");
             }
         }
         Commands::Inspect { source, json } => {
@@ -342,6 +425,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Build {
             source,
+            preset,
             project,
             out,
             name,
@@ -354,12 +438,11 @@ async fn main() -> anyhow::Result<()> {
             let cfg = if let Some(project) = project {
                 BuildConfig::from_path(&project)?
             } else {
-                let source = source.ok_or_else(|| {
-                    anyhow::anyhow!("--source is required when --project is not used")
-                })?;
+                // Resolve source: --preset takes precedence over --source when both absent
+                let resolved_source = resolve_source_from_preset_or_str(source, preset)?;
                 BuildConfig {
                     name: name.unwrap_or_else(|| "forgeiso-build".to_string()),
-                    source: IsoSource::from_raw(source),
+                    source: IsoSource::from_raw(resolved_source),
                     overlay_dir: overlay,
                     output_label: volume_label,
                     profile: parse_profile(profile.as_deref().unwrap_or("minimal"))?,
@@ -460,6 +543,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Inject {
             source,
+            preset,
             autoinstall,
             out,
             name,
@@ -579,8 +663,11 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .collect();
 
+            // Resolve source: --preset or --source
+            let resolved_source = resolve_source_from_preset_or_str(source, preset)?;
+
             let cfg = InjectConfig {
-                source: IsoSource::from_raw(source),
+                source: IsoSource::from_raw(resolved_source),
                 autoinstall_yaml: autoinstall,
                 out_name: name.unwrap_or_else(|| "injected.iso".to_string()),
                 output_label: volume_label,
@@ -684,6 +771,93 @@ async fn main() -> anyhow::Result<()> {
                 println!("Injected ISO: {}", iso.display());
             }
         }
+        Commands::Sources { command } => match command {
+            SourcesCmd::List { json } => {
+                let presets = all_presets();
+                if json {
+                    println!("{}", serde_json::to_string_pretty(presets)?);
+                } else {
+                    println!("{:<28} {:<12} {:<16} NOTE", "PRESET", "DISTRO", "STRATEGY");
+                    println!("{}", "-".repeat(90));
+                    for p in presets {
+                        println!(
+                            "{:<28} {:<12} {:<16} {}",
+                            p.id.as_str(),
+                            p.distro,
+                            p.strategy.as_str(),
+                            &p.note[..p.note.len().min(50)]
+                        );
+                    }
+                    println!(
+                        "\n{} presets. Run 'forgeiso sources show <PRESET>' for details.",
+                        presets.len()
+                    );
+                }
+            }
+            SourcesCmd::Show { preset, json } => {
+                let p = find_preset_by_str(&preset).ok_or_else(|| {
+                    let ids: Vec<_> = all_presets().iter().map(|p| p.id.as_str()).collect();
+                    anyhow::anyhow!("unknown preset '{}'. Available: {}", preset, ids.join(", "))
+                })?;
+                if json {
+                    println!("{}", serde_json::to_string_pretty(p)?);
+                } else {
+                    println!("{}", format_preset_detail(p));
+                }
+            }
+            SourcesCmd::Resolve { preset, json } => {
+                let p = find_preset_by_str(&preset).ok_or_else(|| {
+                    let ids: Vec<_> = all_presets().iter().map(|p| p.id.as_str()).collect();
+                    anyhow::anyhow!("unknown preset '{}'. Available: {}", preset, ids.join(", "))
+                })?;
+                let url = resolve_url(p)?;
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&serde_json::json!({
+                            "preset": p.id.as_str(),
+                            "strategy": p.strategy.as_str(),
+                            "url": url,
+                            "official_page": p.official_page,
+                            "checksum_url": p.checksum_url,
+                            "note": p.note,
+                        }))?
+                    );
+                } else {
+                    match &url {
+                        Some(u) => {
+                            println!("Preset:        {}", p.id.as_str());
+                            println!("URL:           {u}");
+                            if let Some(c) = p.checksum_url {
+                                println!("Checksums:     {c}");
+                            }
+                        }
+                        None => {
+                            match p.strategy {
+                                AcquisitionStrategy::DiscoveryPage => {
+                                    println!("Preset:        {}", p.id.as_str());
+                                    println!(
+                                        "Strategy:      discovery-page (URL changes each release)"
+                                    );
+                                    println!("Official page: {}", p.official_page);
+                                    println!("Note:          {}", p.note);
+                                    println!("\nVisit the official page to find the current download URL,");
+                                    println!("then use: forgeiso inject --source <URL> ...");
+                                }
+                                AcquisitionStrategy::UserProvided => {
+                                    println!("Preset:        {}", p.id.as_str());
+                                    println!("Strategy:      user-provided (BYO ISO)");
+                                    println!("Official page: {}", p.official_page);
+                                    println!("Note:          {}", p.note);
+                                    println!("\nProvide your own ISO path: forgeiso inject --source /path/to/rhel.iso ...");
+                                }
+                                AcquisitionStrategy::DirectUrl => unreachable!(),
+                            }
+                        }
+                    }
+                }
+            }
+        },
         Commands::Diff { base, target, json } => {
             let result = engine.diff_isos(&base, &target).await?;
             if json {
@@ -718,6 +892,96 @@ async fn main() -> anyhow::Result<()> {
                 println!("Unchanged: {}", result.unchanged);
             }
         }
+        Commands::Vm { command } => match command {
+            VmCmd::Emit {
+                iso,
+                hypervisor,
+                firmware,
+                ram,
+                cpus,
+                disk,
+                name,
+                json,
+            } => {
+                let hv = match hypervisor.to_lowercase().as_str() {
+                    "qemu" => Hypervisor::Qemu,
+                    "virtualbox" | "vbox" => Hypervisor::VirtualBox,
+                    "vmware" => Hypervisor::Vmware,
+                    "hyperv" | "hyper-v" => Hypervisor::HyperV,
+                    "proxmox" => Hypervisor::Proxmox,
+                    other => anyhow::bail!("unknown hypervisor '{other}': expected qemu, virtualbox, vmware, hyperv, proxmox"),
+                };
+                let fw = match firmware.to_lowercase().as_str() {
+                    "bios" => FirmwareMode::Bios,
+                    "uefi" | "efi" => FirmwareMode::Uefi,
+                    other => anyhow::bail!("unknown firmware '{other}': expected bios or uefi"),
+                };
+                let ovmf = if matches!(fw, FirmwareMode::Uefi) {
+                    find_ovmf()
+                } else {
+                    None
+                };
+                let vm_name = name.unwrap_or_else(|| {
+                    iso.file_stem()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "forgeiso-vm".to_string())
+                });
+                let spec = VmLaunchSpec {
+                    hypervisor: hv,
+                    firmware: fw,
+                    iso_path: iso,
+                    ram_mb: ram,
+                    cpus,
+                    disk_gb: disk,
+                    vm_name,
+                    ovmf_path: ovmf,
+                };
+                let out = emit_launch(&spec);
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&out)?);
+                } else {
+                    println!("Hypervisor: {:?}", out.hypervisor);
+                    println!("Firmware:   {:?}", out.firmware);
+                    println!("ISO:        {}", out.iso_path);
+                    println!(
+                        "KVM:        {}",
+                        if out.kvm_available {
+                            "available"
+                        } else {
+                            "not available (software emulation)"
+                        }
+                    );
+                    if let Some(ref ovmf) = out.ovmf_used {
+                        println!("OVMF:       {ovmf}");
+                    }
+                    if !out.notes.is_empty() {
+                        println!();
+                        for note in &out.notes {
+                            eprintln!("NOTE: {note}");
+                        }
+                    }
+                    if !out.commands.is_empty() {
+                        println!();
+                        // QEMU args are a single argv list; join as one shell command.
+                        // VirtualBox/Proxmox store complete commands, one per entry.
+                        if matches!(out.hypervisor, Hypervisor::Qemu) {
+                            println!("# Run:");
+                            println!("{}", out.commands.join(" \\\n  "));
+                        } else {
+                            println!("# Run these commands:");
+                            for cmd in &out.commands {
+                                println!("{cmd}");
+                            }
+                        }
+                    }
+                    if let Some(ref script) = out.script {
+                        println!();
+                        println!("# Script:");
+                        println!("{script}");
+                    }
+                }
+            }
+        },
     }
 
     Ok(())
@@ -728,5 +992,48 @@ fn parse_profile(raw: &str) -> anyhow::Result<ProfileKind> {
         "minimal" => Ok(ProfileKind::Minimal),
         "desktop" => Ok(ProfileKind::Desktop),
         other => anyhow::bail!("unsupported profile '{other}': expected minimal|desktop"),
+    }
+}
+
+/// Resolve a source URL/path from either --preset or --source flags.
+/// Returns an error if neither is provided or if the preset strategy requires user input.
+fn resolve_source_from_preset_or_str(
+    source: Option<String>,
+    preset: Option<String>,
+) -> anyhow::Result<String> {
+    if let Some(preset_name) = preset {
+        let ids: Vec<&str> = all_presets().iter().map(|p| p.id.as_str()).collect();
+        let found = find_preset_by_str(&preset_name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "unknown preset '{}'. Available: {}",
+                preset_name,
+                ids.join(", ")
+            )
+        })?;
+        match found.strategy {
+            AcquisitionStrategy::DirectUrl => {
+                let url = resolve_url(found)?.expect("DirectUrl preset must have direct_url set");
+                Ok(url)
+            }
+            AcquisitionStrategy::DiscoveryPage => {
+                anyhow::bail!(
+                    "preset '{}' uses a discovery page — visit {} to find the current ISO URL, \
+                     then use --source <URL>",
+                    found.id.as_str(),
+                    found.official_page
+                );
+            }
+            AcquisitionStrategy::UserProvided => {
+                anyhow::bail!(
+                    "preset '{}' requires you to supply your own ISO — visit {} and use --source <path>",
+                    found.id.as_str(),
+                    found.official_page
+                );
+            }
+        }
+    } else if let Some(s) = source {
+        Ok(s)
+    } else {
+        anyhow::bail!("--source or --preset is required")
     }
 }
