@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use forgeiso_engine::sources::format_preset_detail;
 use forgeiso_engine::{
-    BuildConfig, ContainerConfig, Distro, EventPhase, FirewallConfig, ForgeIsoEngine, GrubConfig,
-    InjectConfig, IsoSource, NetworkConfig, ProfileKind, ProxyConfig, SshConfig, SwapConfig,
-    UserConfig,
+    all_presets, find_preset_by_str, resolve_url, AcquisitionStrategy, BuildConfig,
+    ContainerConfig, Distro, EventPhase, FirewallConfig, ForgeIsoEngine, GrubConfig, InjectConfig,
+    IsoSource, NetworkConfig, ProfileKind, ProxyConfig, SshConfig, SwapConfig, UserConfig,
 };
 
 #[derive(Debug, Parser)]
@@ -28,8 +29,12 @@ enum Commands {
         json: bool,
     },
     Build {
-        #[arg(long)]
+        #[arg(long, conflicts_with = "preset")]
         source: Option<String>,
+        /// Use a built-in source preset instead of --source.
+        /// Run 'forgeiso sources list' to see available presets.
+        #[arg(long, conflicts_with = "source")]
+        preset: Option<String>,
         #[arg(long)]
         project: Option<PathBuf>,
         #[arg(long)]
@@ -81,8 +86,12 @@ enum Commands {
         json: bool,
     },
     Inject {
-        #[arg(long)]
-        source: String,
+        #[arg(long, conflicts_with = "preset")]
+        source: Option<String>,
+        /// Use a built-in source preset instead of --source.
+        /// Run 'forgeiso sources list' to see available presets.
+        #[arg(long, conflicts_with = "source")]
+        preset: Option<String>,
         #[arg(long)]
         autoinstall: Option<PathBuf>,
         #[arg(long)]
@@ -272,6 +281,34 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Work with built-in ISO source presets
+    Sources {
+        #[command(subcommand)]
+        command: SourcesCmd,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SourcesCmd {
+    /// List all built-in ISO source presets
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show details for a specific preset
+    Show {
+        /// Preset name, e.g. ubuntu-server-lts
+        preset: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Resolve the download URL for a preset
+    Resolve {
+        /// Preset name, e.g. ubuntu-server-lts
+        preset: String,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[tokio::main]
@@ -317,6 +354,9 @@ async fn main() -> anyhow::Result<()> {
                 for warning in &report.warnings {
                     println!("warning: {warning}");
                 }
+                println!("Source presets:");
+                println!("  {} built-in presets available", all_presets().len());
+                println!("  Run 'forgeiso sources list' to see all");
             }
         }
         Commands::Inspect { source, json } => {
@@ -348,6 +388,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Build {
             source,
+            preset,
             project,
             out,
             name,
@@ -360,12 +401,11 @@ async fn main() -> anyhow::Result<()> {
             let cfg = if let Some(project) = project {
                 BuildConfig::from_path(&project)?
             } else {
-                let source = source.ok_or_else(|| {
-                    anyhow::anyhow!("--source is required when --project is not used")
-                })?;
+                // Resolve source: --preset takes precedence over --source when both absent
+                let resolved_source = resolve_source_from_preset_or_str(source, preset)?;
                 BuildConfig {
                     name: name.unwrap_or_else(|| "forgeiso-build".to_string()),
-                    source: IsoSource::from_raw(source),
+                    source: IsoSource::from_raw(resolved_source),
                     overlay_dir: overlay,
                     output_label: volume_label,
                     profile: parse_profile(profile.as_deref().unwrap_or("minimal"))?,
@@ -466,6 +506,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Inject {
             source,
+            preset,
             autoinstall,
             out,
             name,
@@ -585,8 +626,11 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .collect();
 
+            // Resolve source: --preset or --source
+            let resolved_source = resolve_source_from_preset_or_str(source, preset)?;
+
             let cfg = InjectConfig {
-                source: IsoSource::from_raw(source),
+                source: IsoSource::from_raw(resolved_source),
                 autoinstall_yaml: autoinstall,
                 out_name: name.unwrap_or_else(|| "injected.iso".to_string()),
                 output_label: volume_label,
@@ -690,6 +734,93 @@ async fn main() -> anyhow::Result<()> {
                 println!("Injected ISO: {}", iso.display());
             }
         }
+        Commands::Sources { command } => match command {
+            SourcesCmd::List { json } => {
+                let presets = all_presets();
+                if json {
+                    println!("{}", serde_json::to_string_pretty(presets)?);
+                } else {
+                    println!("{:<28} {:<12} {:<16} NOTE", "PRESET", "DISTRO", "STRATEGY");
+                    println!("{}", "-".repeat(90));
+                    for p in presets {
+                        println!(
+                            "{:<28} {:<12} {:<16} {}",
+                            p.id.as_str(),
+                            p.distro,
+                            p.strategy.as_str(),
+                            &p.note[..p.note.len().min(50)]
+                        );
+                    }
+                    println!(
+                        "\n{} presets. Run 'forgeiso sources show <PRESET>' for details.",
+                        presets.len()
+                    );
+                }
+            }
+            SourcesCmd::Show { preset, json } => {
+                let p = find_preset_by_str(&preset).ok_or_else(|| {
+                    let ids: Vec<_> = all_presets().iter().map(|p| p.id.as_str()).collect();
+                    anyhow::anyhow!("unknown preset '{}'. Available: {}", preset, ids.join(", "))
+                })?;
+                if json {
+                    println!("{}", serde_json::to_string_pretty(p)?);
+                } else {
+                    println!("{}", format_preset_detail(p));
+                }
+            }
+            SourcesCmd::Resolve { preset, json } => {
+                let p = find_preset_by_str(&preset).ok_or_else(|| {
+                    let ids: Vec<_> = all_presets().iter().map(|p| p.id.as_str()).collect();
+                    anyhow::anyhow!("unknown preset '{}'. Available: {}", preset, ids.join(", "))
+                })?;
+                let url = resolve_url(p)?;
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&serde_json::json!({
+                            "preset": p.id.as_str(),
+                            "strategy": p.strategy.as_str(),
+                            "url": url,
+                            "official_page": p.official_page,
+                            "checksum_url": p.checksum_url,
+                            "note": p.note,
+                        }))?
+                    );
+                } else {
+                    match &url {
+                        Some(u) => {
+                            println!("Preset:        {}", p.id.as_str());
+                            println!("URL:           {u}");
+                            if let Some(c) = p.checksum_url {
+                                println!("Checksums:     {c}");
+                            }
+                        }
+                        None => {
+                            match p.strategy {
+                                AcquisitionStrategy::DiscoveryPage => {
+                                    println!("Preset:        {}", p.id.as_str());
+                                    println!(
+                                        "Strategy:      discovery-page (URL changes each release)"
+                                    );
+                                    println!("Official page: {}", p.official_page);
+                                    println!("Note:          {}", p.note);
+                                    println!("\nVisit the official page to find the current download URL,");
+                                    println!("then use: forgeiso inject --source <URL> ...");
+                                }
+                                AcquisitionStrategy::UserProvided => {
+                                    println!("Preset:        {}", p.id.as_str());
+                                    println!("Strategy:      user-provided (BYO ISO)");
+                                    println!("Official page: {}", p.official_page);
+                                    println!("Note:          {}", p.note);
+                                    println!("\nProvide your own ISO path: forgeiso inject --source /path/to/rhel.iso ...");
+                                }
+                                AcquisitionStrategy::DirectUrl => unreachable!(),
+                            }
+                        }
+                    }
+                }
+            }
+        },
         Commands::Diff { base, target, json } => {
             let result = engine.diff_isos(&base, &target).await?;
             if json {
@@ -734,5 +865,48 @@ fn parse_profile(raw: &str) -> anyhow::Result<ProfileKind> {
         "minimal" => Ok(ProfileKind::Minimal),
         "desktop" => Ok(ProfileKind::Desktop),
         other => anyhow::bail!("unsupported profile '{other}': expected minimal|desktop"),
+    }
+}
+
+/// Resolve a source URL/path from either --preset or --source flags.
+/// Returns an error if neither is provided or if the preset strategy requires user input.
+fn resolve_source_from_preset_or_str(
+    source: Option<String>,
+    preset: Option<String>,
+) -> anyhow::Result<String> {
+    if let Some(preset_name) = preset {
+        let ids: Vec<&str> = all_presets().iter().map(|p| p.id.as_str()).collect();
+        let found = find_preset_by_str(&preset_name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "unknown preset '{}'. Available: {}",
+                preset_name,
+                ids.join(", ")
+            )
+        })?;
+        match found.strategy {
+            AcquisitionStrategy::DirectUrl => {
+                let url = resolve_url(found)?.expect("DirectUrl preset must have direct_url set");
+                Ok(url)
+            }
+            AcquisitionStrategy::DiscoveryPage => {
+                anyhow::bail!(
+                    "preset '{}' uses a discovery page — visit {} to find the current ISO URL, \
+                     then use --source <URL>",
+                    found.id.as_str(),
+                    found.official_page
+                );
+            }
+            AcquisitionStrategy::UserProvided => {
+                anyhow::bail!(
+                    "preset '{}' requires you to supply your own ISO — visit {} and use --source <path>",
+                    found.id.as_str(),
+                    found.official_page
+                );
+            }
+        }
+    } else if let Some(s) = source {
+        Ok(s)
+    } else {
+        anyhow::bail!("--source or --preset is required")
     }
 }
