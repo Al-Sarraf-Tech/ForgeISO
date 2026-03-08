@@ -4,6 +4,7 @@ pub mod error;
 pub mod events;
 pub mod iso;
 pub mod kickstart;
+pub mod mint_preseed;
 pub mod orchestrator;
 pub mod report;
 pub mod scanner;
@@ -21,6 +22,7 @@ pub use error::{EngineError, EngineResult};
 pub use events::{EngineEvent, EventLevel, EventPhase};
 pub use iso::{BootSupport, IsoMetadata, SourceKind};
 pub use kickstart::generate_kickstart_cfg;
+pub use mint_preseed::generate_mint_preseed;
 pub use orchestrator::{
     BuildResult, DiffEntry, DoctorReport, ForgeIsoEngine, Iso9660Compliance, IsoDiff, ScanResult,
     TestResult, VerifyResult,

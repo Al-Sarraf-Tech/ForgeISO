@@ -305,10 +305,16 @@ async fn main() -> anyhow::Result<()> {
                 println!("Host: {} {}", report.host_os, report.host_arch);
                 println!("Linux build support: {}", report.linux_supported);
                 println!("Tooling:");
-                for (name, available) in report.tooling {
-                    println!("  - {name}: {available}");
+                for (name, available) in &report.tooling {
+                    let marker = if *available { "ok" } else { "MISSING" };
+                    println!("  [{marker}] {name}");
                 }
-                for warning in report.warnings {
+                println!("Distro readiness:");
+                for (distro, ready) in &report.distro_readiness {
+                    let marker = if *ready { "ready" } else { "not ready" };
+                    println!("  [{marker}] {distro}");
+                }
+                for warning in &report.warnings {
                     println!("warning: {warning}");
                 }
             }
