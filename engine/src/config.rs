@@ -43,6 +43,7 @@ impl Default for IsoSource {
 }
 
 impl IsoSource {
+    #[must_use]
     pub fn from_raw(input: impl Into<String>) -> Self {
         let raw = input.into();
         if raw.starts_with("http://") || raw.starts_with("https://") {
@@ -52,6 +53,7 @@ impl IsoSource {
         }
     }
 
+    #[must_use]
     pub fn display_value(&self) -> String {
         match self {
             Self::Path(path) => path.display().to_string(),
@@ -59,12 +61,14 @@ impl IsoSource {
         }
     }
 
+    #[must_use]
     pub fn is_remote(&self) -> bool {
         matches!(self, Self::Url(_))
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ScanPolicy {
     #[serde(default = "default_true")]
     pub enable_sbom: bool,
@@ -139,17 +143,23 @@ pub struct BuildConfig {
 }
 
 impl BuildConfig {
+    /// # Errors
+    /// Returns an error if the YAML is invalid or fails validation.
     pub fn from_yaml_str(raw: &str) -> EngineResult<Self> {
         let cfg: Self = serde_yaml::from_str(raw)?;
         cfg.validate()?;
         Ok(cfg)
     }
 
+    /// # Errors
+    /// Returns an error if the file cannot be read or the YAML is invalid.
     pub fn from_path(path: &Path) -> EngineResult<Self> {
         let raw = std::fs::read_to_string(path)?;
         Self::from_yaml_str(&raw)
     }
 
+    /// # Errors
+    /// Returns an error if any required field is missing or invalid.
     pub fn validate(&self) -> EngineResult<()> {
         if self.name.trim().is_empty() {
             return Err(EngineError::InvalidConfig(
@@ -212,11 +222,11 @@ impl BuildConfig {
     }
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
-fn default_profile() -> ProfileKind {
+const fn default_profile() -> ProfileKind {
     ProfileKind::Minimal
 }
 
@@ -445,6 +455,10 @@ impl InjectConfig {
     /// Validate structured fields to prevent shell injection in late-commands.
     /// Fields like `run_commands` and `extra_late_commands` are intentional
     /// escape hatches and are NOT validated here.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::InvalidConfig`] if any field contains shell-unsafe characters.
+    #[allow(clippy::too_many_lines)]
     pub fn validate(&self) -> EngineResult<()> {
         // Regex-like check: only allow safe characters in structured fields.
         fn is_safe_identifier(s: &str, field: &str) -> EngineResult<()> {
@@ -508,11 +522,6 @@ impl InjectConfig {
                     "realname contains shell metacharacters: {r:?}"
                 )));
             }
-        }
-
-        // SSH
-        if let Some(true) = self.ssh.allow_password_auth {
-            // fine
         }
 
         // User config
@@ -936,5 +945,104 @@ mod tests {
         assert!(policy.enable_secrets_scan);
         assert!(!policy.enable_syft_grype);
         assert!(!policy.enable_open_scap);
+    }
+
+    // ── IsoSource ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn iso_source_from_raw_detects_https_url() {
+        let src = IsoSource::from_raw("https://releases.ubuntu.com/noble/ubuntu.iso");
+        assert!(src.is_remote());
+        assert!(matches!(src, IsoSource::Url(_)));
+    }
+
+    #[test]
+    fn iso_source_from_raw_detects_http_url() {
+        let src = IsoSource::from_raw("http://mirror.example.com/ubuntu.iso");
+        assert!(src.is_remote());
+    }
+
+    #[test]
+    fn iso_source_from_raw_treats_local_path_as_path() {
+        let src = IsoSource::from_raw("/tmp/ubuntu.iso");
+        assert!(!src.is_remote());
+        assert!(matches!(src, IsoSource::Path(_)));
+    }
+
+    #[test]
+    fn iso_source_display_value_url() {
+        let url = "https://example.com/ubuntu.iso";
+        let src = IsoSource::from_raw(url);
+        assert_eq!(src.display_value(), url);
+    }
+
+    #[test]
+    fn iso_source_display_value_path() {
+        let src = IsoSource::from_raw("/tmp/ubuntu.iso");
+        assert_eq!(src.display_value(), "/tmp/ubuntu.iso");
+    }
+
+    // ── InjectConfig validate edge cases ─────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_semicolon_in_hostname() {
+        let cfg = InjectConfig {
+            hostname: Some("bad;host".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_accepts_hostname_with_dash_and_dot() {
+        let cfg = InjectConfig {
+            hostname: Some("my-host.example.com".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn inject_rejects_newline_in_realname() {
+        let cfg = InjectConfig {
+            realname: Some("Jane\nDoe".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_accepts_realname_with_space() {
+        let cfg = InjectConfig {
+            realname: Some("Jane Doe".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn inject_rejects_backtick_in_service_name() {
+        let cfg = InjectConfig {
+            enable_services: vec!["ssh`whoami`".into()],
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    // ── BuildConfig validation ────────────────────────────────────────────────
+
+    #[test]
+    fn build_config_from_yaml_str_minimal() {
+        // IsoSource is #[serde(untagged)] — deserializes from bare string
+        let yaml = "name: test-build\nsource: /tmp/ubuntu.iso\n";
+        let result = BuildConfig::from_yaml_str(yaml);
+        assert!(result.is_ok(), "parse failed: {result:?}");
+    }
+
+    #[test]
+    fn build_config_rejects_empty_name() {
+        let yaml = "name: ''\nsource: /tmp/ubuntu.iso\n";
+        let result = BuildConfig::from_yaml_str(yaml);
+        assert!(result.is_err());
     }
 }

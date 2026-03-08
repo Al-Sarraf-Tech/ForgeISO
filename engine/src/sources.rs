@@ -408,4 +408,75 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn all_presets_have_nonempty_official_page() {
+        for preset in all_presets() {
+            assert!(
+                !preset.official_page.is_empty(),
+                "preset '{}' missing official_page",
+                preset.id.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn all_presets_have_nonempty_note() {
+        for preset in all_presets() {
+            assert!(
+                !preset.note.is_empty(),
+                "preset '{}' missing note",
+                preset.id.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn find_preset_returns_correct_struct() {
+        let p = find_preset_by_str("ubuntu-server-lts").expect("should find preset");
+        assert_eq!(p.id.as_str(), "ubuntu-server-lts");
+        assert_eq!(p.strategy, AcquisitionStrategy::DirectUrl);
+    }
+
+    #[test]
+    fn rhel_custom_is_user_provided() {
+        let p = find_preset_by_str("rhel-custom").expect("rhel-custom preset must exist");
+        assert_eq!(p.strategy, AcquisitionStrategy::UserProvided);
+        assert!(resolve_url(p).unwrap().is_none());
+    }
+
+    #[test]
+    fn discovery_page_presets_resolve_to_none() {
+        // fedora-server and fedora-workstation use discovery pages
+        for id in ["fedora-server", "fedora-workstation"] {
+            let p = find_preset_by_str(id).unwrap_or_else(|| panic!("{id} must exist"));
+            assert_eq!(p.strategy, AcquisitionStrategy::DiscoveryPage);
+            assert!(
+                resolve_url(p).unwrap().is_none(),
+                "{id} should resolve to None"
+            );
+        }
+    }
+
+    #[test]
+    fn format_preset_summary_width_is_consistent() {
+        // Summary should not panic for any preset; spot-check content
+        for preset in all_presets() {
+            let s = format_preset_summary(preset);
+            assert!(s.contains(preset.id.as_str()));
+            assert!(s.contains(preset.strategy.as_str()));
+        }
+    }
+
+    #[test]
+    fn format_preset_detail_contains_official_page() {
+        for preset in all_presets() {
+            let d = format_preset_detail(preset);
+            assert!(
+                d.contains(preset.official_page),
+                "detail missing official_page for {}",
+                preset.id.as_str()
+            );
+        }
+    }
 }

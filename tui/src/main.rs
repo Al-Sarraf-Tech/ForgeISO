@@ -14,7 +14,7 @@ use forgeiso_engine::{
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style, Stylize},
+    style::{Color, Style},
     text::Line,
     widgets::{Block, Borders, Clear, Paragraph, Row, Table},
     Terminal,
