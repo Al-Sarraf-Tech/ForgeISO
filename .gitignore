@@ -19,6 +19,9 @@ agent/.cache/
 __pycache__/
 *.pyc
 
+# Claude Code session state
+.claude/
+
 # Generic
 .DS_Store
 *.log
