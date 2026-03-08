@@ -821,7 +821,11 @@ impl ForgeApp {
                 for stage in Stage::ALL {
                     let is_active = &self.active_stage == stage;
                     let is_done = self.stage_done(stage);
-                    let dot_color = if is_done {
+                    let unlocked = self.stage_unlocked(stage);
+
+                    let dot_color = if !unlocked {
+                        Color32::from_rgb(45, 52, 68) // locked — very dim
+                    } else if is_done {
                         GREEN
                     } else if is_active {
                         ACCENT
@@ -833,7 +837,9 @@ impl ForgeApp {
                     } else {
                         Color32::TRANSPARENT
                     };
-                    let dot_text = if is_done {
+                    let dot_text = if !unlocked {
+                        "🔒".to_string()
+                    } else if is_done {
                         "✓".to_string()
                     } else {
                         stage.step_num().to_string()
@@ -853,19 +859,26 @@ impl ForgeApp {
                                 );
                                 ui.add_space(4.0);
                                 ui.vertical(|ui| {
-                                    let lc = if is_active {
+                                    let lc = if !unlocked {
+                                        Color32::from_rgb(55, 63, 82) // locked text
+                                    } else if is_active {
                                         TEXT
                                     } else {
                                         Color32::from_rgb(180, 190, 210)
                                     };
                                     ui.label(RichText::new(stage.label()).size(13.0).color(lc));
-                                    ui.label(
-                                        RichText::new(stage.sublabel()).size(10.0).color(MUTED),
-                                    );
+                                    ui.label(RichText::new(stage.sublabel()).size(10.0).color(
+                                        if unlocked {
+                                            MUTED
+                                        } else {
+                                            Color32::from_rgb(45, 52, 68)
+                                        },
+                                    ));
                                 });
                             });
                         });
-                    if resp.response.interact(egui::Sense::click()).clicked() {
+                    // Only allow navigation to unlocked stages
+                    if unlocked && resp.response.interact(egui::Sense::click()).clicked() {
                         self.active_stage = stage.clone();
                     }
                     ui.add_space(2.0);
@@ -1049,6 +1062,19 @@ impl ForgeApp {
         }
     }
 
+    /// A stage is unlocked (navigable) once the preceding stage is done.
+    /// Inject is always available. Completion unlocks as soon as inject succeeds
+    /// so the user can view their artifact without running all optional stages.
+    fn stage_unlocked(&self, stage: &Stage) -> bool {
+        match stage {
+            Stage::Inject => true,
+            Stage::Verify => self.inject_done,
+            Stage::Diff => self.verify_done,
+            Stage::Build => self.diff_done,
+            Stage::Completion => self.build_done,
+        }
+    }
+
     fn render_main(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default()
             .frame(Frame::new().fill(BG))
@@ -1081,11 +1107,17 @@ impl ForgeApp {
     // ── Stage: Inject ─────────────────────────────────────────────────────────
 
     fn show_inject(&mut self, ui: &mut Ui) {
-        stage_header(ui, 1, "Inject", "Inject a cloud-init autoinstall configuration into an ISO image. Configure identity, SSH, network, and system settings below.");
+        stage_header(
+            ui,
+            1,
+            "Inject",
+            "Configure and inject an autoinstall preset into your ISO. Fill in at minimum the Source ISO and Output fields, then click Run Inject.",
+        );
 
         let running = self.job_running;
         let mut do_inject = false;
 
+        // ── Section 1: Source & Output (always visible, most important) ──────
         card(ui, |ui| {
             ui.label(
                 RichText::new("Source & Output")
@@ -1093,32 +1125,46 @@ impl ForgeApp {
                     .size(15.0)
                     .color(TEXT),
             );
+            ui.add_space(10.0);
+
+            let full_w = ui.available_width();
+            // Source ISO — full width
+            ui.label(
+                RichText::new("Source ISO  *  (path or URL)")
+                    .size(12.0)
+                    .color(MUTED),
+            );
+            ui.horizontal(|ui| {
+                ui.add_enabled(
+                    !running,
+                    egui::TextEdit::singleline(&mut self.inject.source)
+                        .hint_text("/path/to/ubuntu-24.04.iso  or  https://releases.ubuntu.com/…")
+                        .desired_width(full_w - 90.0)
+                        .min_size(Vec2::new(full_w - 90.0, 32.0))
+                        .font(egui::FontId::proportional(14.0)),
+                );
+                if ui
+                    .add_enabled(
+                        !running,
+                        egui::Button::new(RichText::new("📂 Browse").size(13.0))
+                            .min_size(Vec2::new(82.0, 32.0)),
+                    )
+                    .on_hover_text("Pick an ISO file")
+                    .clicked()
+                {
+                    worker::pick_iso(PickTarget::InjectSource, self.tx.clone());
+                }
+            });
             ui.add_space(8.0);
-            let col2_w = (ui.available_width() - 16.0) / 2.0;
-            egui::Grid::new("inject_grid")
+
+            // Output dir + filename — side by side
+            let col2_w = (full_w - 16.0) / 2.0;
+            egui::Grid::new("inject_src_grid")
                 .num_columns(2)
-                .spacing([16.0, 8.0])
+                .spacing([16.0, 6.0])
                 .show(ui, |ui| {
                     ui.vertical(|ui| {
-                        ui.label(RichText::new("Source ISO *").size(12.0).color(MUTED));
-                        ui.horizontal(|ui| {
-                            ui.add_enabled(
-                                !running,
-                                egui::TextEdit::singleline(&mut self.inject.source)
-                                    .hint_text("/path/to/ubuntu.iso or https://…")
-                                    .desired_width(col2_w - 42.0),
-                            );
-                            if ui
-                                .add_enabled(!running, egui::Button::new("📂"))
-                                .on_hover_text("Browse for ISO file")
-                                .clicked()
-                            {
-                                worker::pick_iso(PickTarget::InjectSource, self.tx.clone());
-                            }
-                        });
-                    });
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Output directory *").size(12.0).color(MUTED));
+                        ui.label(RichText::new("Output Directory  *").size(12.0).color(MUTED));
                         ui.horizontal(|ui| {
                             ui.add_enabled(
                                 !running,
@@ -1126,14 +1172,19 @@ impl ForgeApp {
                                     .hint_text("~/.cache/forgeiso")
                                     .desired_width(col2_w - 42.0),
                             );
-                            if ui.add_enabled(!running, egui::Button::new("📂")).clicked() {
+                            if ui
+                                .add_enabled(
+                                    !running,
+                                    egui::Button::new("📂").min_size(Vec2::new(34.0, 24.0)),
+                                )
+                                .clicked()
+                            {
                                 worker::pick_folder(PickTarget::InjectOutputDir, self.tx.clone());
                             }
                         });
                     });
-                    ui.end_row();
                     ui.vertical(|ui| {
-                        ui.label(RichText::new("Output filename").size(12.0).color(MUTED));
+                        ui.label(RichText::new("Output Filename").size(12.0).color(MUTED));
                         ui.add_enabled(
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.out_name)
@@ -1141,78 +1192,81 @@ impl ForgeApp {
                                 .desired_width(col2_w),
                         );
                     });
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Volume label").size(12.0).color(MUTED));
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.output_label)
-                                .hint_text("FORGEISO")
-                                .desired_width(col2_w),
-                        );
-                    });
-                    ui.end_row();
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Distribution").size(12.0).color(MUTED));
-                        egui::ComboBox::from_id_salt("inject_distro")
-                            .selected_text(&self.inject.distro)
-                            .show_ui(ui, |ui| {
-                                for d in &["ubuntu", "fedora", "arch", "mint"] {
-                                    ui.selectable_value(&mut self.inject.distro, d.to_string(), *d);
-                                }
-                            });
-                    });
-                    ui.vertical(|ui| {
-                        ui.label(
-                            RichText::new("Expected SHA-256 (optional)")
-                                .size(12.0)
-                                .color(MUTED),
-                        );
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.expected_sha256)
-                                .hint_text("abcdef… (leave blank to skip check)")
-                                .desired_width(col2_w),
-                        );
-                    });
                     ui.end_row();
                 });
 
-            ui.add_space(16.0);
-
-            // ── Identity ─────────────────────────────────────────────────────
+            ui.add_space(10.0);
+            // Distro selector — tab-style buttons
+            ui.label(RichText::new("Distribution").size(12.0).color(MUTED));
+            ui.add_space(4.0);
             ui.horizontal(|ui| {
-                ui.label(RichText::new("Identity").strong().size(15.0).color(TEXT));
-                ui.add_space(8.0);
-                ui.label(
-                    RichText::new("Configures the installed system's user account and hostname")
-                        .size(11.0)
-                        .color(MUTED),
-                );
+                for (key, label, emoji) in &[
+                    ("ubuntu", "Ubuntu", "🟠"),
+                    ("fedora", "Fedora", "🔵"),
+                    ("arch", "Arch Linux", "⚪"),
+                    ("mint", "Linux Mint", "🟢"),
+                ] {
+                    let selected = self.inject.distro == *key;
+                    let fill = if selected {
+                        ACCENT
+                    } else {
+                        Color32::from_rgb(30, 38, 60)
+                    };
+                    let text_col = if selected {
+                        Color32::WHITE
+                    } else {
+                        Color32::from_rgb(180, 190, 210)
+                    };
+                    let btn = egui::Button::new(
+                        RichText::new(format!("{} {}", emoji, label))
+                            .size(13.0)
+                            .color(text_col),
+                    )
+                    .fill(fill)
+                    .stroke(Stroke::new(
+                        1.0,
+                        if selected { ACCENT } else { CARD_BORDER },
+                    ))
+                    .min_size(Vec2::new(110.0, 30.0));
+                    if ui.add_enabled(!running, btn).clicked() {
+                        self.inject.distro = key.to_string();
+                    }
+                    ui.add_space(4.0);
+                }
             });
+        });
+
+        // ── Section 2: Identity ───────────────────────────────────────────────
+        card(ui, |ui| {
+            ui.label(RichText::new("👤 Identity").strong().size(15.0).color(TEXT));
+            ui.label(
+                RichText::new(
+                    "Sets the hostname and initial user account on the installed system.",
+                )
+                .size(11.0)
+                .color(MUTED),
+            );
             ui.add_space(10.0);
 
-            // Hostname — full width, prominent
             let full_w = ui.available_width();
-            ui.label(RichText::new("Hostname").size(13.0).color(MUTED));
+            ui.label(RichText::new("Hostname").size(12.0).color(MUTED));
             ui.add_enabled(
                 !running,
                 egui::TextEdit::singleline(&mut self.inject.hostname)
-                    .hint_text("my-server  (e.g. web-01, dev-box)")
+                    .hint_text("my-server  (e.g.  web-01, dev-box, k8s-node1)")
                     .desired_width(full_w)
                     .min_size(Vec2::new(full_w, 32.0))
                     .font(egui::FontId::proportional(15.0)),
             );
             ui.add_space(10.0);
 
-            // Username + Real name — side by side
-            let col2_w = (ui.available_width() - 16.0) / 2.0;
-            egui::Grid::new("identity_grid")
+            let col2_w = (full_w - 16.0) / 2.0;
+            egui::Grid::new("identity_grid2")
                 .num_columns(2)
                 .spacing([16.0, 10.0])
                 .show(ui, |ui| {
-                    // Username
                     ui.vertical(|ui| {
-                        ui.label(RichText::new("Username  *").size(13.0).color(MUTED));
+                        ui.label(RichText::new("Username  *").size(12.0).color(MUTED));
                         ui.add_enabled(
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.username)
@@ -1222,9 +1276,8 @@ impl ForgeApp {
                                 .font(egui::FontId::proportional(15.0)),
                         );
                     });
-                    // Real name
                     ui.vertical(|ui| {
-                        ui.label(RichText::new("Real name").size(13.0).color(MUTED));
+                        ui.label(RichText::new("Real Name").size(12.0).color(MUTED));
                         ui.add_enabled(
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.realname)
@@ -1236,17 +1289,12 @@ impl ForgeApp {
                     });
                     ui.end_row();
 
-                    // Password
                     let pw_mismatch_here = !self.inject.password.is_empty()
                         && !self.inject.password_confirm.is_empty()
                         && self.inject.password != self.inject.password_confirm;
                     ui.vertical(|ui| {
-                        let lbl = if pw_mismatch_here {
-                            RichText::new("Password  *").size(13.0).color(RED)
-                        } else {
-                            RichText::new("Password  *").size(13.0).color(MUTED)
-                        };
-                        ui.label(lbl);
+                        let lbl_col = if pw_mismatch_here { RED } else { MUTED };
+                        ui.label(RichText::new("Password  *").size(12.0).color(lbl_col));
                         ui.add_enabled(
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.password)
@@ -1257,14 +1305,13 @@ impl ForgeApp {
                                 .font(egui::FontId::proportional(15.0)),
                         );
                     });
-                    // Confirm password
                     ui.vertical(|ui| {
-                        let lbl = if pw_mismatch_here {
-                            RichText::new("Confirm password  *").size(13.0).color(RED)
-                        } else {
-                            RichText::new("Confirm password  *").size(13.0).color(MUTED)
-                        };
-                        ui.label(lbl);
+                        let lbl_col = if pw_mismatch_here { RED } else { MUTED };
+                        ui.label(
+                            RichText::new("Confirm Password  *")
+                                .size(12.0)
+                                .color(lbl_col),
+                        );
                         ui.add_enabled(
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.password_confirm)
@@ -1277,10 +1324,9 @@ impl ForgeApp {
                         if pw_mismatch_here {
                             ui.add_space(2.0);
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new("⚠").color(RED).size(12.0));
                                 ui.label(
-                                    RichText::new("Passwords do not match")
-                                        .size(12.0)
+                                    RichText::new("⚠ Passwords do not match")
+                                        .size(11.0)
                                         .color(RED),
                                 );
                             });
@@ -1288,58 +1334,96 @@ impl ForgeApp {
                             && self.inject.password == self.inject.password_confirm
                         {
                             ui.add_space(2.0);
-                            ui.horizontal(|ui| {
-                                ui.label(RichText::new("✓").color(GREEN).size(12.0));
-                                ui.label(RichText::new("Passwords match").size(12.0).color(GREEN));
-                            });
+                            ui.label(RichText::new("✓ Passwords match").size(11.0).color(GREEN));
                         }
                     });
                     ui.end_row();
                 });
+        });
 
-            ui.add_space(12.0);
-            ui.collapsing(
-                RichText::new("⚙ Advanced Options").size(13.0).color(MUTED),
-                |ui| {
-                    // SSH
-                    ui.add_space(6.0);
-                    ui.label(RichText::new("SSH").strong().size(14.0).color(TEXT));
-                    ui.add_space(4.0);
+        // ── Section 3: SSH Access ─────────────────────────────────────────────
+        let ssh_key_count = crate::state::lines(&self.inject.ssh_keys).len();
+        let ssh_summary = if ssh_key_count > 0 {
+            format!(
+                "{} key{}",
+                ssh_key_count,
+                if ssh_key_count == 1 { "" } else { "s" }
+            )
+        } else {
+            "no keys".into()
+        };
+        egui::CollapsingHeader::new(
+            RichText::new(format!("🔑 SSH Access  —  {}", ssh_summary))
+                .size(14.0)
+                .color(TEXT),
+        )
+        .id_salt("ssh_section")
+        .show(ui, |ui| {
+            ui.add_space(6.0);
+            Frame::new()
+                .fill(CARD)
+                .stroke(Stroke::new(1.0, CARD_BORDER))
+                .inner_margin(14.0f32)
+                .corner_radius(6.0f32)
+                .show(ui, |ui| {
+                    let w = ui.available_width();
                     ui.label(
-                        RichText::new("Authorized keys (one per line)")
+                        RichText::new("Authorized Public Keys (one per line)")
                             .size(12.0)
                             .color(MUTED),
                     );
+                    ui.add_space(4.0);
                     ui.add_enabled(
                         !running,
                         egui::TextEdit::multiline(&mut self.inject.ssh_keys)
-                            .hint_text("ssh-rsa AAAA…")
+                            .hint_text("ssh-ed25519 AAAA…\nssh-rsa AAAA…")
                             .desired_rows(3)
-                            .desired_width(ui.available_width()),
+                            .desired_width(w),
                     );
+                    ui.add_space(6.0);
                     ui.horizontal(|ui| {
-                        ui.checkbox(&mut self.inject.ssh_password_auth, "Allow password auth");
-                        ui.add_space(12.0);
                         ui.checkbox(
                             &mut self.inject.ssh_install_server,
                             "Install OpenSSH server",
                         );
+                        ui.add_space(16.0);
+                        ui.checkbox(
+                            &mut self.inject.ssh_password_auth,
+                            "Allow password authentication",
+                        );
                     });
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
+                });
+        });
+        ui.add_space(4.0);
 
-                    // Network
-                    ui.label(RichText::new("Network").strong().size(14.0).color(TEXT));
-                    ui.add_space(4.0);
+        // ── Section 4: Network ────────────────────────────────────────────────
+        let net_summary = if !self.inject.static_ip.trim().is_empty() {
+            format!("static {}", self.inject.static_ip.trim())
+        } else {
+            "DHCP".into()
+        };
+        egui::CollapsingHeader::new(
+            RichText::new(format!("🌐 Network  —  {}", net_summary))
+                .size(14.0)
+                .color(TEXT),
+        )
+        .id_salt("net_section")
+        .show(ui, |ui| {
+            ui.add_space(6.0);
+            Frame::new()
+                .fill(CARD)
+                .stroke(Stroke::new(1.0, CARD_BORDER))
+                .inner_margin(14.0f32)
+                .corner_radius(6.0f32)
+                .show(ui, |ui| {
                     let col2_w = (ui.available_width() - 16.0) / 2.0;
-                    egui::Grid::new("net_grid")
+                    egui::Grid::new("net_grid2")
                         .num_columns(2)
                         .spacing([16.0, 6.0])
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
                                 ui.label(
-                                    RichText::new("DNS servers (one/line)")
+                                    RichText::new("DNS Servers (one per line)")
                                         .size(12.0)
                                         .color(MUTED),
                                 );
@@ -1353,7 +1437,7 @@ impl ForgeApp {
                             });
                             ui.vertical(|ui| {
                                 ui.label(
-                                    RichText::new("NTP servers (one/line)")
+                                    RichText::new("NTP Servers (one per line)")
                                         .size(12.0)
                                         .color(MUTED),
                                 );
@@ -1367,7 +1451,11 @@ impl ForgeApp {
                             });
                             ui.end_row();
                             ui.vertical(|ui| {
-                                ui.label(RichText::new("Static IP (CIDR)").size(12.0).color(MUTED));
+                                ui.label(
+                                    RichText::new("Static IP (CIDR, leave blank for DHCP)")
+                                        .size(12.0)
+                                        .color(MUTED),
+                                );
                                 ui.add_enabled(
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.static_ip)
@@ -1376,7 +1464,7 @@ impl ForgeApp {
                                 );
                             });
                             ui.vertical(|ui| {
-                                ui.label(RichText::new("Gateway").size(12.0).color(MUTED));
+                                ui.label(RichText::new("Default Gateway").size(12.0).color(MUTED));
                                 ui.add_enabled(
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.gateway)
@@ -1385,44 +1473,71 @@ impl ForgeApp {
                                 );
                             });
                             ui.end_row();
+                            ui.vertical(|ui| {
+                                ui.label(RichText::new("HTTP Proxy").size(12.0).color(MUTED));
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::singleline(&mut self.inject.http_proxy)
+                                        .hint_text("http://proxy.corp.com:3128")
+                                        .desired_width(col2_w),
+                                );
+                            });
+                            ui.vertical(|ui| {
+                                ui.label(RichText::new("HTTPS Proxy").size(12.0).color(MUTED));
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::singleline(&mut self.inject.https_proxy)
+                                        .hint_text("https://proxy.corp.com:3128")
+                                        .desired_width(col2_w),
+                                );
+                            });
+                            ui.end_row();
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new("No Proxy (comma-separated)")
+                                        .size(12.0)
+                                        .color(MUTED),
+                                );
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::singleline(&mut self.inject.no_proxy)
+                                        .hint_text("localhost,127.0.0.1,10.0.0.0/8")
+                                        .desired_width(col2_w),
+                                );
+                            });
+                            ui.end_row();
                         });
-                    ui.add_space(6.0);
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("HTTP proxy").size(12.0).color(MUTED));
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.http_proxy)
-                                .hint_text("http://proxy.corp.com:3128")
-                                .desired_width(ui.available_width()),
-                        );
-                    });
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("HTTPS proxy").size(12.0).color(MUTED));
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.https_proxy)
-                                .hint_text("https://proxy.corp.com:3128")
-                                .desired_width(ui.available_width()),
-                        );
-                    });
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("No proxy").size(12.0).color(MUTED));
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.no_proxy)
-                                .hint_text("localhost,127.0.0.1,10.0.0.0/8")
-                                .desired_width(ui.available_width()),
-                        );
-                    });
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
+                });
+        });
+        ui.add_space(4.0);
 
-                    // System
-                    ui.label(RichText::new("System").strong().size(14.0).color(TEXT));
-                    ui.add_space(4.0);
+        // ── Section 5: System Settings ────────────────────────────────────────
+        let sys_summary = {
+            let tz = self.inject.timezone.trim();
+            let kb = self.inject.keyboard_layout.trim();
+            match (tz.is_empty(), kb.is_empty()) {
+                (false, false) => format!("{}, {}", tz, kb),
+                (false, true) => tz.to_string(),
+                (true, false) => kb.to_string(),
+                _ => "defaults".into(),
+            }
+        };
+        egui::CollapsingHeader::new(
+            RichText::new(format!("⚙ System Settings  —  {}", sys_summary))
+                .size(14.0)
+                .color(TEXT),
+        )
+        .id_salt("sys_section")
+        .show(ui, |ui| {
+            ui.add_space(6.0);
+            Frame::new()
+                .fill(CARD)
+                .stroke(Stroke::new(1.0, CARD_BORDER))
+                .inner_margin(14.0f32)
+                .corner_radius(6.0f32)
+                .show(ui, |ui| {
                     let col2_w = (ui.available_width() - 16.0) / 2.0;
-                    egui::Grid::new("sys_grid")
+                    egui::Grid::new("sys_grid2")
                         .num_columns(2)
                         .spacing([16.0, 6.0])
                         .show(ui, |ui| {
@@ -1446,7 +1561,7 @@ impl ForgeApp {
                             });
                             ui.end_row();
                             ui.vertical(|ui| {
-                                ui.label(RichText::new("Keyboard layout").size(12.0).color(MUTED));
+                                ui.label(RichText::new("Keyboard Layout").size(12.0).color(MUTED));
                                 ui.add_enabled(
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.keyboard_layout)
@@ -1455,18 +1570,8 @@ impl ForgeApp {
                                 );
                             });
                             ui.vertical(|ui| {
-                                ui.label(RichText::new("APT mirror").size(12.0).color(MUTED));
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.apt_mirror)
-                                        .hint_text("http://archive.ubuntu.com/ubuntu")
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.end_row();
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("Storage layout").size(12.0).color(MUTED));
-                                egui::ComboBox::from_id_salt("storage_layout")
+                                ui.label(RichText::new("Storage Layout").size(12.0).color(MUTED));
+                                egui::ComboBox::from_id_salt("storage_layout2")
                                     .selected_text(if self.inject.storage_layout.is_empty() {
                                         "direct (default)"
                                     } else {
@@ -1487,8 +1592,22 @@ impl ForgeApp {
                                         }
                                     });
                             });
+                            ui.end_row();
                             ui.vertical(|ui| {
-                                ui.label(RichText::new("Wallpaper").size(12.0).color(MUTED));
+                                ui.label(
+                                    RichText::new("APT Mirror (Ubuntu/Mint)")
+                                        .size(12.0)
+                                        .color(MUTED),
+                                );
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::singleline(&mut self.inject.apt_mirror)
+                                        .hint_text("http://archive.ubuntu.com/ubuntu")
+                                        .desired_width(col2_w),
+                                );
+                            });
+                            ui.vertical(|ui| {
+                                ui.label(RichText::new("Wallpaper Image").size(12.0).color(MUTED));
                                 ui.horizontal(|ui| {
                                     ui.add_enabled(
                                         !running,
@@ -1496,7 +1615,12 @@ impl ForgeApp {
                                             .hint_text("/path/to/wallpaper.png")
                                             .desired_width(col2_w - 42.0),
                                     );
-                                    if ui.add_enabled(!running, egui::Button::new("📂")).clicked()
+                                    if ui
+                                        .add_enabled(
+                                            !running,
+                                            egui::Button::new("📂").min_size(Vec2::new(34.0, 24.0)),
+                                        )
+                                        .clicked()
                                     {
                                         worker::pick_file(
                                             PickTarget::InjectWallpaper,
@@ -1507,112 +1631,130 @@ impl ForgeApp {
                             });
                             ui.end_row();
                         });
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
-
-                    // Packages & Commands
+                    ui.add_space(6.0);
                     ui.label(
-                        RichText::new("Packages & Commands")
-                            .strong()
-                            .size(14.0)
-                            .color(TEXT),
+                        RichText::new("Volume Label (ISO filesystem label, optional)")
+                            .size(12.0)
+                            .color(MUTED),
                     );
-                    ui.add_space(4.0);
-                    let col2_w = (ui.available_width() - 16.0) / 2.0;
-                    egui::Grid::new("pkg_grid")
-                        .num_columns(2)
-                        .spacing([16.0, 6.0])
-                        .show(ui, |ui| {
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("Extra packages (one/line)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::multiline(&mut self.inject.packages)
-                                        .hint_text("curl\nvim\ngit")
-                                        .desired_rows(3)
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("APT repos (one/line)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::multiline(&mut self.inject.apt_repos)
-                                        .hint_text("ppa:user/repo\ndeb [arch=amd64] https://example.com/repo focal main")
-                                        .desired_rows(3)
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.end_row();
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("Run commands (one/line)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.label(
-                                    RichText::new("Runs early, before packages install")
-                                        .size(10.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::multiline(&mut self.inject.run_commands)
-                                        .hint_text("echo hello")
-                                        .desired_rows(3)
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("Late commands (one/line)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.label(
-                                    RichText::new("Runs post-install via curtin in-target")
-                                        .size(10.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::multiline(&mut self.inject.late_commands)
-                                        .hint_text("curtin in-target -- apt-get upgrade -y")
-                                        .desired_rows(3)
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.end_row();
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.output_label)
+                            .hint_text("FORGEISO")
+                            .desired_width(ui.available_width()),
+                    );
+                });
+        });
+        ui.add_space(4.0);
+
+        // ── Section 6: Packages & Commands ────────────────────────────────────
+        let pkg_count = crate::state::lines(&self.inject.packages).len();
+        let pkg_summary = if pkg_count > 0 {
+            format!(
+                "{} package{}",
+                pkg_count,
+                if pkg_count == 1 { "" } else { "s" }
+            )
+        } else {
+            "none".into()
+        };
+        egui::CollapsingHeader::new(
+            RichText::new(format!("📦 Packages & Commands  —  {}", pkg_summary)).size(14.0).color(TEXT),
+        )
+        .id_salt("pkg_section")
+        .show(ui, |ui| {
+            ui.add_space(6.0);
+            Frame::new().fill(CARD).stroke(Stroke::new(1.0, CARD_BORDER)).inner_margin(14.0f32).corner_radius(6.0f32).show(ui, |ui| {
+                let col2_w = (ui.available_width() - 16.0) / 2.0;
+                egui::Grid::new("pkg_grid2")
+                    .num_columns(2)
+                    .spacing([16.0, 6.0])
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new("Extra Packages (one per line)").size(12.0).color(MUTED));
+                            ui.add_enabled(!running, egui::TextEdit::multiline(&mut self.inject.packages).hint_text("curl\nvim\ngit\nnginx").desired_rows(4).desired_width(col2_w));
                         });
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new("APT Repositories (one per line)").size(12.0).color(MUTED));
+                            ui.add_enabled(!running, egui::TextEdit::multiline(&mut self.inject.apt_repos).hint_text("ppa:user/repo\ndeb [arch=amd64] https://example.com/repo focal main").desired_rows(4).desired_width(col2_w));
+                        });
+                        ui.end_row();
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new("Run Commands (early — one per line)").size(12.0).color(MUTED));
+                            ui.label(RichText::new("Executes before packages are installed").size(10.0).color(MUTED));
+                            ui.add_enabled(!running, egui::TextEdit::multiline(&mut self.inject.run_commands).hint_text("echo hello").desired_rows(3).desired_width(col2_w));
+                        });
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new("Late Commands (post-install — one per line)").size(12.0).color(MUTED));
+                            ui.label(RichText::new("Executes after install via curtin in-target").size(10.0).color(MUTED));
+                            ui.add_enabled(!running, egui::TextEdit::multiline(&mut self.inject.late_commands).hint_text("curtin in-target -- apt-get upgrade -y").desired_rows(3).desired_width(col2_w));
+                        });
+                        ui.end_row();
+                    });
+            });
+        });
+        ui.add_space(4.0);
 
-                    // User & Services
-                    ui.label(
-                        RichText::new("User & Services")
-                            .strong()
-                            .size(14.0)
-                            .color(TEXT),
-                    );
-                    ui.add_space(4.0);
+        // ── Section 7: User, Services & Containers ────────────────────────────
+        let svc_en = crate::state::lines(&self.inject.enable_services).len();
+        let svc_dis = crate::state::lines(&self.inject.disable_services).len();
+        let container_parts: Vec<&str> = [
+            if self.inject.docker {
+                Some("Docker")
+            } else {
+                None
+            },
+            if self.inject.podman {
+                Some("Podman")
+            } else {
+                None
+            },
+        ]
+        .iter()
+        .filter_map(|x| *x)
+        .collect();
+        let svc_summary = {
+            let mut parts = Vec::new();
+            if svc_en > 0 {
+                parts.push(format!("{} enabled", svc_en));
+            }
+            if svc_dis > 0 {
+                parts.push(format!("{} disabled", svc_dis));
+            }
+            if !container_parts.is_empty() {
+                parts.push(container_parts.join(", "));
+            }
+            if parts.is_empty() {
+                "default".into()
+            } else {
+                parts.join(" · ")
+            }
+        };
+        egui::CollapsingHeader::new(
+            RichText::new(format!(
+                "👥 User, Services & Containers  —  {}",
+                svc_summary
+            ))
+            .size(14.0)
+            .color(TEXT),
+        )
+        .id_salt("svc_section")
+        .show(ui, |ui| {
+            ui.add_space(6.0);
+            Frame::new()
+                .fill(CARD)
+                .stroke(Stroke::new(1.0, CARD_BORDER))
+                .inner_margin(14.0f32)
+                .corner_radius(6.0f32)
+                .show(ui, |ui| {
                     let col3_w = (ui.available_width() - 32.0) / 3.0;
-                    egui::Grid::new("user_svc_grid")
+                    egui::Grid::new("user_svc_grid2")
                         .num_columns(3)
                         .spacing([16.0, 6.0])
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
                                 ui.label(
-                                    RichText::new("Extra groups (one/line)")
+                                    RichText::new("Extra Groups (one per line)")
                                         .size(12.0)
                                         .color(MUTED),
                                 );
@@ -1626,7 +1768,7 @@ impl ForgeApp {
                             });
                             ui.vertical(|ui| {
                                 ui.label(
-                                    RichText::new("Enable services (one/line)")
+                                    RichText::new("Enable Services (one per line)")
                                         .size(12.0)
                                         .color(MUTED),
                                 );
@@ -1640,14 +1782,14 @@ impl ForgeApp {
                             });
                             ui.vertical(|ui| {
                                 ui.label(
-                                    RichText::new("Disable services (one/line)")
+                                    RichText::new("Disable Services (one per line)")
                                         .size(12.0)
                                         .color(MUTED),
                                 );
                                 ui.add_enabled(
                                     !running,
                                     egui::TextEdit::multiline(&mut self.inject.disable_services)
-                                        .hint_text("snapd\ncup.socket")
+                                        .hint_text("snapd\ncups.socket")
                                         .desired_rows(3)
                                         .desired_width(col3_w),
                                 );
@@ -1655,24 +1797,52 @@ impl ForgeApp {
                             ui.end_row();
                         });
                     ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.inject.docker, "Install Docker");
+                        ui.add_space(16.0);
+                        ui.checkbox(&mut self.inject.podman, "Install Podman");
+                        ui.add_space(16.0);
+                        ui.checkbox(
+                            &mut self.inject.no_user_interaction,
+                            "Fully unattended (no prompts)",
+                        );
+                    });
+                });
+        });
+        ui.add_space(4.0);
 
-                    // Firewall & Containers
-                    ui.label(
-                        RichText::new("Firewall & Containers")
-                            .strong()
-                            .size(14.0)
-                            .color(TEXT),
-                    );
-                    ui.add_space(4.0);
+        // ── Section 8: Firewall ───────────────────────────────────────────────
+        let fw_summary = if self.inject.firewall_enabled {
+            let policy = if self.inject.firewall_policy.is_empty() {
+                "deny"
+            } else {
+                &self.inject.firewall_policy
+            };
+            format!("UFW enabled — default {}", policy)
+        } else {
+            "disabled".into()
+        };
+        egui::CollapsingHeader::new(
+            RichText::new(format!("🔥 Firewall  —  {}", fw_summary))
+                .size(14.0)
+                .color(TEXT),
+        )
+        .id_salt("fw_section")
+        .show(ui, |ui| {
+            ui.add_space(6.0);
+            Frame::new()
+                .fill(CARD)
+                .stroke(Stroke::new(1.0, CARD_BORDER))
+                .inner_margin(14.0f32)
+                .corner_radius(6.0f32)
+                .show(ui, |ui| {
                     ui.checkbox(&mut self.inject.firewall_enabled, "Enable UFW firewall");
                     if self.inject.firewall_enabled {
-                        ui.add_space(4.0);
+                        ui.add_space(6.0);
                         ui.horizontal(|ui| {
                             ui.label(RichText::new("Default policy").size(12.0).color(MUTED));
                             ui.add_space(8.0);
-                            egui::ComboBox::from_id_salt("fw_policy")
+                            egui::ComboBox::from_id_salt("fw_policy2")
                                 .selected_text(if self.inject.firewall_policy.is_empty() {
                                     "deny"
                                 } else {
@@ -1688,29 +1858,29 @@ impl ForgeApp {
                                     }
                                 });
                         });
-                        ui.add_space(4.0);
+                        ui.add_space(6.0);
                         let col2_w = (ui.available_width() - 16.0) / 2.0;
-                        egui::Grid::new("fw_grid")
+                        egui::Grid::new("fw_grid2")
                             .num_columns(2)
                             .spacing([16.0, 6.0])
                             .show(ui, |ui| {
                                 ui.vertical(|ui| {
                                     ui.label(
-                                        RichText::new("Allow ports (one/line)")
+                                        RichText::new("Allow Ports (one per line, e.g. 22/tcp)")
                                             .size(12.0)
                                             .color(MUTED),
                                     );
                                     ui.add_enabled(
                                         !running,
                                         egui::TextEdit::multiline(&mut self.inject.allow_ports)
-                                            .hint_text("22/tcp\n80/tcp")
-                                            .desired_rows(2)
+                                            .hint_text("22/tcp\n80/tcp\n443/tcp")
+                                            .desired_rows(3)
                                             .desired_width(col2_w),
                                     );
                                 });
                                 ui.vertical(|ui| {
                                     ui.label(
-                                        RichText::new("Deny ports (one/line)")
+                                        RichText::new("Deny Ports (one per line)")
                                             .size(12.0)
                                             .color(MUTED),
                                     );
@@ -1718,217 +1888,231 @@ impl ForgeApp {
                                         !running,
                                         egui::TextEdit::multiline(&mut self.inject.deny_ports)
                                             .hint_text("23/tcp")
-                                            .desired_rows(2)
+                                            .desired_rows(3)
                                             .desired_width(col2_w),
                                     );
                                 });
                                 ui.end_row();
                             });
                     }
-                    ui.add_space(4.0);
-                    ui.horizontal(|ui| {
-                        ui.checkbox(&mut self.inject.docker, "Install Docker");
-                        ui.add_space(12.0);
-                        ui.checkbox(&mut self.inject.podman, "Install Podman");
-                        ui.add_space(12.0);
-                        ui.checkbox(&mut self.inject.no_user_interaction, "No user interaction");
-                    });
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
-                    // Swap
-                    ui.label(RichText::new("Swap").strong().size(14.0).color(TEXT));
-                    ui.add_space(4.0);
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Swap size (MiB)").size(12.0).color(MUTED));
-                        ui.add_space(8.0);
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.swap_size_mb)
-                                .hint_text("0 = disabled, e.g. 2048")
-                                .desired_width(140.0),
-                        );
-                        if !self.inject.swap_size_mb.trim().is_empty()
-                            && self.inject.swap_size_mb.trim().parse::<u32>().is_err()
-                        {
-                            ui.label(RichText::new("Must be a number").size(11.0).color(RED));
-                        }
-                    });
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
-
-                    // GRUB
-                    ui.label(RichText::new("GRUB").strong().size(14.0).color(TEXT));
-                    ui.add_space(4.0);
-                    let grub_cmdline_w = (ui.available_width() - 80.0 - 160.0 - 16.0).max(120.0);
-                    egui::Grid::new("inject_grub_grid")
-                        .num_columns(3)
-                        .spacing([8.0, 6.0])
-                        .show(ui, |ui| {
-                            ui.vertical(|ui| {
-                                let bad_timeout = !self.inject.grub_timeout.trim().is_empty()
-                                    && self.inject.grub_timeout.trim().parse::<u32>().is_err();
-                                let lbl_col = if bad_timeout { RED } else { MUTED };
-                                ui.label(
-                                    RichText::new("Timeout (s)").size(12.0).color(lbl_col),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.grub_timeout)
-                                        .hint_text("5  (empty = OS default)")
-                                        .desired_width(80.0),
-                                );
-                                if bad_timeout {
-                                    ui.label(
-                                        RichText::new("Must be a whole number")
-                                            .size(10.0)
-                                            .color(RED),
-                                    );
-                                }
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("Default entry").size(12.0).color(MUTED));
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.grub_default)
-                                        .hint_text("Ubuntu")
-                                        .desired_width(160.0),
-                                );
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("Extra cmdline args").size(12.0).color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.grub_cmdline)
-                                        .hint_text("quiet splash")
-                                        .desired_width(grub_cmdline_w),
-                                );
-                            });
-                            ui.end_row();
-                        });
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
-
-                    // Sysctl
-                    ui.label(RichText::new("Sysctl").strong().size(14.0).color(TEXT));
-                    ui.add_space(4.0);
-                    ui.label(
-                        RichText::new("One key=value per line (e.g. net.ipv4.ip_forward=1)")
-                            .size(11.0)
-                            .color(MUTED),
-                    );
-                    ui.add_enabled(
-                        !running,
-                        egui::TextEdit::multiline(&mut self.inject.sysctl_pairs)
-                            .hint_text("net.ipv4.ip_forward=1\nvm.swappiness=10")
-                            .desired_width(ui.available_width())
-                            .desired_rows(3),
-                    );
-                    let bad_sysctl = crate::state::lines(&self.inject.sysctl_pairs)
-                        .iter()
-                        .filter(|s| !s.contains('='))
-                        .count();
-                    if bad_sysctl > 0 {
-                        ui.label(
-                            RichText::new(format!(
-                                "⚠ {bad_sysctl} line{} missing '=' will be ignored",
-                                if bad_sysctl == 1 { "" } else { "s" }
-                            ))
-                            .size(11.0)
-                            .color(AMBER),
-                        );
-                    }
-                },
-            );
-
-            ui.add_space(16.0);
-
-            // Validate required fields and show inline errors before the button
-            let pw_mismatch = !self.inject.password.is_empty()
-                && !self.inject.password_confirm.is_empty()
-                && self.inject.password != self.inject.password_confirm;
-            let source_empty = self.inject.source.trim().is_empty();
-            let sha_invalid = {
-                let s = self.inject.expected_sha256.trim();
-                !s.is_empty() && (s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()))
-            };
-            if source_empty && !running {
-                ui.label(
-                    RichText::new("⚠ Source ISO is required")
-                        .size(12.0)
-                        .color(RED),
-                );
-            }
-            if pw_mismatch {
-                ui.label(
-                    RichText::new("⚠ Passwords do not match — cannot inject")
-                        .size(12.0)
-                        .color(RED),
-                );
-            }
-            if sha_invalid {
-                ui.label(
-                    RichText::new("⚠ SHA-256 must be a 64-character hex string")
-                        .size(12.0)
-                        .color(RED),
-                );
-            }
-            let can = !source_empty && !pw_mismatch && !sha_invalid && !running;
-            if primary_btn(
-                ui,
-                if running {
-                    "⏳ Injecting…"
-                } else {
-                    "▶ Inject ISO"
-                },
-                can,
-            ) {
-                do_inject = true;
-            }
+                });
         });
+        ui.add_space(4.0);
+
+        // ── Section 9: Advanced (GRUB · Swap · Sysctl · SHA-256) ─────────────
+        egui::CollapsingHeader::new(
+            RichText::new("🔧 Advanced  —  GRUB · Swap · Sysctl · SHA-256 Verification").size(14.0).color(MUTED),
+        )
+        .id_salt("adv_section")
+        .show(ui, |ui| {
+            ui.add_space(6.0);
+            Frame::new().fill(CARD).stroke(Stroke::new(1.0, CARD_BORDER)).inner_margin(14.0f32).corner_radius(6.0f32).show(ui, |ui| {
+                // GRUB
+                ui.label(RichText::new("GRUB Boot Loader").strong().size(13.0).color(TEXT));
+                ui.add_space(4.0);
+                let col3_w_grub = (ui.available_width() - 32.0) / 3.0;
+                egui::Grid::new("grub_grid2")
+                    .num_columns(3)
+                    .spacing([16.0, 6.0])
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            let bad_timeout = !self.inject.grub_timeout.trim().is_empty()
+                                && self.inject.grub_timeout.trim().parse::<u32>().is_err();
+                            ui.label(RichText::new("Timeout (seconds)").size(12.0).color(if bad_timeout { RED } else { MUTED }));
+                            ui.add_enabled(!running, egui::TextEdit::singleline(&mut self.inject.grub_timeout).hint_text("5").desired_width(col3_w_grub));
+                            if bad_timeout { ui.label(RichText::new("Must be a whole number").size(10.0).color(RED)); }
+                        });
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new("Default Entry Label").size(12.0).color(MUTED));
+                            ui.add_enabled(!running, egui::TextEdit::singleline(&mut self.inject.grub_default).hint_text("Ubuntu").desired_width(col3_w_grub));
+                        });
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new("Extra Kernel Args").size(12.0).color(MUTED));
+                            ui.add_enabled(!running, egui::TextEdit::singleline(&mut self.inject.grub_cmdline).hint_text("quiet splash").desired_width(col3_w_grub));
+                        });
+                        ui.end_row();
+                    });
+
+                ui.add_space(10.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                // Swap
+                ui.label(RichText::new("Swap File").strong().size(13.0).color(TEXT));
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Size (MiB) — 0 or blank to disable").size(12.0).color(MUTED));
+                    ui.add_space(8.0);
+                    ui.add_enabled(!running, egui::TextEdit::singleline(&mut self.inject.swap_size_mb).hint_text("2048").desired_width(100.0));
+                    if !self.inject.swap_size_mb.trim().is_empty() && self.inject.swap_size_mb.trim().parse::<u32>().is_err() {
+                        ui.label(RichText::new("Must be a number").size(11.0).color(RED));
+                    }
+                });
+
+                ui.add_space(10.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                // Sysctl
+                ui.label(RichText::new("Sysctl Parameters").strong().size(13.0).color(TEXT));
+                ui.add_space(4.0);
+                ui.label(RichText::new("One key=value per line — applied via /etc/sysctl.d/ on the installed system").size(11.0).color(MUTED));
+                ui.add_space(4.0);
+                ui.add_enabled(!running, egui::TextEdit::multiline(&mut self.inject.sysctl_pairs).hint_text("net.ipv4.ip_forward=1\nvm.swappiness=10").desired_width(ui.available_width()).desired_rows(3));
+                let bad_sysctl = crate::state::lines(&self.inject.sysctl_pairs).iter().filter(|s| !s.contains('=')).count();
+                if bad_sysctl > 0 {
+                    ui.label(RichText::new(format!("⚠ {bad_sysctl} line{} missing '=' will be ignored", if bad_sysctl == 1 { "" } else { "s" })).size(11.0).color(AMBER));
+                }
+
+                ui.add_space(10.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                // SHA-256 Verification
+                ui.label(RichText::new("Source ISO SHA-256 Verification (optional)").strong().size(13.0).color(TEXT));
+                ui.label(RichText::new("If provided, the source ISO is verified before injection begins. Leave blank to skip.").size(11.0).color(MUTED));
+                ui.add_space(4.0);
+                let sha_invalid = {
+                    let s = self.inject.expected_sha256.trim();
+                    !s.is_empty() && (s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()))
+                };
+                ui.add_enabled(
+                    !running,
+                    egui::TextEdit::singleline(&mut self.inject.expected_sha256)
+                        .hint_text("64-character hex SHA-256 (leave blank to skip check)")
+                        .desired_width(ui.available_width()),
+                );
+                if sha_invalid {
+                    ui.label(RichText::new("⚠ SHA-256 must be exactly 64 hex characters").size(11.0).color(RED));
+                }
+            });
+        });
+
+        ui.add_space(16.0);
+
+        // ── Run button + validation summary ───────────────────────────────────
+        let pw_mismatch = !self.inject.password.is_empty()
+            && !self.inject.password_confirm.is_empty()
+            && self.inject.password != self.inject.password_confirm;
+        let source_empty = self.inject.source.trim().is_empty();
+        let sha_invalid = {
+            let s = self.inject.expected_sha256.trim();
+            !s.is_empty() && (s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()))
+        };
+
+        Frame::new()
+            .fill(Color32::from_rgb(15, 20, 36))
+            .stroke(Stroke::new(1.0, CARD_BORDER))
+            .inner_margin(16.0f32)
+            .corner_radius(8.0f32)
+            .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                if source_empty {
+                    ui.label(
+                        RichText::new("⚠  Source ISO is required before you can inject.")
+                            .size(12.0)
+                            .color(AMBER),
+                    );
+                    ui.add_space(6.0);
+                }
+                if pw_mismatch {
+                    ui.label(
+                        RichText::new("⚠  Passwords do not match.")
+                            .size(12.0)
+                            .color(RED),
+                    );
+                    ui.add_space(6.0);
+                }
+                if sha_invalid {
+                    ui.label(
+                        RichText::new("⚠  SHA-256 must be a 64-character hex string.")
+                            .size(12.0)
+                            .color(RED),
+                    );
+                    ui.add_space(6.0);
+                }
+                let can_run = !source_empty && !pw_mismatch && !sha_invalid && !running;
+                let btn_label = if running {
+                    "⏳  Injecting…  (see Log below)"
+                } else {
+                    "🚀  Run Inject"
+                };
+                let btn_fill = if can_run {
+                    ACCENT
+                } else {
+                    Color32::from_rgb(40, 50, 80)
+                };
+                let btn = egui::Button::new(
+                    RichText::new(btn_label)
+                        .size(16.0)
+                        .color(Color32::WHITE)
+                        .strong(),
+                )
+                .fill(btn_fill)
+                .min_size(Vec2::new(ui.available_width(), 44.0));
+                if ui.add_enabled(can_run, btn).clicked() {
+                    do_inject = true;
+                }
+            });
 
         if do_inject {
             self.spawn_inject();
         }
 
         if let Some(r) = self.inject_result.clone() {
+            ui.add_space(12.0);
             card_green(ui, |ui| {
-                ui.label(
-                    RichText::new("✓ Inject Complete")
-                        .size(16.0)
-                        .strong()
-                        .color(GREEN),
-                );
-                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("✓").size(24.0).color(GREEN));
+                    ui.add_space(8.0);
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new("Inject Complete").size(16.0).strong().color(GREEN));
+                        ui.label(RichText::new("Your ISO has been created. Copy the path below or open the folder.").size(12.0).color(MUTED));
+                    });
+                });
+                ui.add_space(10.0);
                 for a in &r.artifacts {
+                    let path_str = a.to_string_lossy();
+                    let full_w = ui.available_width();
                     ui.horizontal(|ui| {
-                        ui.label("💿");
-                        ui.label(
-                            RichText::new(a.to_string_lossy().as_ref())
-                                .size(13.0)
-                                .monospace()
-                                .color(TEXT),
+                        ui.label(RichText::new("💿").size(18.0));
+                        ui.add_space(4.0);
+                        ui.add(
+                            egui::TextEdit::singleline(&mut path_str.as_ref().to_string())
+                                .desired_width(full_w - 120.0)
+                                .interactive(false)
+                                .font(egui::FontId::monospace(12.0)),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("📋").on_hover_text("Copy path").clicked() {
-                                ui.ctx().copy_text(a.to_string_lossy().into_owned());
-                            }
-                            if ui.small_button("📂").on_hover_text("Open folder").clicked() {
+                            if ui
+                                .button("📂 Open")
+                                .on_hover_text("Open containing folder")
+                                .clicked()
+                            {
                                 if let Some(dir) = a.parent() {
                                     let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
                                 }
                             }
+                            if ui
+                                .button("📋 Copy")
+                                .on_hover_text("Copy full path")
+                                .clicked()
+                            {
+                                ui.ctx().copy_text(a.to_string_lossy().into_owned());
+                            }
                         });
                     });
                 }
-                ui.add_space(10.0);
-                if continue_btn(ui, "Continue to Verify →") {
-                    self.active_stage = Stage::Verify;
-                }
+                ui.add_space(12.0);
+                ui.horizontal(|ui| {
+                    if continue_btn(ui, "Continue to Verify →") {
+                        self.active_stage = Stage::Verify;
+                    }
+                    ui.add_space(12.0);
+                    if ghost_btn(ui, "→ Skip to Results", true) {
+                        self.active_stage = Stage::Completion;
+                    }
+                });
             });
         }
     }
@@ -2208,7 +2392,6 @@ impl ForgeApp {
                 }
                 ui.add_space(10.0);
                 if continue_btn(ui, "Continue to Diff →") {
-                    self.verify_done = true;
                     self.active_stage = Stage::Diff;
                 }
             });
@@ -2447,7 +2630,6 @@ impl ForgeApp {
                 );
                 ui.add_space(8.0);
                 if continue_btn(ui, "Continue to Build →") {
-                    self.diff_done = true;
                     self.active_stage = Stage::Build;
                 }
             });
@@ -2866,7 +3048,6 @@ impl ForgeApp {
                 }
                 ui.add_space(10.0);
                 if continue_btn(ui, "Continue to Completion →") {
-                    self.build_done = true;
                     self.active_stage = Stage::Completion;
                 }
             });
@@ -3032,7 +3213,7 @@ impl ForgeApp {
                 ("← Back to Build", Stage::Build),
             ];
             for (label, target) in stages {
-                if ghost_btn(ui, label, true) {
+                if ghost_btn(ui, label, self.stage_unlocked(&target)) {
                     self.active_stage = target;
                 }
                 ui.add_space(8.0);

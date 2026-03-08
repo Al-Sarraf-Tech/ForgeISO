@@ -792,9 +792,12 @@ impl ForgeIsoEngine {
         // Copy distro-specific files into the extracted ISO and patch boot entries
         match cfg.distro {
             None | Some(Distro::Ubuntu) | Some(Distro::Mint) => {
-                // Cloud-init nocloud overlay
+                // Cloud-init nocloud overlay.
+                // Files must be at the ISO root so that when the installer
+                // mounts the CD at /cdrom/ the datasource path resolves to
+                // /cdrom/nocloud/ — not /cdrom/cdrom/nocloud/.
                 let nocloud_dir = work_dir.join("overlay").join("nocloud");
-                let iso_nocloud = extract_dir.join("cdrom").join("nocloud");
+                let iso_nocloud = extract_dir.join("nocloud");
                 std::fs::create_dir_all(&iso_nocloud)?;
                 for entry in std::fs::read_dir(&nocloud_dir)? {
                     let entry = entry?;
@@ -802,10 +805,10 @@ impl ForgeIsoEngine {
                 }
                 self.emit(EngineEvent::info(
                     EventPhase::Inject,
-                    "injected cloud-init files",
+                    "injected cloud-init files into ISO root /nocloud/",
                 ));
 
-                // Wallpaper
+                // Wallpaper — also at ISO root so /cdrom/wallpaper/ resolves correctly.
                 if let Some(src) = &cfg.wallpaper {
                     let fname = src.file_name().ok_or_else(|| {
                         EngineError::InvalidConfig(format!(
@@ -813,7 +816,7 @@ impl ForgeIsoEngine {
                             src.display()
                         ))
                     })?;
-                    let iso_wp = extract_dir.join("cdrom").join("wallpaper");
+                    let iso_wp = extract_dir.join("wallpaper");
                     std::fs::create_dir_all(&iso_wp)?;
                     std::fs::copy(work_dir.join("wallpaper").join(fname), iso_wp.join(fname))?;
                 }
