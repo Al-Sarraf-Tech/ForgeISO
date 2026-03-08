@@ -43,21 +43,21 @@ const TAB_ACTIVE: Color32 = Color32::from_rgb(33, 38, 45);
 
 /// Thin muted label that sits above a field.
 fn lbl(ui: &mut Ui, text: &str) {
-    ui.label(RichText::new(text).size(11.0).color(MUTED));
+    ui.label(RichText::new(text).size(14.0).color(MUTED));
 }
 
 /// Section title inside a form.
 fn section(ui: &mut Ui, text: &str) {
+    ui.add_space(6.0);
+    ui.label(RichText::new(text).size(14.0).strong().color(TEXT));
     ui.add_space(4.0);
-    ui.label(RichText::new(text).size(13.0).strong().color(TEXT));
-    ui.add_space(2.0);
 }
 
 /// Thin horizontal rule.
 fn rule(ui: &mut Ui) {
-    ui.add_space(10.0);
+    ui.add_space(14.0);
     ui.add(egui::Separator::default().horizontal().spacing(0.0));
-    ui.add_space(10.0);
+    ui.add_space(14.0);
 }
 
 /// Full-width primary action button.
@@ -68,10 +68,10 @@ fn action_btn(ui: &mut Ui, label: &str, enabled: bool) -> bool {
         Color32::from_rgb(33, 38, 45)
     };
     let text_col = if enabled { Color32::WHITE } else { MUTED };
-    let btn = egui::Button::new(RichText::new(label).size(15.0).strong().color(text_col))
+    let btn = egui::Button::new(RichText::new(label).size(16.0).strong().color(text_col))
         .fill(fill)
         .stroke(Stroke::new(1.0, if enabled { ACCENT } else { BORDER }))
-        .min_size(Vec2::new(ui.available_width(), 44.0));
+        .min_size(Vec2::new(ui.available_width(), 52.0));
     ui.add_enabled(enabled, btn).clicked()
 }
 
@@ -79,10 +79,10 @@ fn action_btn(ui: &mut Ui, label: &str, enabled: bool) -> bool {
 fn browse_btn(ui: &mut Ui, enabled: bool) -> bool {
     ui.add_enabled(
         enabled,
-        egui::Button::new("Browse")
+        egui::Button::new(RichText::new("Browse").size(13.0))
             .fill(SURFACE)
             .stroke(Stroke::new(1.0, BORDER))
-            .min_size(Vec2::new(64.0, 28.0)),
+            .min_size(Vec2::new(80.0, 38.0)),
     )
     .clicked()
 }
@@ -91,20 +91,25 @@ fn browse_btn(ui: &mut Ui, enabled: bool) -> bool {
 fn small_btn(ui: &mut Ui, label: &str, enabled: bool) -> bool {
     ui.add_enabled(
         enabled,
-        egui::Button::new(label)
+        egui::Button::new(RichText::new(label).size(13.0))
             .fill(SURFACE)
             .stroke(Stroke::new(1.0, BORDER))
-            .min_size(Vec2::new(80.0, 28.0)),
+            .min_size(Vec2::new(100.0, 38.0)),
     )
     .clicked()
 }
 
 /// Green "Continue" button.
 fn continue_btn(ui: &mut Ui, label: &str) -> bool {
-    let btn = egui::Button::new(RichText::new(label).color(Color32::WHITE).strong())
-        .fill(GREEN)
-        .stroke(Stroke::new(1.0, GREEN))
-        .min_size(Vec2::new(160.0, 34.0));
+    let btn = egui::Button::new(
+        RichText::new(label)
+            .size(14.0)
+            .color(Color32::WHITE)
+            .strong(),
+    )
+    .fill(GREEN)
+    .stroke(Stroke::new(1.0, GREEN))
+    .min_size(Vec2::new(180.0, 42.0));
     ui.add(btn).clicked()
 }
 
@@ -715,21 +720,21 @@ impl ForgeApp {
                 Frame::new()
                     .fill(Color32::from_rgb(10, 14, 20))
                     .stroke(Stroke::new(1.0, BORDER))
-                    .inner_margin(egui::Margin::symmetric(16, 10)),
+                    .inner_margin(egui::Margin::symmetric(20, 14)),
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     // Logo
                     ui.label(
                         RichText::new("ForgeISO")
-                            .size(16.0)
+                            .size(18.0)
                             .strong()
                             .color(Color32::WHITE),
                     );
-                    ui.add_space(4.0);
+                    ui.add_space(6.0);
                     ui.label(
                         RichText::new("ISO Customization Platform")
-                            .size(11.0)
+                            .size(13.0)
                             .color(MUTED),
                     );
 
@@ -739,11 +744,11 @@ impl ForgeApp {
                             if ui
                                 .add(
                                     egui::Button::new(
-                                        RichText::new("Cancel").size(12.0).color(Color32::WHITE),
+                                        RichText::new("Cancel").size(14.0).color(Color32::WHITE),
                                     )
                                     .fill(Color32::from_rgb(100, 30, 30))
                                     .stroke(Stroke::new(1.0, RED))
-                                    .min_size(Vec2::new(64.0, 24.0)),
+                                    .min_size(Vec2::new(72.0, 32.0)),
                                 )
                                 .clicked()
                             {
@@ -754,20 +759,20 @@ impl ForgeApp {
                             ui.add_space(4.0);
                             ui.label(
                                 RichText::new(self.job_phase.clone())
-                                    .size(12.0)
+                                    .size(14.0)
                                     .color(MUTED),
                             );
                             if let Some(pct) = self.job_pct {
                                 ui.add_space(8.0);
                                 ui.label(
                                     RichText::new(format!("{:.0}%", pct * 100.0))
-                                        .size(12.0)
+                                        .size(14.0)
                                         .color(ACCENT),
                                 );
                             }
                         } else if let Some(s) = self.status.as_ref() {
                             let col = if s.is_error { RED } else { GREEN };
-                            ui.label(RichText::new(&s.text).size(12.0).color(col));
+                            ui.label(RichText::new(&s.text).size(14.0).color(col));
                         }
                     });
                 });
@@ -781,11 +786,11 @@ impl ForgeApp {
                 Frame::new()
                     .fill(Color32::from_rgb(13, 17, 23))
                     .stroke(Stroke::new(1.0, BORDER))
-                    .inner_margin(egui::Margin::symmetric(12, 0)),
+                    .inner_margin(egui::Margin::symmetric(16, 0)),
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.add_space(4.0);
+                    ui.add_space(6.0);
                     for tab in &[Tab::Inject, Tab::Verify, Tab::Diff, Tab::Build, Tab::Doctor] {
                         let active = *tab == self.active_tab;
                         let label = tab.label();
@@ -812,17 +817,17 @@ impl ForgeApp {
                             label.to_string()
                         };
                         let btn =
-                            egui::Button::new(RichText::new(display).size(13.0).color(text_col))
+                            egui::Button::new(RichText::new(display).size(14.0).color(text_col))
                                 .fill(fill)
                                 .stroke(Stroke::new(
                                     if active { 1.0 } else { 0.0 },
                                     Color32::from_rgb(48, 54, 61),
                                 ))
-                                .min_size(Vec2::new(0.0, 34.0));
+                                .min_size(Vec2::new(100.0, 46.0));
                         if ui.add(btn).clicked() {
                             self.active_tab = *tab;
                         }
-                        ui.add_space(2.0);
+                        ui.add_space(4.0);
                     }
 
                     // Log toggle on the right
@@ -843,7 +848,7 @@ impl ForgeApp {
                         };
                         let log_col = if error_count > 0 { RED } else { MUTED };
                         let log_btn =
-                            egui::Button::new(RichText::new(log_label).size(12.0).color(log_col))
+                            egui::Button::new(RichText::new(log_label).size(13.0).color(log_col))
                                 .fill(Color32::TRANSPARENT)
                                 .stroke(Stroke::new(0.0, BORDER));
                         if ui.add(log_btn).clicked() {
@@ -861,8 +866,8 @@ impl ForgeApp {
         }
         egui::TopBottomPanel::bottom("log_panel")
             .resizable(true)
-            .min_height(120.0)
-            .default_height(180.0)
+            .min_height(150.0)
+            .default_height(220.0)
             .frame(
                 Frame::new()
                     .fill(Color32::from_rgb(10, 14, 20))
@@ -871,16 +876,16 @@ impl ForgeApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("Log").size(12.0).strong().color(MUTED));
+                    ui.label(RichText::new("Log").size(14.0).strong().color(MUTED));
                     ui.add_space(12.0);
                     ui.checkbox(
                         &mut self.log_errors_only,
-                        RichText::new("Errors only").size(11.0).color(MUTED),
+                        RichText::new("Errors only").size(13.0).color(MUTED),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui
                             .add(
-                                egui::Button::new(RichText::new("Clear").size(11.0).color(MUTED))
+                                egui::Button::new(RichText::new("Clear").size(13.0).color(MUTED))
                                     .fill(Color32::TRANSPARENT)
                                     .stroke(Stroke::new(0.0, BORDER)),
                             )
@@ -916,21 +921,21 @@ impl ForgeApp {
                             ui.horizontal(|ui| {
                                 ui.label(
                                     RichText::new(&entry.timestamp)
-                                        .size(11.0)
+                                        .size(13.0)
                                         .monospace()
                                         .color(Color32::from_rgb(70, 80, 95)),
                                 );
                                 ui.add_space(4.0);
                                 ui.label(
                                     RichText::new(format!("[{}]", entry.phase))
-                                        .size(11.0)
+                                        .size(13.0)
                                         .monospace()
                                         .color(ACCENT),
                                 );
                                 ui.add_space(4.0);
                                 ui.label(
                                     RichText::new(&entry.message)
-                                        .size(11.0)
+                                        .size(13.0)
                                         .monospace()
                                         .color(col),
                                 );
@@ -949,8 +954,7 @@ impl ForgeApp {
         egui::ScrollArea::vertical()
             .id_salt("inject_scroll")
             .show(ui, |ui| {
-                ui.set_max_width(740.0);
-                ui.add_space(8.0);
+                ui.add_space(12.0);
 
                 // ── Source ISO ──────────────────────────────────────────────
                 lbl(ui, "Source ISO  (local path or URL)");
@@ -961,8 +965,8 @@ impl ForgeApp {
                             .hint_text(
                                 "/path/to/ubuntu-24.04.iso  or  https://releases.ubuntu.com/…",
                             )
-                            .desired_width(ui.available_width() - 72.0)
-                            .min_size(Vec2::new(0.0, 30.0)),
+                            .desired_width(ui.available_width() - 96.0)
+                            .min_size(Vec2::new(0.0, 42.0)),
                     );
                     if browse_btn(ui, !running) {
                         worker::pick_iso(PickTarget::InjectSource, self.tx.clone());
@@ -973,10 +977,10 @@ impl ForgeApp {
 
                 // ── Output ─────────────────────────────────────────────────
                 let full_w = ui.available_width();
-                let col_w = (full_w - 12.0) / 2.0;
+                let col_w = (full_w - 20.0) / 2.0;
                 egui::Grid::new("output_grid")
                     .num_columns(2)
-                    .spacing([12.0, 0.0])
+                    .spacing([20.0, 12.0])
                     .show(ui, |ui| {
                         ui.vertical(|ui| {
                             lbl(ui, "Output Directory");
@@ -984,8 +988,8 @@ impl ForgeApp {
                                 ui.add_enabled(
                                     !running,
                                     egui::TextEdit::singleline(&mut self.inject.output_dir)
-                                        .desired_width(col_w - 44.0)
-                                        .min_size(Vec2::new(0.0, 28.0)),
+                                        .desired_width(col_w - 52.0)
+                                        .min_size(Vec2::new(0.0, 38.0)),
                                 );
                                 if ui
                                     .add_enabled(
@@ -993,7 +997,7 @@ impl ForgeApp {
                                         egui::Button::new("📂")
                                             .fill(SURFACE)
                                             .stroke(Stroke::new(1.0, BORDER))
-                                            .min_size(Vec2::new(32.0, 28.0)),
+                                            .min_size(Vec2::new(40.0, 38.0)),
                                     )
                                     .on_hover_text("Pick output folder")
                                     .clicked()
@@ -1012,7 +1016,7 @@ impl ForgeApp {
                                 egui::TextEdit::singleline(&mut self.inject.out_name)
                                     .hint_text("forgeiso-local.iso")
                                     .desired_width(col_w)
-                                    .min_size(Vec2::new(0.0, 28.0)),
+                                    .min_size(Vec2::new(0.0, 38.0)),
                             );
                         });
                         ui.end_row();
@@ -1024,7 +1028,7 @@ impl ForgeApp {
                 section(ui, "Identity");
                 egui::Grid::new("identity_grid")
                     .num_columns(2)
-                    .spacing([12.0, 8.0])
+                    .spacing([20.0, 16.0])
                     .show(ui, |ui| {
                         ui.vertical(|ui| {
                             lbl(ui, "Hostname");
@@ -1033,7 +1037,7 @@ impl ForgeApp {
                                 egui::TextEdit::singleline(&mut self.inject.hostname)
                                     .hint_text("my-server")
                                     .desired_width(col_w)
-                                    .min_size(Vec2::new(0.0, 28.0)),
+                                    .min_size(Vec2::new(0.0, 38.0)),
                             );
                         });
                         ui.vertical(|ui| {
@@ -1043,7 +1047,7 @@ impl ForgeApp {
                                 egui::TextEdit::singleline(&mut self.inject.username)
                                     .hint_text("admin")
                                     .desired_width(col_w)
-                                    .min_size(Vec2::new(0.0, 28.0)),
+                                    .min_size(Vec2::new(0.0, 38.0)),
                             );
                         });
                         ui.end_row();
@@ -1054,7 +1058,7 @@ impl ForgeApp {
                                 egui::TextEdit::singleline(&mut self.inject.password)
                                     .password(true)
                                     .desired_width(col_w)
-                                    .min_size(Vec2::new(0.0, 28.0)),
+                                    .min_size(Vec2::new(0.0, 38.0)),
                             );
                         });
                         ui.vertical(|ui| {
@@ -1065,7 +1069,7 @@ impl ForgeApp {
                             let te = egui::TextEdit::singleline(&mut self.inject.password_confirm)
                                 .password(true)
                                 .desired_width(col_w)
-                                .min_size(Vec2::new(0.0, 28.0));
+                                .min_size(Vec2::new(0.0, 38.0));
                             let resp = ui.add_enabled(!running, te);
                             if mismatch {
                                 resp.on_hover_text(
@@ -1073,7 +1077,7 @@ impl ForgeApp {
                                 );
                                 ui.label(
                                     RichText::new("Passwords do not match")
-                                        .size(11.0)
+                                        .size(13.0)
                                         .color(RED),
                                 );
                             }
@@ -1123,11 +1127,11 @@ impl ForgeApp {
 
                 // ── Advanced Options ───────────────────────────────────────
                 egui::CollapsingHeader::new(
-                    RichText::new("Advanced Options").size(13.0).color(MUTED),
+                    RichText::new("⚙  Advanced Options").size(15.0).color(MUTED),
                 )
                 .default_open(false)
                 .show(ui, |ui| {
-                    ui.add_space(6.0);
+                    ui.add_space(10.0);
                     self.show_inject_advanced(ui, running);
                 });
 
@@ -1147,7 +1151,7 @@ impl ForgeApp {
                 if source_empty {
                     ui.label(
                         RichText::new("Source ISO is required to proceed.")
-                            .size(12.0)
+                            .size(14.0)
                             .color(AMBER),
                     );
                     ui.add_space(4.0);
@@ -1155,7 +1159,7 @@ impl ForgeApp {
                 if out_empty {
                     ui.label(
                         RichText::new("Output directory is required.")
-                            .size(12.0)
+                            .size(14.0)
                             .color(AMBER),
                     );
                     ui.add_space(4.0);
@@ -1163,7 +1167,7 @@ impl ForgeApp {
                 if pw_mismatch {
                     ui.label(
                         RichText::new("Passwords do not match.")
-                            .size(12.0)
+                            .size(14.0)
                             .color(RED),
                     );
                     ui.add_space(4.0);
@@ -1171,7 +1175,7 @@ impl ForgeApp {
                 if sha_invalid {
                     ui.label(
                         RichText::new("SHA-256 must be 64 hex characters.")
-                            .size(12.0)
+                            .size(14.0)
                             .color(RED),
                     );
                     ui.add_space(4.0);
@@ -1272,7 +1276,7 @@ impl ForgeApp {
 
     fn show_inject_advanced(&mut self, ui: &mut Ui, running: bool) {
         let full_w = ui.available_width();
-        let col_w = (full_w - 12.0) / 2.0;
+        let col_w = (full_w - 20.0) / 2.0;
 
         // ── SSH ──────────────────────────────────────────────────────────
         section(ui, "SSH");
@@ -1282,7 +1286,7 @@ impl ForgeApp {
             egui::TextEdit::multiline(&mut self.inject.ssh_keys)
                 .hint_text("ssh-ed25519 AAAA…")
                 .desired_width(full_w)
-                .desired_rows(3),
+                .desired_rows(4),
         );
         ui.add_space(4.0);
         ui.horizontal(|ui| {
@@ -1306,7 +1310,7 @@ impl ForgeApp {
         section(ui, "Network");
         egui::Grid::new("adv_net_grid")
             .num_columns(2)
-            .spacing([12.0, 8.0])
+            .spacing([20.0, 16.0])
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     lbl(ui, "DNS Servers  (one per line)");
@@ -1315,7 +1319,7 @@ impl ForgeApp {
                         egui::TextEdit::multiline(&mut self.inject.dns_servers)
                             .hint_text("8.8.8.8\n1.1.1.1")
                             .desired_width(col_w)
-                            .desired_rows(2),
+                            .desired_rows(3),
                     );
                 });
                 ui.vertical(|ui| {
@@ -1325,7 +1329,7 @@ impl ForgeApp {
                         egui::TextEdit::multiline(&mut self.inject.ntp_servers)
                             .hint_text("pool.ntp.org")
                             .desired_width(col_w)
-                            .desired_rows(2),
+                            .desired_rows(3),
                     );
                 });
                 ui.end_row();
@@ -1382,7 +1386,7 @@ impl ForgeApp {
         section(ui, "System");
         egui::Grid::new("adv_sys_grid")
             .num_columns(2)
-            .spacing([12.0, 8.0])
+            .spacing([20.0, 16.0])
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     lbl(ui, "Timezone");
@@ -1437,7 +1441,7 @@ impl ForgeApp {
                         ui.add_enabled(
                             !running,
                             egui::TextEdit::singleline(&mut self.inject.wallpaper_path)
-                                .desired_width(col_w - 44.0),
+                                .desired_width(col_w - 52.0),
                         );
                         if ui
                             .add_enabled(
@@ -1462,7 +1466,7 @@ impl ForgeApp {
         section(ui, "Packages");
         egui::Grid::new("adv_pkg_grid")
             .num_columns(2)
-            .spacing([12.0, 8.0])
+            .spacing([20.0, 16.0])
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     lbl(ui, "Extra Packages  (one per line)");
@@ -1471,7 +1475,7 @@ impl ForgeApp {
                         egui::TextEdit::multiline(&mut self.inject.packages)
                             .hint_text("curl\ngit\nvim")
                             .desired_width(col_w)
-                            .desired_rows(3),
+                            .desired_rows(4),
                     );
                 });
                 ui.vertical(|ui| {
@@ -1481,7 +1485,7 @@ impl ForgeApp {
                         egui::TextEdit::multiline(&mut self.inject.apt_repos)
                             .hint_text("ppa:example/ppa")
                             .desired_width(col_w)
-                            .desired_rows(3),
+                            .desired_rows(4),
                     );
                 });
                 ui.end_row();
@@ -1493,7 +1497,7 @@ impl ForgeApp {
         section(ui, "Run Commands");
         egui::Grid::new("adv_cmd_grid")
             .num_columns(2)
-            .spacing([12.0, 8.0])
+            .spacing([20.0, 16.0])
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     lbl(ui, "Early Commands  (run before packages)");
@@ -1502,7 +1506,7 @@ impl ForgeApp {
                         egui::TextEdit::multiline(&mut self.inject.run_commands)
                             .hint_text("apt-get update -qq")
                             .desired_width(col_w)
-                            .desired_rows(3),
+                            .desired_rows(4),
                     );
                 });
                 ui.vertical(|ui| {
@@ -1512,7 +1516,7 @@ impl ForgeApp {
                         egui::TextEdit::multiline(&mut self.inject.late_commands)
                             .hint_text("systemctl enable myservice")
                             .desired_width(col_w)
-                            .desired_rows(3),
+                            .desired_rows(4),
                     );
                 });
                 ui.end_row();
@@ -1524,7 +1528,7 @@ impl ForgeApp {
         section(ui, "Services & Containers");
         egui::Grid::new("adv_svc_grid")
             .num_columns(2)
-            .spacing([12.0, 8.0])
+            .spacing([20.0, 16.0])
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     lbl(ui, "Enable Services  (one per line)");
@@ -1533,7 +1537,7 @@ impl ForgeApp {
                         egui::TextEdit::multiline(&mut self.inject.enable_services)
                             .hint_text("docker\nssh")
                             .desired_width(col_w)
-                            .desired_rows(2),
+                            .desired_rows(3),
                     );
                 });
                 ui.vertical(|ui| {
@@ -1543,7 +1547,7 @@ impl ForgeApp {
                         egui::TextEdit::multiline(&mut self.inject.disable_services)
                             .hint_text("snapd")
                             .desired_width(col_w)
-                            .desired_rows(2),
+                            .desired_rows(3),
                     );
                 });
                 ui.end_row();
@@ -1554,7 +1558,7 @@ impl ForgeApp {
                         egui::TextEdit::multiline(&mut self.inject.user_groups)
                             .hint_text("docker\nsudo")
                             .desired_width(col_w)
-                            .desired_rows(2),
+                            .desired_rows(3),
                     );
                 });
                 ui.vertical(|ui| {
@@ -1597,7 +1601,7 @@ impl ForgeApp {
             ui.add_space(6.0);
             egui::Grid::new("adv_fw_grid")
                 .num_columns(2)
-                .spacing([12.0, 8.0])
+                .spacing([20.0, 16.0])
                 .show(ui, |ui| {
                     ui.vertical(|ui| {
                         lbl(ui, "Allow Ports  (one per line, e.g. 22/tcp)");
@@ -1606,7 +1610,7 @@ impl ForgeApp {
                             egui::TextEdit::multiline(&mut self.inject.allow_ports)
                                 .hint_text("22/tcp\n443")
                                 .desired_width(col_w)
-                                .desired_rows(3),
+                                .desired_rows(4),
                         );
                     });
                     ui.vertical(|ui| {
@@ -1616,7 +1620,7 @@ impl ForgeApp {
                             egui::TextEdit::multiline(&mut self.inject.deny_ports)
                                 .hint_text("23")
                                 .desired_width(col_w)
-                                .desired_rows(3),
+                                .desired_rows(4),
                         );
                     });
                     ui.end_row();
@@ -1629,7 +1633,7 @@ impl ForgeApp {
         section(ui, "Boot & Storage");
         egui::Grid::new("adv_boot_grid")
             .num_columns(2)
-            .spacing([12.0, 8.0])
+            .spacing([20.0, 16.0])
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     lbl(ui, "GRUB Timeout  (seconds)");
@@ -1676,7 +1680,7 @@ impl ForgeApp {
             egui::TextEdit::multiline(&mut self.inject.sysctl_pairs)
                 .hint_text("net.ipv4.ip_forward=1\nvm.swappiness=10")
                 .desired_width(full_w)
-                .desired_rows(3),
+                .desired_rows(4),
         );
 
         rule(ui);
@@ -1685,7 +1689,7 @@ impl ForgeApp {
         section(ui, "Output Options");
         egui::Grid::new("adv_out_grid")
             .num_columns(2)
-            .spacing([12.0, 8.0])
+            .spacing([20.0, 16.0])
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     lbl(ui, "Volume Label  (blank = keep original)");
@@ -1726,13 +1730,12 @@ impl ForgeApp {
         egui::ScrollArea::vertical()
             .id_salt("verify_scroll")
             .show(ui, |ui| {
-                ui.set_max_width(740.0);
-                ui.add_space(8.0);
+                ui.add_space(12.0);
 
                 // ── SHA-256 Checksum ────────────────────────────────────
                 ui.label(
                     RichText::new("SHA-256 Checksum Verification")
-                        .size(15.0)
+                        .size(17.0)
                         .strong()
                         .color(TEXT),
                 );
@@ -1743,7 +1746,7 @@ impl ForgeApp {
                          Auto-detected for Ubuntu. For injected or renamed ISOs, \
                          the computed hash is displayed for your records.",
                     )
-                    .size(12.0)
+                    .size(14.0)
                     .color(MUTED),
                 );
                 ui.add_space(10.0);
@@ -1754,8 +1757,8 @@ impl ForgeApp {
                         !running,
                         egui::TextEdit::singleline(&mut self.verify.source)
                             .hint_text("/path/to/ubuntu.iso")
-                            .desired_width(ui.available_width() - 72.0)
-                            .min_size(Vec2::new(0.0, 28.0)),
+                            .desired_width(ui.available_width() - 96.0)
+                            .min_size(Vec2::new(0.0, 38.0)),
                     );
                     if browse_btn(ui, !running) {
                         worker::pick_iso(PickTarget::VerifySource, self.tx.clone());
@@ -1818,13 +1821,13 @@ impl ForgeApp {
                         ui.horizontal(|ui| {
                             ui.label(
                                 RichText::new("File:    ")
-                                    .size(12.0)
+                                    .size(14.0)
                                     .monospace()
                                     .color(MUTED),
                             );
                             ui.label(
                                 RichText::new(&r.filename)
-                                    .size(12.0)
+                                    .size(14.0)
                                     .monospace()
                                     .color(TEXT),
                             );
@@ -1840,13 +1843,13 @@ impl ForgeApp {
                         ui.horizontal(|ui| {
                             ui.label(
                                 RichText::new("Expected:")
-                                    .size(12.0)
+                                    .size(14.0)
                                     .monospace()
                                     .color(MUTED),
                             );
                             ui.label(
                                 RichText::new(exp_display)
-                                    .size(12.0)
+                                    .size(14.0)
                                     .monospace()
                                     .color(MUTED),
                             );
@@ -1856,13 +1859,13 @@ impl ForgeApp {
                         ui.horizontal(|ui| {
                             ui.label(
                                 RichText::new("Actual:  ")
-                                    .size(12.0)
+                                    .size(14.0)
                                     .monospace()
                                     .color(MUTED),
                             );
                             ui.label(
                                 RichText::new(format!("{}…", &r.actual[..32.min(r.actual.len())]))
-                                    .size(12.0)
+                                    .size(14.0)
                                     .monospace()
                                     .color(act_col),
                             );
@@ -1882,7 +1885,7 @@ impl ForgeApp {
                 // ── ISO-9660 Validation ──────────────────────────────────
                 ui.label(
                     RichText::new("ISO-9660 Structure Validation")
-                        .size(15.0)
+                        .size(17.0)
                         .strong()
                         .color(TEXT),
                 );
@@ -1892,7 +1895,7 @@ impl ForgeApp {
                         "Checks that the ISO has a valid ISO-9660 filesystem header. \
                          Uses the same source path as checksum verification above.",
                     )
-                    .size(12.0)
+                    .size(14.0)
                     .color(MUTED),
                 );
                 ui.add_space(10.0);
@@ -1928,12 +1931,12 @@ impl ForgeApp {
                         if let Some(vid) = &r.volume_id {
                             ui.label(
                                 RichText::new(format!("Volume ID: {vid}"))
-                                    .size(12.0)
+                                    .size(14.0)
                                     .color(MUTED),
                             );
                         }
                         if let Some(err) = &r.error {
-                            ui.label(RichText::new(err).size(11.0).color(RED));
+                            ui.label(RichText::new(err).size(13.0).color(RED));
                         }
                     });
                 }
@@ -1956,12 +1959,11 @@ impl ForgeApp {
         egui::ScrollArea::vertical()
             .id_salt("diff_scroll")
             .show(ui, |ui| {
-                ui.set_max_width(740.0);
-                ui.add_space(8.0);
+                ui.add_space(12.0);
 
                 ui.label(
                     RichText::new("Compare Two ISO Images")
-                        .size(15.0)
+                        .size(17.0)
                         .strong()
                         .color(TEXT),
                 );
@@ -1971,17 +1973,17 @@ impl ForgeApp {
                         "Select the original (base) and modified (target) ISOs \
                          to see what files were added, removed, or changed.",
                     )
-                    .size(12.0)
+                    .size(14.0)
                     .color(MUTED),
                 );
                 ui.add_space(12.0);
 
                 let full_w = ui.available_width();
-                let col_w = (full_w - 12.0) / 2.0;
+                let col_w = (full_w - 20.0) / 2.0;
 
                 egui::Grid::new("diff_paths")
                     .num_columns(2)
-                    .spacing([12.0, 0.0])
+                    .spacing([20.0, 12.0])
                     .show(ui, |ui| {
                         ui.vertical(|ui| {
                             lbl(ui, "Base ISO  (original)");
@@ -1990,8 +1992,8 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.diff.base)
                                         .hint_text("/path/to/original.iso")
-                                        .desired_width(col_w - 44.0)
-                                        .min_size(Vec2::new(0.0, 28.0)),
+                                        .desired_width(col_w - 52.0)
+                                        .min_size(Vec2::new(0.0, 38.0)),
                                 );
                                 if ui
                                     .add_enabled(
@@ -1999,7 +2001,7 @@ impl ForgeApp {
                                         egui::Button::new("📂")
                                             .fill(SURFACE)
                                             .stroke(Stroke::new(1.0, BORDER))
-                                            .min_size(Vec2::new(32.0, 28.0)),
+                                            .min_size(Vec2::new(40.0, 38.0)),
                                     )
                                     .on_hover_text("Browse for base ISO")
                                     .clicked()
@@ -2015,8 +2017,8 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.diff.target)
                                         .hint_text("/path/to/modified.iso")
-                                        .desired_width(col_w - 44.0)
-                                        .min_size(Vec2::new(0.0, 28.0)),
+                                        .desired_width(col_w - 52.0)
+                                        .min_size(Vec2::new(0.0, 38.0)),
                                 );
                                 if ui
                                     .add_enabled(
@@ -2024,7 +2026,7 @@ impl ForgeApp {
                                         egui::Button::new("📂")
                                             .fill(SURFACE)
                                             .stroke(Stroke::new(1.0, BORDER))
-                                            .min_size(Vec2::new(32.0, 28.0)),
+                                            .min_size(Vec2::new(40.0, 38.0)),
                                     )
                                     .on_hover_text("Browse for target ISO")
                                     .clicked()
@@ -2076,11 +2078,11 @@ impl ForgeApp {
                                     ui.vertical_centered(|ui| {
                                         ui.label(
                                             RichText::new(n.to_string())
-                                                .size(22.0)
+                                                .size(26.0)
                                                 .strong()
                                                 .color(col),
                                         );
-                                        ui.label(RichText::new(label).size(11.0).color(MUTED));
+                                        ui.label(RichText::new(label).size(13.0).color(MUTED));
                                     });
                                 });
                             ui.add_space(8.0);
@@ -2102,25 +2104,26 @@ impl ForgeApp {
                             let col = if active { Color32::WHITE } else { MUTED };
                             if ui
                                 .add(
-                                    egui::Button::new(RichText::new(label).size(12.0).color(col))
+                                    egui::Button::new(RichText::new(label).size(14.0).color(col))
                                         .fill(fill)
                                         .stroke(Stroke::new(
                                             1.0,
                                             if active { ACCENT } else { BORDER },
                                         ))
-                                        .min_size(Vec2::new(64.0, 24.0)),
+                                        .min_size(Vec2::new(90.0, 38.0)),
                                 )
                                 .clicked()
                             {
                                 self.diff_filter = filter;
                             }
-                            ui.add_space(4.0);
+                            ui.add_space(6.0);
                         }
-                        ui.add_space(12.0);
+                        ui.add_space(16.0);
                         ui.add(
                             egui::TextEdit::singleline(&mut self.diff_search)
                                 .hint_text("Filter paths…")
-                                .desired_width(200.0),
+                                .desired_width(280.0)
+                                .min_size(Vec2::new(0.0, 38.0)),
                         );
                     });
 
@@ -2128,7 +2131,7 @@ impl ForgeApp {
 
                     egui::ScrollArea::vertical()
                         .id_salt("diff_results_scroll")
-                        .max_height(360.0)
+                        .max_height(480.0)
                         .show(ui, |ui| {
                             let search = self.diff_search.to_lowercase();
 
@@ -2141,10 +2144,10 @@ impl ForgeApp {
                                     }
                                     ui.horizontal(|ui| {
                                         ui.label(
-                                            RichText::new("+").size(12.0).monospace().color(GREEN),
+                                            RichText::new("+").size(14.0).monospace().color(GREEN),
                                         );
                                         ui.label(
-                                            RichText::new(p).size(12.0).monospace().color(TEXT),
+                                            RichText::new(p).size(14.0).monospace().color(TEXT),
                                         );
                                     });
                                 }
@@ -2159,10 +2162,10 @@ impl ForgeApp {
                                     }
                                     ui.horizontal(|ui| {
                                         ui.label(
-                                            RichText::new("-").size(12.0).monospace().color(RED),
+                                            RichText::new("-").size(14.0).monospace().color(RED),
                                         );
                                         ui.label(
-                                            RichText::new(p).size(12.0).monospace().color(TEXT),
+                                            RichText::new(p).size(14.0).monospace().color(TEXT),
                                         );
                                     });
                                 }
@@ -2177,11 +2180,11 @@ impl ForgeApp {
                                     }
                                     ui.horizontal(|ui| {
                                         ui.label(
-                                            RichText::new("~").size(12.0).monospace().color(AMBER),
+                                            RichText::new("~").size(14.0).monospace().color(AMBER),
                                         );
                                         ui.label(
                                             RichText::new(&entry.path)
-                                                .size(12.0)
+                                                .size(14.0)
                                                 .monospace()
                                                 .color(TEXT),
                                         );
@@ -2191,7 +2194,7 @@ impl ForgeApp {
                                                 fmt_bytes(entry.base_size),
                                                 fmt_bytes(entry.target_size)
                                             ))
-                                            .size(11.0)
+                                            .size(13.0)
                                             .color(MUTED),
                                         );
                                     });
@@ -2216,12 +2219,11 @@ impl ForgeApp {
         egui::ScrollArea::vertical()
             .id_salt("build_scroll")
             .show(ui, |ui| {
-                ui.set_max_width(740.0);
-                ui.add_space(8.0);
+                ui.add_space(12.0);
 
                 ui.label(
                     RichText::new("Fetch & Build ISO")
-                        .size(15.0)
+                        .size(17.0)
                         .strong()
                         .color(TEXT),
                 );
@@ -2231,13 +2233,13 @@ impl ForgeApp {
                         "Download, verify, and repack an ISO with optional overlay files \
                          and configuration.",
                     )
-                    .size(12.0)
+                    .size(14.0)
                     .color(MUTED),
                 );
                 ui.add_space(12.0);
 
                 let full_w = ui.available_width();
-                let col_w = (full_w - 12.0) / 2.0;
+                let col_w = (full_w - 20.0) / 2.0;
 
                 lbl(ui, "Source ISO  (local path or URL)");
                 ui.horizontal(|ui| {
@@ -2245,8 +2247,8 @@ impl ForgeApp {
                         !running,
                         egui::TextEdit::singleline(&mut self.build.source)
                             .hint_text("/path/to/ubuntu.iso  or  https://releases.ubuntu.com/…")
-                            .desired_width(ui.available_width() - 72.0)
-                            .min_size(Vec2::new(0.0, 28.0)),
+                            .desired_width(ui.available_width() - 96.0)
+                            .min_size(Vec2::new(0.0, 38.0)),
                     );
                     if browse_btn(ui, !running) {
                         worker::pick_iso(PickTarget::BuildSource, self.tx.clone());
@@ -2257,7 +2259,7 @@ impl ForgeApp {
 
                 egui::Grid::new("build_grid")
                     .num_columns(2)
-                    .spacing([12.0, 8.0])
+                    .spacing([20.0, 16.0])
                     .show(ui, |ui| {
                         ui.vertical(|ui| {
                             lbl(ui, "Output Directory");
@@ -2265,8 +2267,8 @@ impl ForgeApp {
                                 ui.add_enabled(
                                     !running,
                                     egui::TextEdit::singleline(&mut self.build.output_dir)
-                                        .desired_width(col_w - 44.0)
-                                        .min_size(Vec2::new(0.0, 28.0)),
+                                        .desired_width(col_w - 52.0)
+                                        .min_size(Vec2::new(0.0, 38.0)),
                                 );
                                 if ui
                                     .add_enabled(
@@ -2274,7 +2276,7 @@ impl ForgeApp {
                                         egui::Button::new("📂")
                                             .fill(SURFACE)
                                             .stroke(Stroke::new(1.0, BORDER))
-                                            .min_size(Vec2::new(32.0, 28.0)),
+                                            .min_size(Vec2::new(40.0, 38.0)),
                                     )
                                     .clicked()
                                 {
@@ -2302,7 +2304,7 @@ impl ForgeApp {
                                     !running,
                                     egui::TextEdit::singleline(&mut self.build.overlay_dir)
                                         .hint_text("/path/to/overlay/")
-                                        .desired_width(col_w - 44.0),
+                                        .desired_width(col_w - 52.0),
                                 );
                                 if ui
                                     .add_enabled(
@@ -2310,7 +2312,7 @@ impl ForgeApp {
                                         egui::Button::new("📂")
                                             .fill(SURFACE)
                                             .stroke(Stroke::new(1.0, BORDER))
-                                            .min_size(Vec2::new(32.0, 28.0)),
+                                            .min_size(Vec2::new(40.0, 38.0)),
                                     )
                                     .clicked()
                                 {
@@ -2380,7 +2382,7 @@ impl ForgeApp {
                     )
                     .fill(if can_build { ACCENT } else { SURFACE })
                     .stroke(Stroke::new(1.0, if can_build { ACCENT } else { BORDER }))
-                    .min_size(Vec2::new(160.0, 40.0));
+                    .min_size(Vec2::new(180.0, 48.0));
                     if ui.add_enabled(can_build, btn).clicked() {
                         do_build = true;
                     }
@@ -2431,8 +2433,8 @@ impl ForgeApp {
                                 continue;
                             }
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new(format!("{k}:")).size(12.0).color(MUTED));
-                                ui.label(RichText::new(&v).size(12.0).monospace().color(TEXT));
+                                ui.label(RichText::new(format!("{k}:")).size(14.0).color(MUTED));
+                                ui.label(RichText::new(&v).size(14.0).monospace().color(TEXT));
                             });
                         }
                     });
@@ -2529,12 +2531,11 @@ impl ForgeApp {
         egui::ScrollArea::vertical()
             .id_salt("doctor_scroll")
             .show(ui, |ui| {
-                ui.set_max_width(740.0);
-                ui.add_space(8.0);
+                ui.add_space(12.0);
 
                 ui.label(
                     RichText::new("System Dependencies")
-                        .size(15.0)
+                        .size(17.0)
                         .strong()
                         .color(TEXT),
                 );
@@ -2544,7 +2545,7 @@ impl ForgeApp {
                         "Checks that all required tools (xorriso, grub, squashfs-tools, etc.) \
                          are installed and accessible.",
                     )
-                    .size(12.0)
+                    .size(14.0)
                     .color(MUTED),
                 );
                 ui.add_space(10.0);
@@ -2587,15 +2588,15 @@ impl ForgeApp {
                         ui.add_space(8.0);
                         egui::Grid::new("doctor_grid")
                             .num_columns(2)
-                            .spacing([16.0, 4.0])
+                            .spacing([24.0, 8.0])
                             .striped(true)
                             .show(ui, |ui| {
-                                ui.label(RichText::new("Tool").size(11.0).strong().color(MUTED));
-                                ui.label(RichText::new("Status").size(11.0).strong().color(MUTED));
+                                ui.label(RichText::new("Tool").size(14.0).strong().color(MUTED));
+                                ui.label(RichText::new("Status").size(14.0).strong().color(MUTED));
                                 ui.end_row();
                                 for (name, &ok) in &r.tooling {
                                     ui.label(
-                                        RichText::new(name).size(12.0).monospace().color(TEXT),
+                                        RichText::new(name).size(15.0).monospace().color(TEXT),
                                     );
                                     let (status_text, status_col) = if ok {
                                         ("✓ OK", GREEN)
@@ -2603,7 +2604,7 @@ impl ForgeApp {
                                         ("✗ Missing", RED)
                                     };
                                     ui.label(
-                                        RichText::new(status_text).size(12.0).color(status_col),
+                                        RichText::new(status_text).size(15.0).color(status_col),
                                     );
                                     ui.end_row();
                                 }
@@ -2611,23 +2612,28 @@ impl ForgeApp {
                     });
 
                     if !all_ok {
-                        ui.add_space(8.0);
+                        ui.add_space(12.0);
                         ui.label(
                             RichText::new("Install missing tools with:")
-                                .size(12.0)
+                                .size(14.0)
                                 .color(MUTED),
                         );
-                        ui.add_space(4.0);
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                RichText::new(
-                                    "sudo dnf install xorriso grub2-tools squashfs-tools",
-                                )
-                                .size(12.0)
-                                .monospace()
-                                .color(TEXT),
-                            );
-                        });
+                        ui.add_space(6.0);
+                        Frame::new()
+                            .fill(Color32::from_rgb(10, 14, 20))
+                            .stroke(Stroke::new(1.0, BORDER))
+                            .inner_margin(12.0f32)
+                            .corner_radius(6.0f32)
+                            .show(ui, |ui| {
+                                ui.label(
+                                    RichText::new(
+                                        "sudo dnf install xorriso grub2-tools squashfs-tools",
+                                    )
+                                    .size(15.0)
+                                    .monospace()
+                                    .color(TEXT),
+                                );
+                            });
                     }
                 }
 
@@ -2655,7 +2661,7 @@ impl eframe::App for ForgeApp {
             .frame(
                 Frame::new()
                     .fill(BG)
-                    .inner_margin(egui::Margin::symmetric(16, 12)),
+                    .inner_margin(egui::Margin::symmetric(28, 20)),
             )
             .show(ctx, |ui| match self.active_tab {
                 Tab::Inject => self.show_inject(ui),

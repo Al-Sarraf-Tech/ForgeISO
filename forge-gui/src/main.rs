@@ -13,8 +13,8 @@ fn main() -> eframe::Result {
 
     let opts = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1280.0, 820.0])
-            .with_min_inner_size([1024.0, 640.0])
+            .with_inner_size([1400.0, 900.0])
+            .with_min_inner_size([1100.0, 720.0])
             .with_title("ForgeISO — ISO Pipeline Wizard"),
         ..Default::default()
     };
