@@ -332,19 +332,25 @@ impl ForgeApp {
             }
             WorkerMsg::InjectOk(r) => {
                 self.inject_done = true;
+                // source_iso is the resolved local path of the original (pre-inject) ISO.
+                let src = r.source_iso.to_string_lossy().into_owned();
                 if let Some(path) = r.artifacts.first() {
-                    let s = path.to_string_lossy().into_owned();
+                    let out = path.to_string_lossy().into_owned();
+                    // Verify: show the original source so the user can confirm
+                    // the download is authentic (injected ISO won't match Ubuntu's SUMS).
                     if self.verify.source.is_empty() {
-                        self.verify.source = s.clone();
+                        self.verify.source = src.clone();
                     }
+                    // Diff: base = original local ISO, target = injected ISO.
+                    // Using source_iso (resolved path) avoids URL-as-base-path problems.
                     if self.diff.base.is_empty() {
-                        self.diff.base = self.inject.source.clone();
+                        self.diff.base = src;
                     }
                     if self.diff.target.is_empty() {
-                        self.diff.target = s.clone();
+                        self.diff.target = out.clone();
                     }
                     if self.build.source.is_empty() {
-                        self.build.source = s;
+                        self.build.source = out;
                     }
                 }
                 self.inject_result = Some(*r);
@@ -2134,7 +2140,7 @@ impl ForgeApp {
                     .color(TEXT),
             );
             ui.add_space(4.0);
-            ui.label(RichText::new("Verify an ISO against its official SHA256SUMS file. Auto-detected for Ubuntu releases.").size(12.0).color(MUTED));
+            ui.label(RichText::new("Verify the original source ISO against official checksums. Auto-detected for Ubuntu releases. For injected ISOs, the computed SHA-256 is shown even if no matching SUMS entry is found.").size(12.0).color(MUTED));
             ui.add_space(10.0);
 
             ui.label(RichText::new("ISO path *").size(12.0).color(MUTED));
@@ -2220,8 +2226,15 @@ impl ForgeApp {
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("Expected:").size(11.0).color(MUTED));
+                        let exp_display = if r.expected.len() == 64
+                            && r.expected.chars().all(|c| c.is_ascii_hexdigit())
+                        {
+                            format!("{}…", &r.expected[..32])
+                        } else {
+                            r.expected.clone()
+                        };
                         ui.label(
-                            RichText::new(format!("{}…", &r.expected[..32.min(r.expected.len())]))
+                            RichText::new(exp_display)
                                 .size(11.0)
                                 .monospace()
                                 .color(MUTED),

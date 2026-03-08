@@ -38,6 +38,9 @@ pub struct BuildResult {
     pub report_html: PathBuf,
     pub artifacts: Vec<PathBuf>,
     pub iso: IsoMetadata,
+    /// Resolved local path of the *input* ISO used for this operation.
+    /// Always a local filesystem path (URLs are resolved/downloaded before use).
+    pub source_iso: PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -363,6 +366,7 @@ impl ForgeIsoEngine {
             report_json,
             report_html,
             artifacts: vec![output_iso],
+            source_iso: resolved.source_path.clone(),
             iso,
         })
     }
@@ -586,64 +590,76 @@ impl ForgeIsoEngine {
             .map(|s| s.to_string())
             .ok_or_else(|| EngineError::InvalidConfig("Unable to get ISO filename".to_string()))?;
 
-        let effective_sums_url = if let Some(url) = sums_url {
-            url.to_string()
+        // Determine the SHA256SUMS URL — graceful degradation if unavailable.
+        let effective_sums_url: Option<String> = if let Some(url) = sums_url {
+            Some(url.to_string())
         } else if let Some(distro) = metadata.distro {
             if let Some(release) = &metadata.release {
                 match distro {
-                    crate::config::Distro::Ubuntu => {
-                        format!("https://releases.ubuntu.com/{}/SHA256SUMS", release)
-                    }
-                    _ => {
-                        return Err(EngineError::InvalidConfig(
-                            "Auto-detection of sums URL not supported for this distro".to_string(),
-                        ))
-                    }
+                    crate::config::Distro::Ubuntu => Some(format!(
+                        "https://releases.ubuntu.com/{}/SHA256SUMS",
+                        release
+                    )),
+                    _ => None,
                 }
             } else {
-                return Err(EngineError::InvalidConfig(
-                    "Release information not available for auto-detection".to_string(),
-                ));
+                None
             }
         } else {
-            return Err(EngineError::InvalidConfig(
-                "sums_url must be provided or ISO must be recognized as Ubuntu".to_string(),
-            ));
+            None
         };
 
-        self.emit(EngineEvent::info(
-            EventPhase::Verify,
-            format!("fetching checksums from {}", effective_sums_url),
-        ));
+        // If we have a sums URL, fetch and compare; otherwise just report the hash.
+        let (expected, matched) = if let Some(ref url) = effective_sums_url {
+            self.emit(EngineEvent::info(
+                EventPhase::Verify,
+                format!("fetching checksums from {}", url),
+            ));
+            let sums_content = reqwest::get(url).await?.text().await?;
 
-        let sums_content = reqwest::get(&effective_sums_url).await?.text().await?;
-
-        // Parse SHA256SUMS format: <hash>  <filename>
-        let mut expected_hash = None;
-        for line in sums_content.lines() {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 2 {
-                let hash = parts[0];
-                let file_path = parts[1].trim_start_matches('*');
-                if file_path.ends_with(&filename) || file_path == filename {
-                    expected_hash = Some(hash.to_string());
-                    break;
+            // Parse SHA256SUMS format: <hash>  <filename> or <hash>  *<filename>
+            let mut expected_hash = None;
+            for line in sums_content.lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    let hash = parts[0];
+                    let file_path = parts[1].trim_start_matches('*');
+                    if file_path.ends_with(&filename) || file_path == filename {
+                        expected_hash = Some(hash.to_string());
+                        break;
+                    }
                 }
             }
-        }
 
-        let expected = expected_hash
-            .ok_or_else(|| EngineError::NotFound(format!("No checksum found for {}", filename)))?;
-
-        let matched = metadata.sha256 == expected;
-        self.emit(EngineEvent::info(
-            EventPhase::Verify,
-            if matched {
-                "checksum matches!".to_string()
+            if let Some(expected) = expected_hash {
+                let matched = metadata.sha256 == expected;
+                self.emit(EngineEvent::info(
+                    EventPhase::Verify,
+                    if matched {
+                        "checksum matches!".to_string()
+                    } else {
+                        "checksum mismatch!".to_string()
+                    },
+                ));
+                (expected, matched)
             } else {
-                "checksum mismatch!".to_string()
-            },
-        ));
+                // Filename not in SUMS file (e.g. renamed/injected ISO) — report hash only.
+                self.emit(EngineEvent::info(
+                    EventPhase::Verify,
+                    format!(
+                        "no entry for '{}' in checksums file — showing computed hash only",
+                        filename
+                    ),
+                ));
+                ("not found in checksums file".to_string(), false)
+            }
+        } else {
+            self.emit(EngineEvent::info(
+                EventPhase::Verify,
+                "no checksums URL available — showing computed hash only".to_string(),
+            ));
+            ("no checksums source provided".to_string(), false)
+        };
 
         Ok(VerifyResult {
             filename,
@@ -928,6 +944,7 @@ impl ForgeIsoEngine {
             report_json: work_dir.join("report.json"),
             report_html: work_dir.join("report.html"),
             artifacts: vec![output_path],
+            source_iso: resolved.source_path.clone(),
             iso: metadata,
         })
     }
