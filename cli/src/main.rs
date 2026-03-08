@@ -3,9 +3,10 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use forgeiso_engine::sources::format_preset_detail;
 use forgeiso_engine::{
-    all_presets, find_preset_by_str, resolve_url, AcquisitionStrategy, BuildConfig,
-    ContainerConfig, Distro, EventPhase, FirewallConfig, ForgeIsoEngine, GrubConfig, InjectConfig,
-    IsoSource, NetworkConfig, ProfileKind, ProxyConfig, SshConfig, SwapConfig, UserConfig,
+    all_presets, emit_launch, find_ovmf, find_preset_by_str, resolve_url, AcquisitionStrategy,
+    BuildConfig, ContainerConfig, Distro, EventPhase, FirewallConfig, FirmwareMode, ForgeIsoEngine,
+    GrubConfig, Hypervisor, InjectConfig, IsoSource, NetworkConfig, ProfileKind, ProxyConfig,
+    SshConfig, SwapConfig, UserConfig, VmLaunchSpec,
 };
 
 #[derive(Debug, Parser)]
@@ -286,6 +287,11 @@ enum Commands {
         #[command(subcommand)]
         command: SourcesCmd,
     },
+    /// Generate VM hypervisor launch commands for a local ISO
+    Vm {
+        #[command(subcommand)]
+        command: VmCmd,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -306,6 +312,37 @@ enum SourcesCmd {
     Resolve {
         /// Preset name, e.g. ubuntu-server-lts
         preset: String,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum VmCmd {
+    /// Emit hypervisor launch commands for testing an ISO in a VM
+    Emit {
+        /// Path to the ISO to boot
+        #[arg(long, value_name = "PATH")]
+        iso: PathBuf,
+        /// Hypervisor: qemu (default), virtualbox, vmware, hyperv, proxmox
+        #[arg(long, default_value = "qemu")]
+        hypervisor: String,
+        /// Firmware: bios (default) or uefi
+        #[arg(long, default_value = "bios")]
+        firmware: String,
+        /// RAM in MiB (default: 2048)
+        #[arg(long, default_value_t = 2048)]
+        ram: u32,
+        /// vCPUs (default: 2)
+        #[arg(long, default_value_t = 2)]
+        cpus: u8,
+        /// Disk size in GiB for QEMU disk image creation (default: 20)
+        #[arg(long, default_value_t = 20)]
+        disk: u32,
+        /// VM name (defaults to ISO stem)
+        #[arg(long)]
+        name: Option<String>,
+        /// Emit output as JSON
         #[arg(long)]
         json: bool,
     },
@@ -855,6 +892,96 @@ async fn main() -> anyhow::Result<()> {
                 println!("Unchanged: {}", result.unchanged);
             }
         }
+        Commands::Vm { command } => match command {
+            VmCmd::Emit {
+                iso,
+                hypervisor,
+                firmware,
+                ram,
+                cpus,
+                disk,
+                name,
+                json,
+            } => {
+                let hv = match hypervisor.to_lowercase().as_str() {
+                    "qemu" => Hypervisor::Qemu,
+                    "virtualbox" | "vbox" => Hypervisor::VirtualBox,
+                    "vmware" => Hypervisor::Vmware,
+                    "hyperv" | "hyper-v" => Hypervisor::HyperV,
+                    "proxmox" => Hypervisor::Proxmox,
+                    other => anyhow::bail!("unknown hypervisor '{other}': expected qemu, virtualbox, vmware, hyperv, proxmox"),
+                };
+                let fw = match firmware.to_lowercase().as_str() {
+                    "bios" => FirmwareMode::Bios,
+                    "uefi" | "efi" => FirmwareMode::Uefi,
+                    other => anyhow::bail!("unknown firmware '{other}': expected bios or uefi"),
+                };
+                let ovmf = if matches!(fw, FirmwareMode::Uefi) {
+                    find_ovmf()
+                } else {
+                    None
+                };
+                let vm_name = name.unwrap_or_else(|| {
+                    iso.file_stem()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "forgeiso-vm".to_string())
+                });
+                let spec = VmLaunchSpec {
+                    hypervisor: hv,
+                    firmware: fw,
+                    iso_path: iso,
+                    ram_mb: ram,
+                    cpus,
+                    disk_gb: disk,
+                    vm_name,
+                    ovmf_path: ovmf,
+                };
+                let out = emit_launch(&spec);
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&out)?);
+                } else {
+                    println!("Hypervisor: {:?}", out.hypervisor);
+                    println!("Firmware:   {:?}", out.firmware);
+                    println!("ISO:        {}", out.iso_path);
+                    println!(
+                        "KVM:        {}",
+                        if out.kvm_available {
+                            "available"
+                        } else {
+                            "not available (software emulation)"
+                        }
+                    );
+                    if let Some(ref ovmf) = out.ovmf_used {
+                        println!("OVMF:       {ovmf}");
+                    }
+                    if !out.notes.is_empty() {
+                        println!();
+                        for note in &out.notes {
+                            eprintln!("NOTE: {note}");
+                        }
+                    }
+                    if !out.commands.is_empty() {
+                        println!();
+                        // QEMU args are a single argv list; join as one shell command.
+                        // VirtualBox/Proxmox store complete commands, one per entry.
+                        if matches!(out.hypervisor, Hypervisor::Qemu) {
+                            println!("# Run:");
+                            println!("{}", out.commands.join(" \\\n  "));
+                        } else {
+                            println!("# Run these commands:");
+                            for cmd in &out.commands {
+                                println!("{cmd}");
+                            }
+                        }
+                    }
+                    if let Some(ref script) = out.script {
+                        println!();
+                        println!("# Script:");
+                        println!("{script}");
+                    }
+                }
+            }
+        },
     }
 
     Ok(())
