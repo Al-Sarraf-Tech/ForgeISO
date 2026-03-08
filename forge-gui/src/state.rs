@@ -199,7 +199,7 @@ impl Default for InjectState {
             grub_cmdline: String::new(),
             grub_default: String::new(),
             sysctl_pairs: String::new(),
-            no_user_interaction: false,
+            no_user_interaction: true,
             wallpaper_path: String::new(),
             expected_sha256: String::new(),
         }
@@ -267,6 +267,7 @@ pub struct LogEntry {
     pub message: String,
     pub level: LogLevel,
     pub timestamp: String,
+    pub percent: Option<u8>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

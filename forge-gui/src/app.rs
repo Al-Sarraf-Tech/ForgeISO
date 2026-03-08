@@ -193,6 +193,7 @@ pub struct ForgeApp {
     // Log
     log_entries: Vec<LogEntry>,
     log_open: bool,
+    download_idx: std::collections::HashMap<String, usize>,
     log_errors_only: bool,
     // Status
     status: Option<StatusMsg>,
@@ -305,7 +306,8 @@ impl ForgeApp {
             diff_done: false,
             build_done: false,
             log_entries: Vec::new(),
-            log_open: false,
+            log_open: true,
+            download_idx: std::collections::HashMap::new(),
             log_errors_only: false,
             status: None,
             status_since: None,
@@ -343,18 +345,45 @@ impl ForgeApp {
             } => {
                 self.job_phase = phase.clone();
                 self.job_pct = percent;
-                self.log_entries.push(LogEntry {
-                    phase,
-                    message,
-                    level: if is_error {
-                        LogLevel::Error
-                    } else if is_warn {
-                        LogLevel::Warn
+                let level = if is_error {
+                    LogLevel::Error
+                } else if is_warn {
+                    LogLevel::Warn
+                } else {
+                    LogLevel::Info
+                };
+                if let Some(pct) = percent {
+                    // Download progress — update the existing bar entry or create one.
+                    let pct_u8 = (pct * 100.0).clamp(0.0, 100.0) as u8;
+                    let bar = make_progress_bar(pct_u8);
+                    let display = format!("{message}  {bar} {pct_u8}%");
+                    if let Some(&idx) = self.download_idx.get(&phase) {
+                        if let Some(entry) = self.log_entries.get_mut(idx) {
+                            entry.message = display;
+                            entry.percent = Some(pct_u8);
+                        }
                     } else {
-                        LogLevel::Info
-                    },
-                    timestamp: now_ts(),
-                });
+                        let idx = self.log_entries.len();
+                        self.download_idx.insert(phase.clone(), idx);
+                        self.log_entries.push(LogEntry {
+                            phase,
+                            message: display,
+                            level,
+                            timestamp: now_ts(),
+                            percent: Some(pct_u8),
+                        });
+                    }
+                } else {
+                    // Regular message — clear any in-progress bar for this phase.
+                    self.download_idx.remove(&phase);
+                    self.log_entries.push(LogEntry {
+                        phase,
+                        message,
+                        level,
+                        timestamp: now_ts(),
+                        percent: None,
+                    });
+                }
             }
             WorkerMsg::InjectOk(r) => {
                 self.inject_done = true;
@@ -457,6 +486,7 @@ impl ForgeApp {
                     message: e.clone(),
                     level: LogLevel::Error,
                     timestamp: now_ts(),
+                    percent: None,
                 });
                 self.set_status(StatusMsg::err(e));
             }
@@ -811,8 +841,8 @@ impl ForgeApp {
                         } else {
                             Color32::TRANSPARENT
                         };
-                        let display = if done && !active {
-                            format!("{label} ✓")
+                        let display = if done {
+                            format!("✅ {label}")
                         } else {
                             label.to_string()
                         };
@@ -861,9 +891,6 @@ impl ForgeApp {
 
     /// Collapsible log strip at the bottom.
     fn render_log(&mut self, ctx: &egui::Context) {
-        if !self.log_open {
-            return;
-        }
         egui::TopBottomPanel::bottom("log_panel")
             .resizable(true)
             .min_height(150.0)
@@ -893,16 +920,6 @@ impl ForgeApp {
                         {
                             self.log_entries.clear();
                         }
-                        if ui
-                            .add(
-                                egui::Button::new(RichText::new("×").size(14.0).color(MUTED))
-                                    .fill(Color32::TRANSPARENT)
-                                    .stroke(Stroke::new(0.0, BORDER)),
-                            )
-                            .clicked()
-                        {
-                            self.log_open = false;
-                        }
                     });
                 });
                 ui.separator();
@@ -913,10 +930,14 @@ impl ForgeApp {
                             if self.log_errors_only && entry.level != LogLevel::Error {
                                 continue;
                             }
-                            let col = match entry.level {
-                                LogLevel::Error => RED,
-                                LogLevel::Warn => AMBER,
-                                LogLevel::Info => MUTED,
+                            let col = if entry.percent.is_some() {
+                                Color32::from_rgb(80, 200, 120) // green for download progress
+                            } else {
+                                match entry.level {
+                                    LogLevel::Error => RED,
+                                    LogLevel::Warn => AMBER,
+                                    LogLevel::Info => MUTED,
+                                }
                             };
                             ui.horizontal(|ui| {
                                 ui.label(
@@ -2926,6 +2947,14 @@ impl eframe::App for ForgeApp {
 }
 
 // ── Build InjectConfig from form state ────────────────────────────────────────
+
+/// Render a fixed-width ASCII progress bar: `|████████────────────| 45%`
+fn make_progress_bar(pct: u8) -> String {
+    const WIDTH: usize = 24;
+    let filled = ((pct as usize) * WIDTH) / 100;
+    let empty = WIDTH.saturating_sub(filled);
+    format!("|{}{}|", "█".repeat(filled), "─".repeat(empty))
+}
 
 fn build_inject_config(inject: &InjectState) -> InjectConfig {
     let distro = match inject.distro.as_str() {
