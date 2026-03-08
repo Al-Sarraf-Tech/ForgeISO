@@ -30,9 +30,10 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
                     filename_str, ext
                 ));
                 cmds.push("mkdir -p /target/etc/dconf/db/local.d".to_string());
-                cmds.push(
-                    "printf '[org/gnome/desktop/background]\\npicture-uri=\"file:///usr/share/backgrounds/forgeiso-wallpaper.{}\\\"\\n' > /target/etc/dconf/db/local.d/00-forgeiso-background".to_string()
-                );
+                cmds.push(format!(
+                    "printf '[org/gnome/desktop/background]\\npicture-uri=\"file:///usr/share/backgrounds/forgeiso-wallpaper.{}\\\"\\n' > /target/etc/dconf/db/local.d/00-forgeiso-background",
+                    ext
+                ));
                 cmds.push("chroot /target dconf update".to_string());
             }
         }

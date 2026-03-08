@@ -1629,18 +1629,28 @@ fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> EngineResult<s
 }
 
 fn patch_boot_configs(extract_dir: &Path, kernel_append: &str) -> EngineResult<()> {
-    // Patch grub.cfg
+    // Patch grub.cfg — try both canonical kernel paths.
+    // Ubuntu live/desktop/server ISOs use /casper/vmlinuz since 20.04.
+    // Older ISOs (pre-20.04) and some remasters use /boot/vmlinuz.
+    // Both use a literal tab between the `linux` keyword and the path.
     let grub_path = extract_dir.join("boot").join("grub").join("grub.cfg");
     if grub_path.exists() {
         let content = std::fs::read_to_string(&grub_path)?;
-        let patched = content.replace(
-            "linux\t/boot/vmlinuz",
-            &format!("linux\t/boot/vmlinuz{}", kernel_append),
-        );
+        // Replace whichever pattern is present; only one will match per ISO.
+        let patched = content
+            .replace(
+                "linux\t/casper/vmlinuz",
+                &format!("linux\t/casper/vmlinuz{}", kernel_append),
+            )
+            .replace(
+                "linux\t/boot/vmlinuz",
+                &format!("linux\t/boot/vmlinuz{}", kernel_append),
+            );
         std::fs::write(&grub_path, patched)?;
     }
 
-    // Patch isolinux.cfg
+    // Patch isolinux.cfg — the append line contains the full kernel cmdline;
+    // /vmlinuz matches as a substring of /casper/vmlinuz and /boot/vmlinuz.
     let isolinux_path = extract_dir.join("isolinux").join("isolinux.cfg");
     if isolinux_path.exists() {
         let content = std::fs::read_to_string(&isolinux_path)?;
@@ -1728,5 +1738,51 @@ mod tests {
             "expected SHA-512 hash starting with $6$, got: {pw}"
         );
         assert_ne!(pw, "mysecret", "password must not be stored in plaintext");
+    }
+
+    #[test]
+    fn patch_boot_configs_casper_path() {
+        let tmp = tempfile::tempdir().expect("tmp dir");
+        let grub_dir = tmp.path().join("boot").join("grub");
+        std::fs::create_dir_all(&grub_dir).expect("create grub dir");
+        // Ubuntu 22.04+ live ISO grub.cfg uses /casper/vmlinuz
+        let grub_cfg = grub_dir.join("grub.cfg");
+        std::fs::write(
+            &grub_cfg,
+            "linux\t/casper/vmlinuz quiet splash ---\ninitrd\t/casper/initrd\n",
+        )
+        .expect("write grub.cfg");
+
+        patch_boot_configs(tmp.path(), " autoinstall ds=nocloud;s=/cdrom/nocloud/")
+            .expect("patch should succeed");
+
+        let content = std::fs::read_to_string(&grub_cfg).expect("read patched grub.cfg");
+        assert!(
+            content.contains("linux\t/casper/vmlinuz autoinstall ds=nocloud;s=/cdrom/nocloud/"),
+            "casper vmlinuz line was not patched: {content:?}"
+        );
+    }
+
+    #[test]
+    fn patch_boot_configs_legacy_boot_path() {
+        let tmp = tempfile::tempdir().expect("tmp dir");
+        let grub_dir = tmp.path().join("boot").join("grub");
+        std::fs::create_dir_all(&grub_dir).expect("create grub dir");
+        // Older ISO grub.cfg uses /boot/vmlinuz
+        let grub_cfg = grub_dir.join("grub.cfg");
+        std::fs::write(
+            &grub_cfg,
+            "linux\t/boot/vmlinuz quiet splash\ninitrd\t/boot/initrd\n",
+        )
+        .expect("write grub.cfg");
+
+        patch_boot_configs(tmp.path(), " autoinstall ds=nocloud;s=/cdrom/nocloud/")
+            .expect("patch should succeed");
+
+        let content = std::fs::read_to_string(&grub_cfg).expect("read patched grub.cfg");
+        assert!(
+            content.contains("linux\t/boot/vmlinuz autoinstall ds=nocloud;s=/cdrom/nocloud/"),
+            "legacy vmlinuz line was not patched: {content:?}"
+        );
     }
 }
