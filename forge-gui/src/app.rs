@@ -67,11 +67,7 @@ fn action_btn(ui: &mut Ui, label: &str, enabled: bool) -> bool {
     } else {
         Color32::from_rgb(33, 38, 45)
     };
-    let text_col = if enabled {
-        Color32::WHITE
-    } else {
-        MUTED
-    };
+    let text_col = if enabled { Color32::WHITE } else { MUTED };
     let btn = egui::Button::new(RichText::new(label).size(15.0).strong().color(text_col))
         .fill(fill)
         .stroke(Stroke::new(1.0, if enabled { ACCENT } else { BORDER }))
@@ -532,6 +528,7 @@ impl ForgeApp {
     }
 
     fn spawn_iso9660(&mut self) {
+        self.iso9660_result = None;
         self.start_job("Validating ISO-9660…");
         let engine = Arc::clone(&self.engine);
         let tx = self.tx.clone();
@@ -730,7 +727,11 @@ impl ForgeApp {
                             .color(Color32::WHITE),
                     );
                     ui.add_space(4.0);
-                    ui.label(RichText::new("ISO Customization Platform").size(11.0).color(MUTED));
+                    ui.label(
+                        RichText::new("ISO Customization Platform")
+                            .size(11.0)
+                            .color(MUTED),
+                    );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Cancel button if job running
@@ -800,21 +801,24 @@ impl ForgeApp {
                         } else {
                             Color32::from_rgb(139, 148, 158)
                         };
-                        let fill = if active { TAB_ACTIVE } else { Color32::TRANSPARENT };
+                        let fill = if active {
+                            TAB_ACTIVE
+                        } else {
+                            Color32::TRANSPARENT
+                        };
                         let display = if done && !active {
                             format!("{label} ✓")
                         } else {
                             label.to_string()
                         };
-                        let btn = egui::Button::new(
-                            RichText::new(display).size(13.0).color(text_col),
-                        )
-                        .fill(fill)
-                        .stroke(Stroke::new(
-                            if active { 1.0 } else { 0.0 },
-                            Color32::from_rgb(48, 54, 61),
-                        ))
-                        .min_size(Vec2::new(0.0, 34.0));
+                        let btn =
+                            egui::Button::new(RichText::new(display).size(13.0).color(text_col))
+                                .fill(fill)
+                                .stroke(Stroke::new(
+                                    if active { 1.0 } else { 0.0 },
+                                    Color32::from_rgb(48, 54, 61),
+                                ))
+                                .min_size(Vec2::new(0.0, 34.0));
                         if ui.add(btn).clicked() {
                             self.active_tab = *tab;
                         }
@@ -830,16 +834,18 @@ impl ForgeApp {
                             .filter(|e| e.level == LogLevel::Error)
                             .count();
                         let log_label = if error_count > 0 {
-                            format!("Log ({error_count} error{})", if error_count == 1 { "" } else { "s" })
+                            format!(
+                                "Log ({error_count} error{})",
+                                if error_count == 1 { "" } else { "s" }
+                            )
                         } else {
                             format!("Log ({})", self.log_entries.len())
                         };
                         let log_col = if error_count > 0 { RED } else { MUTED };
-                        let log_btn = egui::Button::new(
-                            RichText::new(log_label).size(12.0).color(log_col),
-                        )
-                        .fill(Color32::TRANSPARENT)
-                        .stroke(Stroke::new(0.0, BORDER));
+                        let log_btn =
+                            egui::Button::new(RichText::new(log_label).size(12.0).color(log_col))
+                                .fill(Color32::TRANSPARENT)
+                                .stroke(Stroke::new(0.0, BORDER));
                         if ui.add(log_btn).clicked() {
                             self.log_open = !self.log_open;
                         }
@@ -923,7 +929,10 @@ impl ForgeApp {
                                 );
                                 ui.add_space(4.0);
                                 ui.label(
-                                    RichText::new(&entry.message).size(11.0).monospace().color(col),
+                                    RichText::new(&entry.message)
+                                        .size(11.0)
+                                        .monospace()
+                                        .color(col),
                                 );
                             });
                         }
@@ -949,7 +958,9 @@ impl ForgeApp {
                     ui.add_enabled(
                         !running,
                         egui::TextEdit::singleline(&mut self.inject.source)
-                            .hint_text("/path/to/ubuntu-24.04.iso  or  https://releases.ubuntu.com/…")
+                            .hint_text(
+                                "/path/to/ubuntu-24.04.iso  or  https://releases.ubuntu.com/…",
+                            )
                             .desired_width(ui.available_width() - 72.0)
                             .min_size(Vec2::new(0.0, 30.0)),
                     );
@@ -987,7 +998,10 @@ impl ForgeApp {
                                     .on_hover_text("Pick output folder")
                                     .clicked()
                                 {
-                                    worker::pick_folder(PickTarget::InjectOutputDir, self.tx.clone());
+                                    worker::pick_folder(
+                                        PickTarget::InjectOutputDir,
+                                        self.tx.clone(),
+                                    );
                                 }
                             });
                         });
@@ -1058,7 +1072,9 @@ impl ForgeApp {
                                     RichText::new("Passwords do not match").color(RED),
                                 );
                                 ui.label(
-                                    RichText::new("Passwords do not match").size(11.0).color(RED),
+                                    RichText::new("Passwords do not match")
+                                        .size(11.0)
+                                        .color(RED),
                                 );
                             }
                         });
@@ -1087,8 +1103,7 @@ impl ForgeApp {
                     && self.inject.password != self.inject.password_confirm;
                 let sha_invalid = {
                     let s = self.inject.expected_sha256.trim();
-                    !s.is_empty()
-                        && (s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()))
+                    !s.is_empty() && (s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()))
                 };
 
                 if source_empty {
@@ -1125,7 +1140,11 @@ impl ForgeApp {
                 }
 
                 let can = !source_empty && !out_empty && !pw_mismatch && !sha_invalid && !running;
-                let btn_label = if running { "⏳  Injecting…" } else { "Inject ISO" };
+                let btn_label = if running {
+                    "⏳  Injecting…"
+                } else {
+                    "Inject ISO"
+                };
                 if action_btn(ui, btn_label, can) {
                     do_inject = true;
                 }
@@ -1231,7 +1250,10 @@ impl ForgeApp {
         ui.horizontal(|ui| {
             ui.add_enabled(
                 !running,
-                egui::Checkbox::new(&mut self.inject.ssh_install_server, "Install OpenSSH server"),
+                egui::Checkbox::new(
+                    &mut self.inject.ssh_install_server,
+                    "Install OpenSSH server",
+                ),
             );
             ui.add_space(16.0);
             ui.add_enabled(
@@ -1752,7 +1774,11 @@ impl ForgeApp {
                             RichText::new(format!(
                                 "{}  {}",
                                 icon,
-                                if r.matched { "Checksum Matched" } else { "Checksum Not Matched" }
+                                if r.matched {
+                                    "Checksum Matched"
+                                } else {
+                                    "Checksum Not Matched"
+                                }
                             ))
                             .size(14.0)
                             .strong()
@@ -1760,8 +1786,18 @@ impl ForgeApp {
                         );
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new("File:    ").size(12.0).monospace().color(MUTED));
-                            ui.label(RichText::new(&r.filename).size(12.0).monospace().color(TEXT));
+                            ui.label(
+                                RichText::new("File:    ")
+                                    .size(12.0)
+                                    .monospace()
+                                    .color(MUTED),
+                            );
+                            ui.label(
+                                RichText::new(&r.filename)
+                                    .size(12.0)
+                                    .monospace()
+                                    .color(TEXT),
+                            );
                         });
                         // Expected
                         let exp_display = if r.expected.len() == 64
@@ -1773,26 +1809,32 @@ impl ForgeApp {
                         };
                         ui.horizontal(|ui| {
                             ui.label(
-                                RichText::new("Expected:").size(12.0).monospace().color(MUTED),
+                                RichText::new("Expected:")
+                                    .size(12.0)
+                                    .monospace()
+                                    .color(MUTED),
                             );
                             ui.label(
-                                RichText::new(exp_display).size(12.0).monospace().color(MUTED),
+                                RichText::new(exp_display)
+                                    .size(12.0)
+                                    .monospace()
+                                    .color(MUTED),
                             );
                         });
                         // Actual
                         let act_col = if r.matched { GREEN } else { AMBER };
                         ui.horizontal(|ui| {
                             ui.label(
-                                RichText::new("Actual:  ").size(12.0).monospace().color(MUTED),
+                                RichText::new("Actual:  ")
+                                    .size(12.0)
+                                    .monospace()
+                                    .color(MUTED),
                             );
                             ui.label(
-                                RichText::new(format!(
-                                    "{}…",
-                                    &r.actual[..32.min(r.actual.len())]
-                                ))
-                                .size(12.0)
-                                .monospace()
-                                .color(act_col),
+                                RichText::new(format!("{}…", &r.actual[..32.min(r.actual.len())]))
+                                    .size(12.0)
+                                    .monospace()
+                                    .color(act_col),
                             );
                             if ui
                                 .small_button("📋")
@@ -1968,7 +2010,11 @@ impl ForgeApp {
                 let can = !self.diff.base.trim().is_empty()
                     && !self.diff.target.trim().is_empty()
                     && !running;
-                let diff_lbl = if running { "⏳  Comparing…" } else { "Compare ISOs" };
+                let diff_lbl = if running {
+                    "⏳  Comparing…"
+                } else {
+                    "Compare ISOs"
+                };
                 if action_btn(ui, diff_lbl, can) {
                     do_diff = true;
                 }
@@ -2028,7 +2074,10 @@ impl ForgeApp {
                                 .add(
                                     egui::Button::new(RichText::new(label).size(12.0).color(col))
                                         .fill(fill)
-                                        .stroke(Stroke::new(1.0, if active { ACCENT } else { BORDER }))
+                                        .stroke(Stroke::new(
+                                            1.0,
+                                            if active { ACCENT } else { BORDER },
+                                        ))
                                         .min_size(Vec2::new(64.0, 24.0)),
                                 )
                                 .clicked()
@@ -2062,12 +2111,11 @@ impl ForgeApp {
                                     }
                                     ui.horizontal(|ui| {
                                         ui.label(
-                                            RichText::new("+")
-                                                .size(12.0)
-                                                .monospace()
-                                                .color(GREEN),
+                                            RichText::new("+").size(12.0).monospace().color(GREEN),
                                         );
-                                        ui.label(RichText::new(p).size(12.0).monospace().color(TEXT));
+                                        ui.label(
+                                            RichText::new(p).size(12.0).monospace().color(TEXT),
+                                        );
                                     });
                                 }
                             }
@@ -2081,12 +2129,11 @@ impl ForgeApp {
                                     }
                                     ui.horizontal(|ui| {
                                         ui.label(
-                                            RichText::new("-")
-                                                .size(12.0)
-                                                .monospace()
-                                                .color(RED),
+                                            RichText::new("-").size(12.0).monospace().color(RED),
                                         );
-                                        ui.label(RichText::new(p).size(12.0).monospace().color(TEXT));
+                                        ui.label(
+                                            RichText::new(p).size(12.0).monospace().color(TEXT),
+                                        );
                                     });
                                 }
                             }
@@ -2100,10 +2147,7 @@ impl ForgeApp {
                                     }
                                     ui.horizontal(|ui| {
                                         ui.label(
-                                            RichText::new("~")
-                                                .size(12.0)
-                                                .monospace()
-                                                .color(AMBER),
+                                            RichText::new("~").size(12.0).monospace().color(AMBER),
                                         );
                                         ui.label(
                                             RichText::new(&entry.path)
@@ -2204,7 +2248,10 @@ impl ForgeApp {
                                     )
                                     .clicked()
                                 {
-                                    worker::pick_folder(PickTarget::BuildOutputDir, self.tx.clone());
+                                    worker::pick_folder(
+                                        PickTarget::BuildOutputDir,
+                                        self.tx.clone(),
+                                    );
                                 }
                             });
                         });
@@ -2288,9 +2335,13 @@ impl ForgeApp {
                 ui.add_space(12.0);
                 ui.horizontal(|ui| {
                     let can_build = !self.build.source.trim().is_empty()
-                    && !self.build.output_dir.trim().is_empty()
-                    && !running;
-                    let build_lbl = if running { "⏳  Building…" } else { "Build ISO" };
+                        && !self.build.output_dir.trim().is_empty()
+                        && !running;
+                    let build_lbl = if running {
+                        "⏳  Building…"
+                    } else {
+                        "Build ISO"
+                    };
                     let btn = egui::Button::new(
                         RichText::new(build_lbl)
                             .size(14.0)
@@ -2350,11 +2401,7 @@ impl ForgeApp {
                                 continue;
                             }
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new(format!("{k}:"))
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
+                                ui.label(RichText::new(format!("{k}:")).size(12.0).color(MUTED));
                                 ui.label(RichText::new(&v).size(12.0).monospace().color(TEXT));
                             });
                         }
@@ -2377,12 +2424,10 @@ impl ForgeApp {
                             let avail = ui.available_width();
                             ui.horizontal(|ui| {
                                 ui.add(
-                                    egui::TextEdit::singleline(
-                                        &mut path_str.as_ref().to_string(),
-                                    )
-                                    .desired_width(avail - 130.0)
-                                    .interactive(false)
-                                    .font(egui::FontId::monospace(12.0)),
+                                    egui::TextEdit::singleline(&mut path_str.as_ref().to_string())
+                                        .desired_width(avail - 130.0)
+                                        .interactive(false)
+                                        .font(egui::FontId::monospace(12.0)),
                                 );
                                 if ui
                                     .add(
@@ -2403,9 +2448,15 @@ impl ForgeApp {
                                     .clicked()
                                 {
                                     if let Some(dir) = a.parent() {
-                                        let _ = std::process::Command::new("xdg-open")
+                                        if std::process::Command::new("xdg-open")
                                             .arg(dir)
-                                            .spawn();
+                                            .spawn()
+                                            .is_err()
+                                        {
+                                            self.set_status(StatusMsg::err(
+                                                "xdg-open failed — open the folder manually",
+                                            ));
+                                        }
                                     }
                                 }
                             });
@@ -2468,7 +2519,11 @@ impl ForgeApp {
                 );
                 ui.add_space(10.0);
 
-                let lbl = if running { "⏳  Checking…" } else { "Run Dependency Check" };
+                let lbl = if running {
+                    "⏳  Checking…"
+                } else {
+                    "Run Dependency Check"
+                };
                 if small_btn(ui, lbl, !running) {
                     self.spawn_doctor();
                 }
@@ -2482,7 +2537,10 @@ impl ForgeApp {
                             Color32::from_rgb(40, 100, 55),
                         )
                     } else {
-                        (Color32::from_rgb(28, 18, 10), Color32::from_rgb(100, 60, 20))
+                        (
+                            Color32::from_rgb(28, 18, 10),
+                            Color32::from_rgb(100, 60, 20),
+                        )
                     };
 
                     result_box(ui, fill, border, |ui| {
@@ -2502,12 +2560,8 @@ impl ForgeApp {
                             .spacing([16.0, 4.0])
                             .striped(true)
                             .show(ui, |ui| {
-                                ui.label(
-                                    RichText::new("Tool").size(11.0).strong().color(MUTED),
-                                );
-                                ui.label(
-                                    RichText::new("Status").size(11.0).strong().color(MUTED),
-                                );
+                                ui.label(RichText::new("Tool").size(11.0).strong().color(MUTED));
+                                ui.label(RichText::new("Status").size(11.0).strong().color(MUTED));
                                 ui.end_row();
                                 for (name, &ok) in &r.tooling {
                                     ui.label(
@@ -2536,10 +2590,12 @@ impl ForgeApp {
                         ui.add_space(4.0);
                         ui.horizontal(|ui| {
                             ui.label(
-                                RichText::new("sudo dnf install xorriso grub2-tools squashfs-tools")
-                                    .size(12.0)
-                                    .monospace()
-                                    .color(TEXT),
+                                RichText::new(
+                                    "sudo dnf install xorriso grub2-tools squashfs-tools",
+                                )
+                                .size(12.0)
+                                .monospace()
+                                .color(TEXT),
                             );
                         });
                     }
@@ -2566,15 +2622,17 @@ impl eframe::App for ForgeApp {
         self.render_log(ctx);
 
         egui::CentralPanel::default()
-            .frame(Frame::new().fill(BG).inner_margin(egui::Margin::symmetric(16, 12)))
-            .show(ctx, |ui| {
-                match self.active_tab {
-                    Tab::Inject => self.show_inject(ui),
-                    Tab::Verify => self.show_verify(ui),
-                    Tab::Diff => self.show_diff(ui),
-                    Tab::Build => self.show_build(ui),
-                    Tab::Doctor => self.show_doctor(ui),
-                }
+            .frame(
+                Frame::new()
+                    .fill(BG)
+                    .inner_margin(egui::Margin::symmetric(16, 12)),
+            )
+            .show(ctx, |ui| match self.active_tab {
+                Tab::Inject => self.show_inject(ui),
+                Tab::Verify => self.show_verify(ui),
+                Tab::Diff => self.show_diff(ui),
+                Tab::Build => self.show_build(ui),
+                Tab::Doctor => self.show_doctor(ui),
             });
     }
 

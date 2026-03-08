@@ -214,7 +214,7 @@ pub struct DiffState {
     pub target: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum DiffFilter {
     #[default]
     All,
