@@ -1081,6 +1081,44 @@ impl ForgeApp {
                         ui.end_row();
                     });
 
+                ui.add_space(8.0);
+
+                // ── Distro ─────────────────────────────────────────────────
+                ui.horizontal(|ui| {
+                    lbl(ui, "Target Distro:");
+                    ui.add_space(8.0);
+                    egui::ComboBox::from_id_salt("distro_combo")
+                        .selected_text(match self.inject.distro.as_str() {
+                            "fedora" => "Fedora",
+                            "arch" => "Arch Linux",
+                            "mint" => "Linux Mint",
+                            _ => "Ubuntu / Mint (default)",
+                        })
+                        .width(200.0)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.inject.distro,
+                                "ubuntu".into(),
+                                "Ubuntu / Mint (default)",
+                            );
+                            ui.selectable_value(
+                                &mut self.inject.distro,
+                                "fedora".into(),
+                                "Fedora  (Kickstart)",
+                            );
+                            ui.selectable_value(
+                                &mut self.inject.distro,
+                                "arch".into(),
+                                "Arch Linux  (archinstall)",
+                            );
+                            ui.selectable_value(
+                                &mut self.inject.distro,
+                                "mint".into(),
+                                "Linux Mint  (cloud-init)",
+                            );
+                        });
+                });
+
                 rule(ui);
 
                 // ── Advanced Options ───────────────────────────────────────
@@ -1529,14 +1567,6 @@ impl ForgeApp {
                     ui.add_enabled(
                         !running,
                         egui::Checkbox::new(&mut self.inject.podman, "Install Podman"),
-                    );
-                    ui.add_space(4.0);
-                    ui.add_enabled(
-                        !running,
-                        egui::Checkbox::new(
-                            &mut self.inject.no_user_interaction,
-                            "No user interaction",
-                        ),
                     );
                 });
                 ui.end_row();
@@ -2742,13 +2772,13 @@ fn build_inject_config(inject: &InjectState) -> InjectConfig {
                 .split_whitespace()
                 .map(String::from)
                 .collect(),
-            default_entry: super::state::opt(&inject.grub_default),
+            default_entry: opt(&inject.grub_default),
         },
         encrypt: false,
         encrypt_passphrase: None,
         mounts: Vec::new(),
         run_commands: lines(&inject.run_commands),
         distro,
-        expected_sha256: super::state::opt(&inject.expected_sha256),
+        expected_sha256: opt(&inject.expected_sha256),
     }
 }

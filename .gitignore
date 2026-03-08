@@ -1,6 +1,7 @@
 # Rust
 target/
 **/*.rs.bk
+*.rlib
 Cargo.lock
 .cargo-tmp/
 

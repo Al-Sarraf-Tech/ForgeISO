@@ -911,10 +911,17 @@ impl ForgeIsoEngine {
         std::fs::create_dir_all(out)?;
         // Ensure the output always has an .iso extension regardless of what the
         // caller passed — avoids producing unrecognised files from the GUI default.
-        let out_filename = if cfg.out_name.to_ascii_lowercase().ends_with(".iso") {
-            cfg.out_name.clone()
-        } else {
-            format!("{}.iso", cfg.out_name)
+        let out_filename = {
+            let name = if cfg.out_name.trim().is_empty() {
+                "forgeiso-local"
+            } else {
+                cfg.out_name.trim()
+            };
+            if name.to_ascii_lowercase().ends_with(".iso") {
+                name.to_string()
+            } else {
+                format!("{}.iso", name)
+            }
         };
         let output_path = out.join(&out_filename);
 
