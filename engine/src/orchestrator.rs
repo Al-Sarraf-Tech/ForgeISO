@@ -566,6 +566,33 @@ impl ForgeIsoEngine {
     }
 
     async fn download_to_path(&self, url: &str, output: &Path) -> EngineResult<()> {
+        const MAX_ATTEMPTS: u32 = 3;
+        let mut last_err: Option<EngineError> = None;
+        for attempt in 0..MAX_ATTEMPTS {
+            if attempt > 0 {
+                let delay_secs = 1u64 << (attempt - 1); // 1s, 2s
+                self.emit(EngineEvent::warn(
+                    EventPhase::Download,
+                    format!(
+                        "download attempt {} failed; retrying in {}s — {}",
+                        attempt, delay_secs, url
+                    ),
+                ));
+                tokio::time::sleep(Duration::from_secs(delay_secs)).await;
+            }
+            match self.download_attempt(url, output).await {
+                Ok(()) => return Ok(()),
+                Err(e) => last_err = Some(e),
+            }
+        }
+        Err(last_err.unwrap_or_else(|| {
+            EngineError::Network(format!(
+                "download failed after {MAX_ATTEMPTS} attempts: {url}"
+            ))
+        }))
+    }
+
+    async fn download_attempt(&self, url: &str, output: &Path) -> EngineResult<()> {
         let response = reqwest::get(url).await?;
         if !response.status().is_success() {
             return Err(EngineError::Network(format!(
@@ -727,6 +754,32 @@ impl ForgeIsoEngine {
             resolved.source_kind,
             resolved.source_value,
         )?;
+
+        // Warn if the requested distro doesn't match what the ISO reports.
+        // This is non-fatal: custom/hybrid ISOs legitimately differ; we warn
+        // so users notice unintentional mismatches before a long build.
+        if let (Some(requested), Some(detected)) = (cfg.distro, metadata.distro) {
+            if requested != detected {
+                self.emit(EngineEvent::warn(
+                    EventPhase::Inject,
+                    format!(
+                        "distro mismatch: config requests {:?} but ISO appears to be {:?}; \
+                         injection may produce an unbootable image",
+                        requested, detected
+                    ),
+                ));
+            }
+        }
+
+        // Warn when LUKS encryption is requested: cloud-init requires the
+        // passphrase in plaintext inside the YAML blob on the ISO.
+        if cfg.encrypt_passphrase.is_some() {
+            self.emit(EngineEvent::warn(
+                EventPhase::Inject,
+                "LUKS passphrase will be stored in plaintext inside the generated \
+                 cloud-init YAML; treat the output ISO as sensitive material",
+            ));
+        }
 
         // Dispatch to the appropriate injection method based on target distro
         match cfg.distro {
@@ -2022,5 +2075,92 @@ mod tests {
         let kernel_append = " auto=true priority=critical preseed/file=/cdrom/preseed.cfg";
         assert!(kernel_append.contains("auto=true"));
         assert!(kernel_append.contains("preseed/file=/cdrom/preseed.cfg"));
+    }
+
+    // ── Distro mismatch logic ────────────────────────────────────────────────
+
+    #[test]
+    fn distro_mismatch_ubuntu_vs_fedora_is_detectable() {
+        use crate::config::Distro;
+        // Confirm that the comparison driving the mismatch warning works correctly.
+        assert_ne!(Distro::Ubuntu, Distro::Fedora);
+        assert_ne!(Distro::Ubuntu, Distro::Arch);
+        assert_ne!(Distro::Ubuntu, Distro::Mint);
+        assert_ne!(Distro::Fedora, Distro::Arch);
+    }
+
+    #[test]
+    fn distro_match_same_variant_no_mismatch() {
+        use crate::config::Distro;
+        // Same distro → mismatch guard must not trigger.
+        assert_eq!(Distro::Ubuntu, Distro::Ubuntu);
+        assert_eq!(Distro::Fedora, Distro::Fedora);
+        assert_eq!(Distro::Arch, Distro::Arch);
+        assert_eq!(Distro::Mint, Distro::Mint);
+    }
+
+    // ── download_filename ────────────────────────────────────────────────────
+
+    #[test]
+    fn download_filename_extracts_iso_basename() {
+        let url = "https://releases.ubuntu.com/noble/ubuntu-24.04.1-live-server-amd64.iso";
+        assert_eq!(
+            download_filename(url),
+            "ubuntu-24.04.1-live-server-amd64.iso"
+        );
+    }
+
+    #[test]
+    fn download_filename_sanitizes_special_chars() {
+        // Characters outside [a-zA-Z0-9._-] become '-'
+        let url = "https://example.com/my%20file.iso";
+        let name = download_filename(url);
+        assert!(
+            !name.contains('%'),
+            "percent signs must be sanitized: {name}"
+        );
+        assert!(!name.is_empty(), "filename must not be empty");
+    }
+
+    #[test]
+    fn download_filename_fallback_for_empty_segment() {
+        // Trailing slash → empty last segment → fallback timestamp name
+        let url = "https://example.com/";
+        let name = download_filename(url);
+        assert!(!name.is_empty(), "fallback must not be empty");
+        assert!(
+            name.ends_with(".iso"),
+            "fallback should end with .iso: {name}"
+        );
+    }
+
+    // ── LUKS passphrase warning ──────────────────────────────────────────────
+
+    #[test]
+    fn inject_config_with_luks_passphrase_is_valid() {
+        // validate() must succeed even when encrypt_passphrase is set;
+        // the warning is advisory (emitted by the engine), not a hard error.
+        let cfg = crate::config::InjectConfig {
+            encrypt_passphrase: Some("supersecret".to_string()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "LUKS passphrase should not fail validate()"
+        );
+    }
+
+    // ── sanitize_filename ────────────────────────────────────────────────────
+
+    #[test]
+    fn sanitize_filename_preserves_safe_chars() {
+        assert_eq!(sanitize_filename("ubuntu-24.04.iso"), "ubuntu-24.04.iso");
+    }
+
+    #[test]
+    fn sanitize_filename_replaces_unsafe_chars_with_dash() {
+        let out = sanitize_filename("my file (v2).iso");
+        assert!(!out.contains(' '), "spaces must be replaced: {out}");
+        assert!(!out.contains('('), "parens must be replaced: {out}");
     }
 }

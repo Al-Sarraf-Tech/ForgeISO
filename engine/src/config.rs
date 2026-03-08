@@ -588,6 +588,18 @@ impl InjectConfig {
                     "apt_repo contains shell metacharacters: {repo:?}"
                 )));
             }
+            // Enforce apt sources.list line format so invalid entries are caught
+            // before they silently produce a malformed sources.list.d file.
+            let trimmed = repo.trim();
+            if !trimmed.is_empty()
+                && !trimmed.starts_with("deb ")
+                && !trimmed.starts_with("deb-src ")
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "apt_repo must be a valid sources.list entry starting with \
+                     'deb ' or 'deb-src ': {repo:?}"
+                )));
+            }
         }
 
         // Mount entries — written into fstab via echo
@@ -934,6 +946,41 @@ mod tests {
             ..Default::default()
         };
         assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn inject_rejects_bare_url_as_apt_repo() {
+        // A raw URL is not a valid sources.list line (missing "deb " prefix).
+        let cfg = InjectConfig {
+            apt_repos: vec!["http://archive.ubuntu.com/ubuntu".into()],
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "bare URL without 'deb ' prefix must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_rejects_ppa_shorthand_as_apt_repo() {
+        // PPA shorthands (ppa:user/name) are not valid sources.list lines.
+        let cfg = InjectConfig {
+            apt_repos: vec!["ppa:deadsnakes/ppa".into()],
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "ppa: shorthand must be rejected (not a sources.list line)"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_deb_src_apt_repo() {
+        let cfg = InjectConfig {
+            apt_repos: vec!["deb-src http://archive.ubuntu.com/ubuntu noble main".into()],
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok(), "deb-src line must be accepted");
     }
 
     #[test]

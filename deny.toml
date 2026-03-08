@@ -18,10 +18,6 @@ ignore = [
     # Tracked: swap indicatif for a maintained alternative when available.
     { id = "RUSTSEC-2025-0119", reason = "number_prefix is unmaintained but has no vulnerability; indicatif has no safe upgrade path yet" },
 
-    # paste: unmaintained, no vulnerability, pulled in by ratatui via macros.
-    # ratatui 0.30+ still transitively uses paste; no upgrade path available.
-    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained but has no vulnerability; ratatui 0.30 still depends on it transitively" },
-
 ]
 
 # ── Licenses ─────────────────────────────────────────────────────────────────
