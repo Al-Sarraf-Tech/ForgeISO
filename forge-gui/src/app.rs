@@ -1290,11 +1290,7 @@ impl ForgeApp {
                             ui.add_space(2.0);
                             ui.horizontal(|ui| {
                                 ui.label(RichText::new("✓").color(GREEN).size(12.0));
-                                ui.label(
-                                    RichText::new("Passwords match")
-                                        .size(12.0)
-                                        .color(GREEN),
-                                );
+                                ui.label(RichText::new("Passwords match").size(12.0).color(GREEN));
                             });
                         }
                     });
