@@ -10,14 +10,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::state::{
     lines, opt, BuildResult, BuildState, DiffFilter, DiffState, DoctorReport, InjectState,
-    Iso9660Compliance, IsoDiff, IsoMetadata, LogEntry, LogLevel, PickTarget, Stage, StatusMsg,
+    Iso9660Compliance, IsoDiff, IsoMetadata, LogEntry, LogLevel, PickTarget, StatusMsg,
     VerifyResult, VerifyState,
 };
 use crate::worker::{self, WorkerMsg};
 
-// ── Persisted form state (saved across sessions via eframe storage) ──────────
+// ── Persisted form state ───────────────────────────────────────────────────────
 
-const STORAGE_KEY: &str = "forgeiso_v1";
+const STORAGE_KEY: &str = "forgeiso_v2";
 
 #[derive(Default, Serialize, Deserialize)]
 struct PersistedState {
@@ -30,99 +30,122 @@ struct PersistedState {
 // ── Palette ───────────────────────────────────────────────────────────────────
 
 const BG: Color32 = Color32::from_rgb(13, 17, 23);
-const CARD: Color32 = Color32::from_rgb(22, 27, 42);
-const CARD_BORDER: Color32 = Color32::from_rgb(40, 50, 75);
-const ACCENT: Color32 = Color32::from_rgb(59, 130, 246);
-const GREEN: Color32 = Color32::from_rgb(34, 197, 94);
-const RED: Color32 = Color32::from_rgb(239, 68, 68);
-const AMBER: Color32 = Color32::from_rgb(245, 158, 11);
-const TEXT: Color32 = Color32::from_rgb(248, 250, 252);
-const MUTED: Color32 = Color32::from_rgb(100, 116, 139);
-const SIDEBAR: Color32 = Color32::from_rgb(17, 22, 35);
+const SURFACE: Color32 = Color32::from_rgb(22, 27, 34);
+const BORDER: Color32 = Color32::from_rgb(48, 54, 61);
+const ACCENT: Color32 = Color32::from_rgb(47, 129, 247);
+const GREEN: Color32 = Color32::from_rgb(63, 185, 80);
+const RED: Color32 = Color32::from_rgb(248, 81, 73);
+const AMBER: Color32 = Color32::from_rgb(210, 153, 34);
+const TEXT: Color32 = Color32::from_rgb(230, 237, 243);
+const MUTED: Color32 = Color32::from_rgb(139, 148, 158);
+const TAB_ACTIVE: Color32 = Color32::from_rgb(33, 38, 45);
+// ── UI helpers ────────────────────────────────────────────────────────────────
 
-// ── Free-function UI helpers (avoid self borrow conflicts) ────────────────────
-
-fn card(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
-    Frame::new()
-        .fill(CARD)
-        .stroke(Stroke::new(1.0, CARD_BORDER))
-        .inner_margin(16.0f32)
-        .corner_radius(8.0f32)
-        .show(ui, add);
-    ui.add_space(12.0);
+/// Thin muted label that sits above a field.
+fn lbl(ui: &mut Ui, text: &str) {
+    ui.label(RichText::new(text).size(11.0).color(MUTED));
 }
 
-fn card_green(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
-    Frame::new()
-        .fill(Color32::from_rgb(14, 36, 24))
-        .stroke(Stroke::new(1.0, Color32::from_rgb(34, 100, 60)))
-        .inner_margin(16.0f32)
-        .corner_radius(8.0f32)
-        .show(ui, add);
-    ui.add_space(12.0);
+/// Section title inside a form.
+fn section(ui: &mut Ui, text: &str) {
+    ui.add_space(4.0);
+    ui.label(RichText::new(text).size(13.0).strong().color(TEXT));
+    ui.add_space(2.0);
 }
 
-fn stage_header(ui: &mut Ui, step: usize, title: &str, desc: &str) {
-    Frame::new()
-        .fill(Color32::from_rgb(15, 20, 36))
-        .stroke(Stroke::new(1.0, Color32::from_rgb(35, 45, 75)))
-        .inner_margin(12.0f32)
-        .corner_radius(8.0f32)
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(format!("Step {step}"))
-                        .size(11.0)
-                        .color(ACCENT)
-                        .strong(),
-                );
-                ui.add_space(8.0);
-                ui.label(RichText::new(title).size(18.0).strong().color(TEXT));
-            });
-            ui.add_space(4.0);
-            ui.label(RichText::new(desc).size(13.0).color(MUTED));
-        });
-    ui.add_space(12.0);
+/// Thin horizontal rule.
+fn rule(ui: &mut Ui) {
+    ui.add_space(10.0);
+    ui.add(egui::Separator::default().horizontal().spacing(0.0));
+    ui.add_space(10.0);
 }
 
-fn primary_btn(ui: &mut Ui, label: &str, enabled: bool) -> bool {
-    let btn = egui::Button::new(RichText::new(label).color(Color32::WHITE).strong())
-        .fill(if enabled {
-            ACCENT
-        } else {
-            Color32::from_rgb(40, 50, 80)
-        })
-        .min_size(Vec2::new(140.0, 36.0));
+/// Full-width primary action button.
+fn action_btn(ui: &mut Ui, label: &str, enabled: bool) -> bool {
+    let fill = if enabled {
+        ACCENT
+    } else {
+        Color32::from_rgb(33, 38, 45)
+    };
+    let text_col = if enabled {
+        Color32::WHITE
+    } else {
+        MUTED
+    };
+    let btn = egui::Button::new(RichText::new(label).size(15.0).strong().color(text_col))
+        .fill(fill)
+        .stroke(Stroke::new(1.0, if enabled { ACCENT } else { BORDER }))
+        .min_size(Vec2::new(ui.available_width(), 44.0));
     ui.add_enabled(enabled, btn).clicked()
 }
 
-fn ghost_btn(ui: &mut Ui, label: &str, enabled: bool) -> bool {
-    let btn = egui::Button::new(label)
-        .fill(Color32::TRANSPARENT)
-        .stroke(Stroke::new(1.0, CARD_BORDER))
-        .min_size(Vec2::new(80.0, 28.0));
-    ui.add_enabled(enabled, btn).clicked()
+/// Small "Browse" button that fits next to a text field.
+fn browse_btn(ui: &mut Ui, enabled: bool) -> bool {
+    ui.add_enabled(
+        enabled,
+        egui::Button::new("Browse")
+            .fill(SURFACE)
+            .stroke(Stroke::new(1.0, BORDER))
+            .min_size(Vec2::new(64.0, 28.0)),
+    )
+    .clicked()
 }
 
+/// Small secondary button.
+fn small_btn(ui: &mut Ui, label: &str, enabled: bool) -> bool {
+    ui.add_enabled(
+        enabled,
+        egui::Button::new(label)
+            .fill(SURFACE)
+            .stroke(Stroke::new(1.0, BORDER))
+            .min_size(Vec2::new(80.0, 28.0)),
+    )
+    .clicked()
+}
+
+/// Green "Continue" button.
 fn continue_btn(ui: &mut Ui, label: &str) -> bool {
     let btn = egui::Button::new(RichText::new(label).color(Color32::WHITE).strong())
         .fill(GREEN)
-        .min_size(Vec2::new(180.0, 36.0));
+        .stroke(Stroke::new(1.0, GREEN))
+        .min_size(Vec2::new(160.0, 34.0));
     ui.add(btn).clicked()
 }
 
-fn badge(ui: &mut Ui, label: &str, fill: Color32, text_col: Color32) {
+/// Coloured result card.
+fn result_box(ui: &mut Ui, fill: Color32, border: Color32, add: impl FnOnce(&mut Ui)) {
     Frame::new()
         .fill(fill)
-        .inner_margin(Vec2::new(8.0, 4.0))
-        .corner_radius(4.0f32)
-        .show(ui, |ui| {
-            ui.label(RichText::new(label).size(12.0).color(text_col).strong());
-        });
+        .stroke(Stroke::new(1.0, border))
+        .inner_margin(14.0f32)
+        .corner_radius(6.0f32)
+        .show(ui, add);
+    ui.add_space(8.0);
+}
+
+fn card_green(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+    result_box(
+        ui,
+        Color32::from_rgb(13, 28, 18),
+        Color32::from_rgb(40, 100, 55),
+        add,
+    );
 }
 
 fn now_ts() -> String {
     chrono::Local::now().format("%H:%M:%S").to_string()
+}
+
+fn fmt_bytes(n: u64) -> String {
+    if n < 1024 {
+        format!("{n} B")
+    } else if n < 1_048_576 {
+        format!("{:.1} KB", n as f64 / 1024.0)
+    } else if n < 1_073_741_824 {
+        format!("{:.1} MB", n as f64 / 1_048_576.0)
+    } else {
+        format!("{:.2} GB", n as f64 / 1_073_741_824.0)
+    }
 }
 
 fn distro_label(d: &forgeiso_engine::Distro) -> String {
@@ -135,27 +158,15 @@ fn distro_label(d: &forgeiso_engine::Distro) -> String {
     }
 }
 
-fn fmt_bytes(n: u64) -> String {
-    if n < 1024 {
-        format!("{n} B")
-    } else if n < 1024 * 1024 {
-        format!("{:.1} KB", n as f64 / 1024.0)
-    } else if n < 1024 * 1024 * 1024 {
-        format!("{:.1} MB", n as f64 / 1_048_576.0)
-    } else {
-        format!("{:.2} GB", n as f64 / 1_073_741_824.0)
-    }
-}
-
-// ── ForgeApp ──────────────────────────────────────────────────────────────────
+// ── App state ─────────────────────────────────────────────────────────────────
 
 pub struct ForgeApp {
     rt: tokio::runtime::Runtime,
     engine: Arc<ForgeIsoEngine>,
     tx: mpsc::Sender<WorkerMsg>,
     rx: mpsc::Receiver<WorkerMsg>,
-    // Navigation
-    active_stage: Stage,
+    // Navigation — now tab-based, no sidebar
+    active_tab: Tab,
     // Job
     job_running: bool,
     job_phase: String,
@@ -173,7 +184,7 @@ pub struct ForgeApp {
     diff_result: Option<IsoDiff>,
     build_result: Option<BuildResult>,
     inspect_result: Option<IsoMetadata>,
-    // Stage done flags
+    // Done flags
     inject_done: bool,
     verify_done: bool,
     diff_done: bool,
@@ -184,40 +195,58 @@ pub struct ForgeApp {
     log_errors_only: bool,
     // Status
     status: Option<StatusMsg>,
-    // Diff UI
+    status_since: Option<std::time::Instant>,
+    // Diff filter
     diff_filter: DiffFilter,
     diff_search: String,
     // Doctor
     doctor_result: Option<DoctorReport>,
-    doctor_open: bool,
-    // Auto-dismiss status
-    status_since: Option<std::time::Instant>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+enum Tab {
+    Inject,
+    Verify,
+    Diff,
+    Build,
+    Doctor,
+}
+
+impl Tab {
+    fn label(&self) -> &'static str {
+        match self {
+            Tab::Inject => "Inject",
+            Tab::Verify => "Verify",
+            Tab::Diff => "Diff",
+            Tab::Build => "Build",
+            Tab::Doctor => "Doctor",
+        }
+    }
 }
 
 impl ForgeApp {
     pub fn new(cc: &eframe::CreationContext<'_>, rt: tokio::runtime::Runtime) -> Self {
-        // Dark theme with custom palette
         let mut visuals = egui::Visuals::dark();
         visuals.window_fill = BG;
         visuals.panel_fill = BG;
-        visuals.widgets.noninteractive.bg_fill = CARD;
+        visuals.widgets.noninteractive.bg_fill = SURFACE;
         visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, TEXT);
-        visuals.widgets.inactive.bg_fill = Color32::from_rgb(30, 38, 60);
+        visuals.widgets.inactive.bg_fill = Color32::from_rgb(27, 32, 39);
         visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, TEXT);
-        visuals.widgets.hovered.bg_fill = Color32::from_rgb(40, 50, 80);
+        visuals.widgets.hovered.bg_fill = Color32::from_rgb(33, 38, 45);
         visuals.widgets.active.bg_fill = ACCENT;
-        visuals.selection.bg_fill = Color32::from_rgba_premultiplied(59, 130, 246, 80);
+        visuals.selection.bg_fill = Color32::from_rgba_premultiplied(47, 129, 247, 70);
         visuals.override_text_color = Some(TEXT);
+        visuals.window_stroke = Stroke::new(1.0, BORDER);
         cc.egui_ctx.set_visuals(visuals);
 
-        // Increase font sizes
         let mut style = (*cc.egui_ctx.style()).clone();
         use egui::{FontId, TextStyle};
         style.text_styles = [
-            (TextStyle::Heading, FontId::proportional(20.0)),
+            (TextStyle::Heading, FontId::proportional(18.0)),
             (TextStyle::Body, FontId::proportional(14.0)),
-            (TextStyle::Button, FontId::proportional(14.0)),
-            (TextStyle::Small, FontId::proportional(12.0)),
+            (TextStyle::Button, FontId::proportional(13.0)),
+            (TextStyle::Small, FontId::proportional(11.0)),
             (TextStyle::Monospace, FontId::monospace(13.0)),
         ]
         .into();
@@ -226,13 +255,11 @@ impl ForgeApp {
         let (tx, rx) = mpsc::channel();
         let engine = Arc::new(ForgeIsoEngine::new());
 
-        // Load persisted form state if available
         let persisted: PersistedState = cc
             .storage
             .and_then(|s| eframe::get_value(s, STORAGE_KEY))
             .unwrap_or_default();
 
-        // Pipe engine broadcast events → mpsc channel
         {
             let mut ev_rx = engine.subscribe();
             let tx2 = tx.clone();
@@ -257,7 +284,7 @@ impl ForgeApp {
             engine,
             tx,
             rx,
-            active_stage: Stage::Inject,
+            active_tab: Tab::Inject,
             job_running: false,
             job_phase: String::new(),
             job_pct: None,
@@ -280,22 +307,20 @@ impl ForgeApp {
             log_open: false,
             log_errors_only: false,
             status: None,
+            status_since: None,
             diff_filter: DiffFilter::All,
             diff_search: String::new(),
             doctor_result: None,
-            doctor_open: false,
-            status_since: None,
         }
     }
 
-    // ── Message draining ───────────────────────────────────────────────────────
+    // ── Message handling ───────────────────────────────────────────────────────
 
     fn drain_messages(&mut self, ctx: &egui::Context) {
         while let Ok(msg) = self.rx.try_recv() {
             self.handle_msg(msg);
             ctx.request_repaint();
         }
-        // Auto-dismiss non-error status after 8s
         if let Some(t) = self.status_since {
             if t.elapsed().as_secs() >= 8
                 && self.status.as_ref().map(|s| !s.is_error).unwrap_or(false)
@@ -332,17 +357,12 @@ impl ForgeApp {
             }
             WorkerMsg::InjectOk(r) => {
                 self.inject_done = true;
-                // source_iso is the resolved local path of the original (pre-inject) ISO.
                 let src = r.source_iso.to_string_lossy().into_owned();
                 if let Some(path) = r.artifacts.first() {
                     let out = path.to_string_lossy().into_owned();
-                    // Verify: show the original source so the user can confirm
-                    // the download is authentic (injected ISO won't match Ubuntu's SUMS).
                     if self.verify.source.is_empty() {
                         self.verify.source = src.clone();
                     }
-                    // Diff: base = original local ISO, target = injected ISO.
-                    // Using source_iso (resolved path) avoids URL-as-base-path problems.
                     if self.diff.base.is_empty() {
                         self.diff.base = src;
                     }
@@ -365,7 +385,7 @@ impl ForgeApp {
                 self.set_status(if matched {
                     StatusMsg::ok("Checksum matched")
                 } else {
-                    StatusMsg::err("Checksum MISMATCH")
+                    StatusMsg::err("Checksum mismatch")
                 });
             }
             WorkerMsg::Iso9660Ok(r) => {
@@ -383,9 +403,7 @@ impl ForgeApp {
                 self.diff_result = Some(*r);
                 self.diff_done = true;
                 self.job_running = false;
-                self.set_status(StatusMsg::ok(format!(
-                    "Diff complete — {total} changed files"
-                )));
+                self.set_status(StatusMsg::ok(format!("Diff: {total} changed files")));
             }
             WorkerMsg::BuildOk(r) => {
                 let path = r
@@ -472,7 +490,7 @@ impl ForgeApp {
     }
 
     fn spawn_inject(&mut self) {
-        self.start_job("Injecting autoinstall…");
+        self.start_job("Injecting…");
         let engine = Arc::clone(&self.engine);
         let tx = self.tx.clone();
         let inject = self.inject.clone();
@@ -596,7 +614,7 @@ impl ForgeApp {
     }
 
     fn spawn_doctor(&mut self) {
-        self.start_job("Running dependency check…");
+        self.start_job("Checking dependencies…");
         let engine = Arc::clone(&self.engine);
         let tx = self.tx.clone();
         self.current_task = Some(self.rt.spawn(async move {
@@ -679,1553 +697,1044 @@ impl ForgeApp {
 
     // ── Rendering ─────────────────────────────────────────────────────────────
 
-    fn render_doctor_panel(&mut self, ctx: &egui::Context) {
-        egui::Window::new("🩺 System Dependencies")
-            .collapsible(false)
-            .resizable(true)
-            .default_width(420.0)
-            .show(ctx, |ui| {
-                if self.job_running && self.doctor_result.is_none() {
-                    ui.horizontal(|ui| {
-                        ui.spinner();
-                        ui.label(
-                            RichText::new("Checking dependencies…")
-                                .size(13.0)
-                                .color(MUTED),
-                        );
-                    });
-                    return;
-                }
-                if let Some(ref r) = self.doctor_result.clone() {
-                    // OS row
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Host").size(12.0).color(MUTED));
-                        ui.label(
-                            RichText::new(format!("{} / {}", r.host_os, r.host_arch))
-                                .size(12.0)
-                                .color(TEXT)
-                                .monospace(),
-                        );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let (col, lbl) = if r.linux_supported {
-                                (GREEN, "Supported")
-                            } else {
-                                (AMBER, "Limited")
-                            };
-                            badge(
-                                ui,
-                                lbl,
-                                if r.linux_supported {
-                                    Color32::from_rgb(14, 36, 24)
-                                } else {
-                                    Color32::from_rgb(36, 28, 10)
-                                },
-                                col,
-                            );
-                        });
-                    });
-                    ui.separator();
-                    ui.add_space(6.0);
-
-                    // Tools grid
-                    let mut tools: Vec<(&str, bool)> =
-                        r.tooling.iter().map(|(k, v)| (k.as_str(), *v)).collect();
-                    tools.sort_by_key(|(k, _)| *k);
-
-                    let descriptions: std::collections::HashMap<&str, &str> = [
-                        ("xorriso", "ISO read/write (required)"),
-                        ("unsquashfs", "SquashFS extraction"),
-                        ("mksquashfs", "SquashFS packaging"),
-                        ("qemu-system-x86_64", "VM boot testing"),
-                        ("trivy", "CVE scanner"),
-                        ("syft", "SBOM generator"),
-                        ("grype", "Vulnerability scanner"),
-                        ("oscap", "OpenSCAP compliance"),
-                    ]
-                    .into_iter()
-                    .collect();
-
-                    egui::Grid::new("doctor_grid")
-                        .num_columns(3)
-                        .spacing([8.0, 6.0])
-                        .show(ui, |ui| {
-                            for (tool, ok) in &tools {
-                                ui.label(if *ok {
-                                    RichText::new("✓").color(GREEN)
-                                } else {
-                                    RichText::new("✗").color(RED)
-                                });
-                                ui.label(RichText::new(*tool).size(13.0).color(TEXT).monospace());
-                                let desc = descriptions.get(tool).copied().unwrap_or("");
-                                ui.label(RichText::new(desc).size(11.0).color(MUTED));
-                                ui.end_row();
-                            }
-                        });
-
-                    if !r.warnings.is_empty() {
-                        ui.add_space(8.0);
-                        ui.separator();
-                        ui.add_space(4.0);
-                        for w in &r.warnings {
-                            ui.horizontal(|ui| {
-                                ui.label(RichText::new("⚠").color(AMBER));
-                                ui.label(RichText::new(w).size(12.0).color(AMBER));
-                            });
-                        }
-                    }
-
-                    ui.add_space(8.0);
-                    if ui
-                        .add_enabled(!self.job_running, egui::Button::new("Re-run check"))
-                        .clicked()
-                    {
-                        self.spawn_doctor();
-                    }
-                    let ts_display = chrono::DateTime::parse_from_rfc3339(&r.timestamp)
-                        .map(|t| {
-                            t.with_timezone(&chrono::Local)
-                                .format("%Y-%m-%d %H:%M:%S")
-                                .to_string()
-                        })
-                        .unwrap_or_else(|_| r.timestamp.clone());
-                    ui.label(
-                        RichText::new(format!("Checked at {ts_display}"))
-                            .size(10.0)
-                            .color(MUTED),
-                    );
-                } else {
-                    ui.label(RichText::new("No results yet.").color(MUTED));
-                    if ui
-                        .add_enabled(!self.job_running, egui::Button::new("Run check"))
-                        .clicked()
-                    {
-                        self.spawn_doctor();
-                    }
-                }
-            });
-    }
-
-    fn render_sidebar(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("sidebar")
-            .exact_width(168.0)
-            .resizable(false)
-            .frame(Frame::new().fill(SIDEBAR))
-            .show(ctx, |ui| {
-                ui.add_space(16.0);
-                ui.label(RichText::new("⚙ ForgeISO").size(16.0).strong().color(TEXT));
-                ui.add_space(2.0);
-                ui.label(RichText::new("ISO Pipeline Wizard").size(11.0).color(MUTED));
-                ui.label(
-                    RichText::new(concat!("v", env!("CARGO_PKG_VERSION")))
-                        .size(10.0)
-                        .color(Color32::from_rgb(50, 60, 80)),
-                );
-                ui.add_space(16.0);
-                ui.separator();
-                ui.add_space(12.0);
-
-                for stage in Stage::ALL {
-                    let is_active = &self.active_stage == stage;
-                    let is_done = self.stage_done(stage);
-                    let unlocked = self.stage_unlocked(stage);
-
-                    let dot_color = if !unlocked {
-                        Color32::from_rgb(45, 52, 68) // locked — very dim
-                    } else if is_done {
-                        GREEN
-                    } else if is_active {
-                        ACCENT
-                    } else {
-                        MUTED
-                    };
-                    let bg = if is_active {
-                        Color32::from_rgba_premultiplied(59, 130, 246, 25)
-                    } else {
-                        Color32::TRANSPARENT
-                    };
-                    let dot_text = if !unlocked {
-                        "🔒".to_string()
-                    } else if is_done {
-                        "✓".to_string()
-                    } else {
-                        stage.step_num().to_string()
-                    };
-
-                    let resp = Frame::new()
-                        .fill(bg)
-                        .inner_margin(Vec2::new(8.0, 6.0))
-                        .show(ui, |ui| {
-                            ui.set_min_width(148.0);
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    RichText::new(&dot_text)
-                                        .size(11.0)
-                                        .color(dot_color)
-                                        .strong(),
-                                );
-                                ui.add_space(4.0);
-                                ui.vertical(|ui| {
-                                    let lc = if !unlocked {
-                                        Color32::from_rgb(55, 63, 82) // locked text
-                                    } else if is_active {
-                                        TEXT
-                                    } else {
-                                        Color32::from_rgb(180, 190, 210)
-                                    };
-                                    ui.label(RichText::new(stage.label()).size(13.0).color(lc));
-                                    ui.label(RichText::new(stage.sublabel()).size(10.0).color(
-                                        if unlocked {
-                                            MUTED
-                                        } else {
-                                            Color32::from_rgb(45, 52, 68)
-                                        },
-                                    ));
-                                });
-                            });
-                        });
-                    // Only allow navigation to unlocked stages
-                    if unlocked && resp.response.interact(egui::Sense::click()).clicked() {
-                        self.active_stage = stage.clone();
-                    }
-                    ui.add_space(2.0);
-                }
-
-                // Job progress at bottom
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                    ui.add_space(8.0);
-                    if self.job_running {
-                        if let Some(pct) = self.job_pct {
-                            ui.add(egui::ProgressBar::new(pct).desired_width(148.0));
-                        }
-                        ui.horizontal(|ui| {
-                            ui.spinner();
-                            ui.label(RichText::new(&self.job_phase).size(11.0).color(MUTED));
-                        });
-                    }
-                    ui.separator();
-                    ui.add_space(4.0);
-                    // Doctor button
-                    let doc_lbl = if self.doctor_open {
-                        "✕ Close Doctor"
-                    } else {
-                        "🩺 Doctor"
-                    };
-                    let doc_col = if self.doctor_open { ACCENT } else { MUTED };
-                    if ui
-                        .add(
-                            egui::Button::new(RichText::new(doc_lbl).size(12.0).color(doc_col))
-                                .fill(Color32::TRANSPARENT),
-                        )
-                        .on_hover_text("Check system dependencies")
-                        .clicked()
-                    {
-                        self.doctor_open = !self.doctor_open;
-                        if self.doctor_open && self.doctor_result.is_none() && !self.job_running {
-                            self.spawn_doctor();
-                        }
-                    }
-                    if let Some(ref r) = self.doctor_result.clone() {
-                        let ok = r.tooling.values().all(|v| *v);
-                        let dot_col = if ok { GREEN } else { AMBER };
-                        ui.label(RichText::new("●").size(9.0).color(dot_col));
-                    }
-                });
-            });
-    }
-
-    fn render_log_panel(&mut self, ctx: &egui::Context) {
-        let mut do_cancel = false;
-        egui::TopBottomPanel::bottom("log_panel")
-            .resizable(true)
-            .min_height(24.0)
-            .max_height(360.0)
-            .default_height(if self.log_open { 120.0 } else { 24.0 })
+    /// Top header bar: logo + status + cancel button.
+    fn render_header(&mut self, ctx: &egui::Context) {
+        egui::TopBottomPanel::top("header")
             .frame(
                 Frame::new()
-                    .fill(Color32::from_rgb(10, 14, 22))
-                    .stroke(Stroke::new(1.0, CARD_BORDER)),
+                    .fill(Color32::from_rgb(10, 14, 20))
+                    .stroke(Stroke::new(1.0, BORDER))
+                    .inner_margin(egui::Margin::symmetric(16, 10)),
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    let arrow = if self.log_open { "▼" } else { "▶" };
-                    let error_count = self
-                        .log_entries
-                        .iter()
-                        .filter(|e| e.level == LogLevel::Error)
-                        .count();
-                    let log_lbl = if error_count > 0 {
-                        format!(
-                            "{arrow} Log ({} entries, {} error{})",
-                            self.log_entries.len(),
-                            error_count,
-                            if error_count == 1 { "" } else { "s" }
-                        )
-                    } else {
-                        format!("{arrow} Log ({} entries)", self.log_entries.len())
-                    };
-                    let btn_col = if error_count > 0 && !self.log_open {
-                        RED
-                    } else {
-                        TEXT
-                    };
-                    if ui
-                        .add(
-                            egui::Button::new(RichText::new(log_lbl).size(12.0).color(btn_col))
-                                .fill(Color32::TRANSPARENT),
-                        )
-                        .clicked()
-                    {
-                        self.log_open = !self.log_open;
-                    }
-                    if self.job_running {
-                        if let Some(pct) = self.job_pct {
-                            ui.add(
-                                egui::ProgressBar::new(pct)
-                                    .desired_width(120.0)
-                                    .text(format!("{:.0}%", pct * 100.0)),
-                            );
-                        } else {
-                            ui.spinner();
-                        }
-                        ui.label(RichText::new(&self.job_phase).size(11.0).color(MUTED));
-                        if ghost_btn(ui, "✕ Cancel", true) {
-                            do_cancel = true;
-                        }
-                    }
-                    if self.log_open {
-                        ui.add_space(8.0);
-                        if ui.selectable_label(!self.log_errors_only, "All").clicked() {
-                            self.log_errors_only = false;
-                        }
-                        if ui
-                            .selectable_label(self.log_errors_only, "Errors")
-                            .clicked()
-                        {
-                            self.log_errors_only = true;
-                        }
-                        if ui.small_button("Clear").clicked() {
-                            self.log_entries.clear();
-                        }
-                    }
+                    // Logo
+                    ui.label(
+                        RichText::new("ForgeISO")
+                            .size(16.0)
+                            .strong()
+                            .color(Color32::WHITE),
+                    );
+                    ui.add_space(4.0);
+                    ui.label(RichText::new("ISO Customization Platform").size(11.0).color(MUTED));
+
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if let Some(ref s) = self.status {
-                            ui.label(RichText::new(&s.text).size(12.0).color(if s.is_error {
-                                RED
-                            } else {
-                                GREEN
-                            }));
-                        }
-                    });
-                });
-
-                if self.log_open {
-                    egui::ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .stick_to_bottom(true)
-                        .show(ui, |ui| {
-                            for entry in &self.log_entries {
-                                if self.log_errors_only && entry.level != LogLevel::Error {
-                                    continue;
-                                }
-                                let col = match entry.level {
-                                    LogLevel::Error => RED,
-                                    LogLevel::Warn => AMBER,
-                                    LogLevel::Info => MUTED,
-                                };
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        RichText::new(&entry.timestamp)
-                                            .size(10.0)
-                                            .color(Color32::from_rgb(60, 70, 90))
-                                            .monospace(),
-                                    );
-                                    ui.add_space(4.0);
-                                    ui.label(
-                                        RichText::new(&entry.phase)
-                                            .size(11.0)
-                                            .color(ACCENT)
-                                            .monospace(),
-                                    );
-                                    ui.add_space(4.0);
-                                    ui.label(RichText::new(&entry.message).size(11.0).color(col));
-                                });
-                            }
-                        });
-                }
-            });
-        if do_cancel {
-            self.cancel_job();
-        }
-    }
-
-    fn stage_done(&self, stage: &Stage) -> bool {
-        match stage {
-            Stage::Inject => self.inject_done,
-            Stage::Verify => self.verify_done,
-            Stage::Diff => self.diff_done,
-            Stage::Build => self.build_done,
-            Stage::Completion => false,
-        }
-    }
-
-    /// A stage is unlocked (navigable) once the preceding stage is done.
-    /// Inject is always available. Completion unlocks as soon as inject succeeds
-    /// so the user can view their artifact without running all optional stages.
-    fn stage_unlocked(&self, stage: &Stage) -> bool {
-        match stage {
-            Stage::Inject => true,
-            Stage::Verify => self.inject_done,
-            Stage::Diff => self.verify_done,
-            Stage::Build => self.diff_done,
-            Stage::Completion => self.build_done,
-        }
-    }
-
-    fn render_main(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default()
-            .frame(Frame::new().fill(BG))
-            .show(ctx, |ui| {
-                let panel_w = ui.available_width();
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        // Clamp both min and max width to the panel viewport width so that
-                        // Grid cells with desired_width(f32::INFINITY) cannot push the
-                        // content region wider than the visible area.
-                        ui.set_min_width(panel_w);
-                        ui.set_max_width(panel_w);
-                        ui.add_space(24.0);
-                        let margin = 24.0f32;
-                        Frame::new()
-                            .inner_margin(Vec2::new(margin, 0.0))
-                            .show(ui, |ui| match self.active_stage.clone() {
-                                Stage::Inject => self.show_inject(ui),
-                                Stage::Verify => self.show_verify(ui),
-                                Stage::Diff => self.show_diff(ui),
-                                Stage::Build => self.show_build(ui),
-                                Stage::Completion => self.show_completion(ui),
-                            });
-                        ui.add_space(32.0);
-                    });
-            });
-    }
-
-    // ── Stage: Inject ─────────────────────────────────────────────────────────
-
-    fn show_inject(&mut self, ui: &mut Ui) {
-        stage_header(
-            ui,
-            1,
-            "Inject",
-            "Configure and inject an autoinstall preset into your ISO. Fill in at minimum the Source ISO and Output fields, then click Run Inject.",
-        );
-
-        let running = self.job_running;
-        let mut do_inject = false;
-
-        // ── Section 1: Source & Output (always visible, most important) ──────
-        card(ui, |ui| {
-            ui.label(
-                RichText::new("Source & Output")
-                    .strong()
-                    .size(15.0)
-                    .color(TEXT),
-            );
-            ui.add_space(10.0);
-
-            let full_w = ui.available_width();
-            // Source ISO — full width
-            ui.label(
-                RichText::new("Source ISO  *  (path or URL)")
-                    .size(12.0)
-                    .color(MUTED),
-            );
-            ui.horizontal(|ui| {
-                ui.add_enabled(
-                    !running,
-                    egui::TextEdit::singleline(&mut self.inject.source)
-                        .hint_text("/path/to/ubuntu-24.04.iso  or  https://releases.ubuntu.com/…")
-                        .desired_width(full_w - 90.0)
-                        .min_size(Vec2::new(full_w - 90.0, 32.0))
-                        .font(egui::FontId::proportional(14.0)),
-                );
-                if ui
-                    .add_enabled(
-                        !running,
-                        egui::Button::new(RichText::new("📂 Browse").size(13.0))
-                            .min_size(Vec2::new(82.0, 32.0)),
-                    )
-                    .on_hover_text("Pick an ISO file")
-                    .clicked()
-                {
-                    worker::pick_iso(PickTarget::InjectSource, self.tx.clone());
-                }
-            });
-            ui.add_space(8.0);
-
-            // Output dir + filename — side by side
-            let col2_w = (full_w - 16.0) / 2.0;
-            egui::Grid::new("inject_src_grid")
-                .num_columns(2)
-                .spacing([16.0, 6.0])
-                .show(ui, |ui| {
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Output Directory  *").size(12.0).color(MUTED));
-                        ui.horizontal(|ui| {
-                            ui.add_enabled(
-                                !running,
-                                egui::TextEdit::singleline(&mut self.inject.output_dir)
-                                    .hint_text("~/.cache/forgeiso")
-                                    .desired_width(col2_w - 42.0),
-                            );
+                        // Cancel button if job running
+                        if self.job_running {
                             if ui
-                                .add_enabled(
-                                    !running,
-                                    egui::Button::new("📂").min_size(Vec2::new(34.0, 24.0)),
+                                .add(
+                                    egui::Button::new(
+                                        RichText::new("Cancel").size(12.0).color(Color32::WHITE),
+                                    )
+                                    .fill(Color32::from_rgb(100, 30, 30))
+                                    .stroke(Stroke::new(1.0, RED))
+                                    .min_size(Vec2::new(64.0, 24.0)),
                                 )
                                 .clicked()
                             {
-                                worker::pick_folder(PickTarget::InjectOutputDir, self.tx.clone());
+                                self.cancel_job();
                             }
-                        });
-                    });
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Output Filename").size(12.0).color(MUTED));
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.out_name)
-                                .hint_text("forgeiso-local.iso")
-                                .desired_width(col2_w),
-                        );
-                    });
-                    ui.end_row();
-                });
-
-            ui.add_space(10.0);
-            // Distro selector — tab-style buttons
-            ui.label(RichText::new("Distribution").size(12.0).color(MUTED));
-            ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                for (key, label, emoji) in &[
-                    ("ubuntu", "Ubuntu", "🟠"),
-                    ("fedora", "Fedora", "🔵"),
-                    ("arch", "Arch Linux", "⚪"),
-                    ("mint", "Linux Mint", "🟢"),
-                ] {
-                    let selected = self.inject.distro == *key;
-                    let fill = if selected {
-                        ACCENT
-                    } else {
-                        Color32::from_rgb(30, 38, 60)
-                    };
-                    let text_col = if selected {
-                        Color32::WHITE
-                    } else {
-                        Color32::from_rgb(180, 190, 210)
-                    };
-                    let btn = egui::Button::new(
-                        RichText::new(format!("{} {}", emoji, label))
-                            .size(13.0)
-                            .color(text_col),
-                    )
-                    .fill(fill)
-                    .stroke(Stroke::new(
-                        1.0,
-                        if selected { ACCENT } else { CARD_BORDER },
-                    ))
-                    .min_size(Vec2::new(110.0, 30.0));
-                    if ui.add_enabled(!running, btn).clicked() {
-                        self.inject.distro = key.to_string();
-                    }
-                    ui.add_space(4.0);
-                }
-            });
-        });
-
-        // ── Section 2: Identity ───────────────────────────────────────────────
-        card(ui, |ui| {
-            ui.label(RichText::new("👤 Identity").strong().size(15.0).color(TEXT));
-            ui.label(
-                RichText::new(
-                    "Sets the hostname and initial user account on the installed system.",
-                )
-                .size(11.0)
-                .color(MUTED),
-            );
-            ui.add_space(10.0);
-
-            let full_w = ui.available_width();
-            ui.label(RichText::new("Hostname").size(12.0).color(MUTED));
-            ui.add_enabled(
-                !running,
-                egui::TextEdit::singleline(&mut self.inject.hostname)
-                    .hint_text("my-server  (e.g.  web-01, dev-box, k8s-node1)")
-                    .desired_width(full_w)
-                    .min_size(Vec2::new(full_w, 32.0))
-                    .font(egui::FontId::proportional(15.0)),
-            );
-            ui.add_space(10.0);
-
-            let col2_w = (full_w - 16.0) / 2.0;
-            egui::Grid::new("identity_grid2")
-                .num_columns(2)
-                .spacing([16.0, 10.0])
-                .show(ui, |ui| {
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Username  *").size(12.0).color(MUTED));
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.username)
-                                .hint_text("admin")
-                                .desired_width(col2_w)
-                                .min_size(Vec2::new(col2_w, 32.0))
-                                .font(egui::FontId::proportional(15.0)),
-                        );
-                    });
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Real Name").size(12.0).color(MUTED));
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.realname)
-                                .hint_text("Jane Smith")
-                                .desired_width(col2_w)
-                                .min_size(Vec2::new(col2_w, 32.0))
-                                .font(egui::FontId::proportional(15.0)),
-                        );
-                    });
-                    ui.end_row();
-
-                    let pw_mismatch_here = !self.inject.password.is_empty()
-                        && !self.inject.password_confirm.is_empty()
-                        && self.inject.password != self.inject.password_confirm;
-                    ui.vertical(|ui| {
-                        let lbl_col = if pw_mismatch_here { RED } else { MUTED };
-                        ui.label(RichText::new("Password  *").size(12.0).color(lbl_col));
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.password)
-                                .password(true)
-                                .hint_text("Enter password")
-                                .desired_width(col2_w)
-                                .min_size(Vec2::new(col2_w, 32.0))
-                                .font(egui::FontId::proportional(15.0)),
-                        );
-                    });
-                    ui.vertical(|ui| {
-                        let lbl_col = if pw_mismatch_here { RED } else { MUTED };
-                        ui.label(
-                            RichText::new("Confirm Password  *")
-                                .size(12.0)
-                                .color(lbl_col),
-                        );
-                        ui.add_enabled(
-                            !running,
-                            egui::TextEdit::singleline(&mut self.inject.password_confirm)
-                                .password(true)
-                                .hint_text("Re-enter password")
-                                .desired_width(col2_w)
-                                .min_size(Vec2::new(col2_w, 32.0))
-                                .font(egui::FontId::proportional(15.0)),
-                        );
-                        if pw_mismatch_here {
-                            ui.add_space(2.0);
-                            ui.horizontal(|ui| {
+                            ui.add_space(8.0);
+                            ui.spinner();
+                            ui.add_space(4.0);
+                            ui.label(
+                                RichText::new(self.job_phase.clone())
+                                    .size(12.0)
+                                    .color(MUTED),
+                            );
+                            if let Some(pct) = self.job_pct {
+                                ui.add_space(8.0);
                                 ui.label(
-                                    RichText::new("⚠ Passwords do not match")
-                                        .size(11.0)
-                                        .color(RED),
+                                    RichText::new(format!("{:.0}%", pct * 100.0))
+                                        .size(12.0)
+                                        .color(ACCENT),
                                 );
-                            });
-                        } else if !self.inject.password.is_empty()
-                            && self.inject.password == self.inject.password_confirm
-                        {
-                            ui.add_space(2.0);
-                            ui.label(RichText::new("✓ Passwords match").size(11.0).color(GREEN));
+                            }
+                        } else if let Some(s) = &self.status.clone() {
+                            let col = if s.is_error { RED } else { GREEN };
+                            ui.label(RichText::new(&s.text).size(12.0).color(col));
                         }
                     });
-                    ui.end_row();
                 });
-        });
+            });
+    }
 
-        // ── Section 3: SSH Access ─────────────────────────────────────────────
-        let ssh_key_count = crate::state::lines(&self.inject.ssh_keys).len();
-        let ssh_summary = if ssh_key_count > 0 {
-            format!(
-                "{} key{}",
-                ssh_key_count,
-                if ssh_key_count == 1 { "" } else { "s" }
+    /// Horizontal tab strip under the header.
+    fn render_tabs(&mut self, ctx: &egui::Context) {
+        egui::TopBottomPanel::top("tabs")
+            .frame(
+                Frame::new()
+                    .fill(Color32::from_rgb(13, 17, 23))
+                    .stroke(Stroke::new(1.0, BORDER))
+                    .inner_margin(egui::Margin::symmetric(12, 0)),
             )
-        } else {
-            "no keys".into()
-        };
-        egui::CollapsingHeader::new(
-            RichText::new(format!("🔑 SSH Access  —  {}", ssh_summary))
-                .size(14.0)
-                .color(TEXT),
-        )
-        .id_salt("ssh_section")
-        .show(ui, |ui| {
-            ui.add_space(6.0);
-            Frame::new()
-                .fill(CARD)
-                .stroke(Stroke::new(1.0, CARD_BORDER))
-                .inner_margin(14.0f32)
-                .corner_radius(6.0f32)
-                .show(ui, |ui| {
-                    let w = ui.available_width();
-                    ui.label(
-                        RichText::new("Authorized Public Keys (one per line)")
-                            .size(12.0)
-                            .color(MUTED),
-                    );
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
                     ui.add_space(4.0);
-                    ui.add_enabled(
-                        !running,
-                        egui::TextEdit::multiline(&mut self.inject.ssh_keys)
-                            .hint_text("ssh-ed25519 AAAA…\nssh-rsa AAAA…")
-                            .desired_rows(3)
-                            .desired_width(w),
-                    );
-                    ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        ui.checkbox(
-                            &mut self.inject.ssh_install_server,
-                            "Install OpenSSH server",
-                        );
-                        ui.add_space(16.0);
-                        ui.checkbox(
-                            &mut self.inject.ssh_password_auth,
-                            "Allow password authentication",
-                        );
+                    for tab in &[Tab::Inject, Tab::Verify, Tab::Diff, Tab::Build, Tab::Doctor] {
+                        let active = *tab == self.active_tab;
+                        let label = tab.label();
+                        let done = match tab {
+                            Tab::Inject => self.inject_done,
+                            Tab::Verify => self.verify_done,
+                            Tab::Diff => self.diff_done,
+                            Tab::Build => self.build_done,
+                            Tab::Doctor => self.doctor_result.is_some(),
+                        };
+                        let text_col = if active {
+                            Color32::WHITE
+                        } else {
+                            Color32::from_rgb(139, 148, 158)
+                        };
+                        let fill = if active { TAB_ACTIVE } else { Color32::TRANSPARENT };
+                        let display = if done && !active {
+                            format!("{label} ✓")
+                        } else {
+                            label.to_string()
+                        };
+                        let btn = egui::Button::new(
+                            RichText::new(display).size(13.0).color(text_col),
+                        )
+                        .fill(fill)
+                        .stroke(Stroke::new(
+                            if active { 1.0 } else { 0.0 },
+                            Color32::from_rgb(48, 54, 61),
+                        ))
+                        .min_size(Vec2::new(0.0, 34.0));
+                        if ui.add(btn).clicked() {
+                            self.active_tab = tab.clone();
+                        }
+                        ui.add_space(2.0);
+                    }
+
+                    // Log toggle on the right
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add_space(4.0);
+                        let error_count = self
+                            .log_entries
+                            .iter()
+                            .filter(|e| e.level == LogLevel::Error)
+                            .count();
+                        let log_label = if error_count > 0 {
+                            format!("Log ({error_count} error{})", if error_count == 1 { "" } else { "s" })
+                        } else {
+                            format!("Log ({})", self.log_entries.len())
+                        };
+                        let log_col = if error_count > 0 { RED } else { MUTED };
+                        let log_btn = egui::Button::new(
+                            RichText::new(log_label).size(12.0).color(log_col),
+                        )
+                        .fill(Color32::TRANSPARENT)
+                        .stroke(Stroke::new(0.0, BORDER));
+                        if ui.add(log_btn).clicked() {
+                            self.log_open = !self.log_open;
+                        }
                     });
                 });
-        });
-        ui.add_space(4.0);
+            });
+    }
 
-        // ── Section 4: Network ────────────────────────────────────────────────
-        let net_summary = if !self.inject.static_ip.trim().is_empty() {
-            format!("static {}", self.inject.static_ip.trim())
-        } else {
-            "DHCP".into()
-        };
-        egui::CollapsingHeader::new(
-            RichText::new(format!("🌐 Network  —  {}", net_summary))
-                .size(14.0)
-                .color(TEXT),
-        )
-        .id_salt("net_section")
-        .show(ui, |ui| {
-            ui.add_space(6.0);
-            Frame::new()
-                .fill(CARD)
-                .stroke(Stroke::new(1.0, CARD_BORDER))
-                .inner_margin(14.0f32)
-                .corner_radius(6.0f32)
-                .show(ui, |ui| {
-                    let col2_w = (ui.available_width() - 16.0) / 2.0;
-                    egui::Grid::new("net_grid2")
-                        .num_columns(2)
-                        .spacing([16.0, 6.0])
-                        .show(ui, |ui| {
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("DNS Servers (one per line)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::multiline(&mut self.inject.dns_servers)
-                                        .hint_text("1.1.1.1\n8.8.8.8")
-                                        .desired_rows(2)
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("NTP Servers (one per line)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::multiline(&mut self.inject.ntp_servers)
-                                        .hint_text("pool.ntp.org")
-                                        .desired_rows(2)
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.end_row();
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("Static IP (CIDR, leave blank for DHCP)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.static_ip)
-                                        .hint_text("192.168.1.10/24")
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("Default Gateway").size(12.0).color(MUTED));
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.gateway)
-                                        .hint_text("192.168.1.1")
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.end_row();
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("HTTP Proxy").size(12.0).color(MUTED));
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.http_proxy)
-                                        .hint_text("http://proxy.corp.com:3128")
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("HTTPS Proxy").size(12.0).color(MUTED));
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.https_proxy)
-                                        .hint_text("https://proxy.corp.com:3128")
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.end_row();
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("No Proxy (comma-separated)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.no_proxy)
-                                        .hint_text("localhost,127.0.0.1,10.0.0.0/8")
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.end_row();
-                        });
-                });
-        });
-        ui.add_space(4.0);
-
-        // ── Section 5: System Settings ────────────────────────────────────────
-        let sys_summary = {
-            let tz = self.inject.timezone.trim();
-            let kb = self.inject.keyboard_layout.trim();
-            match (tz.is_empty(), kb.is_empty()) {
-                (false, false) => format!("{}, {}", tz, kb),
-                (false, true) => tz.to_string(),
-                (true, false) => kb.to_string(),
-                _ => "defaults".into(),
-            }
-        };
-        egui::CollapsingHeader::new(
-            RichText::new(format!("⚙ System Settings  —  {}", sys_summary))
-                .size(14.0)
-                .color(TEXT),
-        )
-        .id_salt("sys_section")
-        .show(ui, |ui| {
-            ui.add_space(6.0);
-            Frame::new()
-                .fill(CARD)
-                .stroke(Stroke::new(1.0, CARD_BORDER))
-                .inner_margin(14.0f32)
-                .corner_radius(6.0f32)
-                .show(ui, |ui| {
-                    let col2_w = (ui.available_width() - 16.0) / 2.0;
-                    egui::Grid::new("sys_grid2")
-                        .num_columns(2)
-                        .spacing([16.0, 6.0])
-                        .show(ui, |ui| {
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("Timezone").size(12.0).color(MUTED));
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.timezone)
-                                        .hint_text("America/New_York")
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("Locale").size(12.0).color(MUTED));
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.locale)
-                                        .hint_text("en_US.UTF-8")
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.end_row();
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("Keyboard Layout").size(12.0).color(MUTED));
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.keyboard_layout)
-                                        .hint_text("us")
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("Storage Layout").size(12.0).color(MUTED));
-                                egui::ComboBox::from_id_salt("storage_layout2")
-                                    .selected_text(if self.inject.storage_layout.is_empty() {
-                                        "direct (default)"
-                                    } else {
-                                        &self.inject.storage_layout
-                                    })
-                                    .show_ui(ui, |ui| {
-                                        for (v, l) in &[
-                                            ("", "direct (default)"),
-                                            ("direct", "direct"),
-                                            ("lvm", "lvm"),
-                                            ("zfs", "zfs"),
-                                        ] {
-                                            ui.selectable_value(
-                                                &mut self.inject.storage_layout,
-                                                v.to_string(),
-                                                *l,
-                                            );
-                                        }
-                                    });
-                            });
-                            ui.end_row();
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("APT Mirror (Ubuntu/Mint)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.inject.apt_mirror)
-                                        .hint_text("http://archive.ubuntu.com/ubuntu")
-                                        .desired_width(col2_w),
-                                );
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("Wallpaper Image").size(12.0).color(MUTED));
-                                ui.horizontal(|ui| {
-                                    ui.add_enabled(
-                                        !running,
-                                        egui::TextEdit::singleline(&mut self.inject.wallpaper_path)
-                                            .hint_text("/path/to/wallpaper.png")
-                                            .desired_width(col2_w - 42.0),
-                                    );
-                                    if ui
-                                        .add_enabled(
-                                            !running,
-                                            egui::Button::new("📂").min_size(Vec2::new(34.0, 24.0)),
-                                        )
-                                        .clicked()
-                                    {
-                                        worker::pick_file(
-                                            PickTarget::InjectWallpaper,
-                                            self.tx.clone(),
-                                        );
-                                    }
-                                });
-                            });
-                            ui.end_row();
-                        });
-                    ui.add_space(6.0);
-                    ui.label(
-                        RichText::new("Volume Label (ISO filesystem label, optional)")
-                            .size(12.0)
-                            .color(MUTED),
-                    );
-                    ui.add_enabled(
-                        !running,
-                        egui::TextEdit::singleline(&mut self.inject.output_label)
-                            .hint_text("FORGEISO")
-                            .desired_width(ui.available_width()),
-                    );
-                });
-        });
-        ui.add_space(4.0);
-
-        // ── Section 6: Packages & Commands ────────────────────────────────────
-        let pkg_count = crate::state::lines(&self.inject.packages).len();
-        let pkg_summary = if pkg_count > 0 {
-            format!(
-                "{} package{}",
-                pkg_count,
-                if pkg_count == 1 { "" } else { "s" }
+    /// Collapsible log strip at the bottom.
+    fn render_log(&mut self, ctx: &egui::Context) {
+        if !self.log_open {
+            return;
+        }
+        egui::TopBottomPanel::bottom("log_panel")
+            .resizable(true)
+            .min_height(120.0)
+            .default_height(180.0)
+            .frame(
+                Frame::new()
+                    .fill(Color32::from_rgb(10, 14, 20))
+                    .stroke(Stroke::new(1.0, BORDER))
+                    .inner_margin(egui::Margin::symmetric(12, 8)),
             )
-        } else {
-            "none".into()
-        };
-        egui::CollapsingHeader::new(
-            RichText::new(format!("📦 Packages & Commands  —  {}", pkg_summary)).size(14.0).color(TEXT),
-        )
-        .id_salt("pkg_section")
-        .show(ui, |ui| {
-            ui.add_space(6.0);
-            Frame::new().fill(CARD).stroke(Stroke::new(1.0, CARD_BORDER)).inner_margin(14.0f32).corner_radius(6.0f32).show(ui, |ui| {
-                let col2_w = (ui.available_width() - 16.0) / 2.0;
-                egui::Grid::new("pkg_grid2")
-                    .num_columns(2)
-                    .spacing([16.0, 6.0])
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Log").size(12.0).strong().color(MUTED));
+                    ui.add_space(12.0);
+                    ui.checkbox(
+                        &mut self.log_errors_only,
+                        RichText::new("Errors only").size(11.0).color(MUTED),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new("Clear").size(11.0).color(MUTED))
+                                    .fill(Color32::TRANSPARENT)
+                                    .stroke(Stroke::new(0.0, BORDER)),
+                            )
+                            .clicked()
+                        {
+                            self.log_entries.clear();
+                        }
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new("×").size(14.0).color(MUTED))
+                                    .fill(Color32::TRANSPARENT)
+                                    .stroke(Stroke::new(0.0, BORDER)),
+                            )
+                            .clicked()
+                        {
+                            self.log_open = false;
+                        }
+                    });
+                });
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .stick_to_bottom(true)
                     .show(ui, |ui| {
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new("Extra Packages (one per line)").size(12.0).color(MUTED));
-                            ui.add_enabled(!running, egui::TextEdit::multiline(&mut self.inject.packages).hint_text("curl\nvim\ngit\nnginx").desired_rows(4).desired_width(col2_w));
-                        });
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new("APT Repositories (one per line)").size(12.0).color(MUTED));
-                            ui.add_enabled(!running, egui::TextEdit::multiline(&mut self.inject.apt_repos).hint_text("ppa:user/repo\ndeb [arch=amd64] https://example.com/repo focal main").desired_rows(4).desired_width(col2_w));
-                        });
-                        ui.end_row();
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new("Run Commands (early — one per line)").size(12.0).color(MUTED));
-                            ui.label(RichText::new("Executes before packages are installed").size(10.0).color(MUTED));
-                            ui.add_enabled(!running, egui::TextEdit::multiline(&mut self.inject.run_commands).hint_text("echo hello").desired_rows(3).desired_width(col2_w));
-                        });
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new("Late Commands (post-install — one per line)").size(12.0).color(MUTED));
-                            ui.label(RichText::new("Executes after install via curtin in-target").size(10.0).color(MUTED));
-                            ui.add_enabled(!running, egui::TextEdit::multiline(&mut self.inject.late_commands).hint_text("curtin in-target -- apt-get upgrade -y").desired_rows(3).desired_width(col2_w));
-                        });
-                        ui.end_row();
+                        for entry in &self.log_entries {
+                            if self.log_errors_only && entry.level != LogLevel::Error {
+                                continue;
+                            }
+                            let col = match entry.level {
+                                LogLevel::Error => RED,
+                                LogLevel::Warn => AMBER,
+                                LogLevel::Info => MUTED,
+                            };
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new(&entry.timestamp)
+                                        .size(11.0)
+                                        .monospace()
+                                        .color(Color32::from_rgb(70, 80, 95)),
+                                );
+                                ui.add_space(4.0);
+                                ui.label(
+                                    RichText::new(format!("[{}]", entry.phase))
+                                        .size(11.0)
+                                        .monospace()
+                                        .color(ACCENT),
+                                );
+                                ui.add_space(4.0);
+                                ui.label(
+                                    RichText::new(&entry.message).size(11.0).monospace().color(col),
+                                );
+                            });
+                        }
                     });
             });
-        });
-        ui.add_space(4.0);
+    }
 
-        // ── Section 7: User, Services & Containers ────────────────────────────
-        let svc_en = crate::state::lines(&self.inject.enable_services).len();
-        let svc_dis = crate::state::lines(&self.inject.disable_services).len();
-        let container_parts: Vec<&str> = [
-            if self.inject.docker {
-                Some("Docker")
-            } else {
-                None
-            },
-            if self.inject.podman {
-                Some("Podman")
-            } else {
-                None
-            },
-        ]
-        .iter()
-        .filter_map(|x| *x)
-        .collect();
-        let svc_summary = {
-            let mut parts = Vec::new();
-            if svc_en > 0 {
-                parts.push(format!("{} enabled", svc_en));
-            }
-            if svc_dis > 0 {
-                parts.push(format!("{} disabled", svc_dis));
-            }
-            if !container_parts.is_empty() {
-                parts.push(container_parts.join(", "));
-            }
-            if parts.is_empty() {
-                "default".into()
-            } else {
-                parts.join(" · ")
-            }
-        };
-        egui::CollapsingHeader::new(
-            RichText::new(format!(
-                "👥 User, Services & Containers  —  {}",
-                svc_summary
-            ))
-            .size(14.0)
-            .color(TEXT),
-        )
-        .id_salt("svc_section")
-        .show(ui, |ui| {
-            ui.add_space(6.0);
-            Frame::new()
-                .fill(CARD)
-                .stroke(Stroke::new(1.0, CARD_BORDER))
-                .inner_margin(14.0f32)
-                .corner_radius(6.0f32)
-                .show(ui, |ui| {
-                    let col3_w = (ui.available_width() - 32.0) / 3.0;
-                    egui::Grid::new("user_svc_grid2")
-                        .num_columns(3)
-                        .spacing([16.0, 6.0])
-                        .show(ui, |ui| {
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("Extra Groups (one per line)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::multiline(&mut self.inject.user_groups)
-                                        .hint_text("docker\nsudo")
-                                        .desired_rows(3)
-                                        .desired_width(col3_w),
-                                );
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("Enable Services (one per line)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::multiline(&mut self.inject.enable_services)
-                                        .hint_text("docker\nnginx")
-                                        .desired_rows(3)
-                                        .desired_width(col3_w),
-                                );
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("Disable Services (one per line)")
-                                        .size(12.0)
-                                        .color(MUTED),
-                                );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::multiline(&mut self.inject.disable_services)
-                                        .hint_text("snapd\ncups.socket")
-                                        .desired_rows(3)
-                                        .desired_width(col3_w),
-                                );
-                            });
-                            ui.end_row();
-                        });
-                    ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        ui.checkbox(&mut self.inject.docker, "Install Docker");
-                        ui.add_space(16.0);
-                        ui.checkbox(&mut self.inject.podman, "Install Podman");
-                        ui.add_space(16.0);
-                        ui.checkbox(
-                            &mut self.inject.no_user_interaction,
-                            "Fully unattended (no prompts)",
-                        );
-                    });
-                });
-        });
-        ui.add_space(4.0);
+    // ── Tab content ────────────────────────────────────────────────────────────
 
-        // ── Section 8: Firewall ───────────────────────────────────────────────
-        let fw_summary = if self.inject.firewall_enabled {
-            let policy = if self.inject.firewall_policy.is_empty() {
-                "deny"
-            } else {
-                &self.inject.firewall_policy
-            };
-            format!("UFW enabled — default {}", policy)
-        } else {
-            "disabled".into()
-        };
-        egui::CollapsingHeader::new(
-            RichText::new(format!("🔥 Firewall  —  {}", fw_summary))
-                .size(14.0)
-                .color(TEXT),
-        )
-        .id_salt("fw_section")
-        .show(ui, |ui| {
-            ui.add_space(6.0);
-            Frame::new()
-                .fill(CARD)
-                .stroke(Stroke::new(1.0, CARD_BORDER))
-                .inner_margin(14.0f32)
-                .corner_radius(6.0f32)
-                .show(ui, |ui| {
-                    ui.checkbox(&mut self.inject.firewall_enabled, "Enable UFW firewall");
-                    if self.inject.firewall_enabled {
-                        ui.add_space(6.0);
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("Default policy").size(12.0).color(MUTED));
-                            ui.add_space(8.0);
-                            egui::ComboBox::from_id_salt("fw_policy2")
-                                .selected_text(if self.inject.firewall_policy.is_empty() {
-                                    "deny"
-                                } else {
-                                    &self.inject.firewall_policy
-                                })
-                                .show_ui(ui, |ui| {
-                                    for p in &["deny", "allow", "reject"] {
-                                        ui.selectable_value(
-                                            &mut self.inject.firewall_policy,
-                                            p.to_string(),
-                                            *p,
-                                        );
-                                    }
-                                });
-                        });
-                        ui.add_space(6.0);
-                        let col2_w = (ui.available_width() - 16.0) / 2.0;
-                        egui::Grid::new("fw_grid2")
-                            .num_columns(2)
-                            .spacing([16.0, 6.0])
-                            .show(ui, |ui| {
-                                ui.vertical(|ui| {
-                                    ui.label(
-                                        RichText::new("Allow Ports (one per line, e.g. 22/tcp)")
-                                            .size(12.0)
-                                            .color(MUTED),
-                                    );
-                                    ui.add_enabled(
-                                        !running,
-                                        egui::TextEdit::multiline(&mut self.inject.allow_ports)
-                                            .hint_text("22/tcp\n80/tcp\n443/tcp")
-                                            .desired_rows(3)
-                                            .desired_width(col2_w),
-                                    );
-                                });
-                                ui.vertical(|ui| {
-                                    ui.label(
-                                        RichText::new("Deny Ports (one per line)")
-                                            .size(12.0)
-                                            .color(MUTED),
-                                    );
-                                    ui.add_enabled(
-                                        !running,
-                                        egui::TextEdit::multiline(&mut self.inject.deny_ports)
-                                            .hint_text("23/tcp")
-                                            .desired_rows(3)
-                                            .desired_width(col2_w),
-                                    );
-                                });
-                                ui.end_row();
-                            });
+    fn show_inject(&mut self, ui: &mut Ui) {
+        let running = self.job_running;
+        let mut do_inject = false;
+
+        egui::ScrollArea::vertical()
+            .id_salt("inject_scroll")
+            .show(ui, |ui| {
+                ui.set_max_width(740.0);
+                ui.add_space(8.0);
+
+                // ── Source ISO ──────────────────────────────────────────────
+                lbl(ui, "Source ISO  (local path or URL)");
+                ui.horizontal(|ui| {
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.source)
+                            .hint_text("/path/to/ubuntu-24.04.iso  or  https://releases.ubuntu.com/…")
+                            .desired_width(ui.available_width() - 72.0)
+                            .min_size(Vec2::new(0.0, 30.0)),
+                    );
+                    if browse_btn(ui, !running) {
+                        worker::pick_iso(PickTarget::InjectSource, self.tx.clone());
                     }
                 });
-        });
-        ui.add_space(4.0);
 
-        // ── Section 9: Advanced (GRUB · Swap · Sysctl · SHA-256) ─────────────
-        egui::CollapsingHeader::new(
-            RichText::new("🔧 Advanced  —  GRUB · Swap · Sysctl · SHA-256 Verification").size(14.0).color(MUTED),
-        )
-        .id_salt("adv_section")
-        .show(ui, |ui| {
-            ui.add_space(6.0);
-            Frame::new().fill(CARD).stroke(Stroke::new(1.0, CARD_BORDER)).inner_margin(14.0f32).corner_radius(6.0f32).show(ui, |ui| {
-                // GRUB
-                ui.label(RichText::new("GRUB Boot Loader").strong().size(13.0).color(TEXT));
-                ui.add_space(4.0);
-                let col3_w_grub = (ui.available_width() - 32.0) / 3.0;
-                egui::Grid::new("grub_grid2")
-                    .num_columns(3)
-                    .spacing([16.0, 6.0])
+                ui.add_space(10.0);
+
+                // ── Output ─────────────────────────────────────────────────
+                let full_w = ui.available_width();
+                let col_w = (full_w - 12.0) / 2.0;
+                egui::Grid::new("output_grid")
+                    .num_columns(2)
+                    .spacing([12.0, 0.0])
                     .show(ui, |ui| {
                         ui.vertical(|ui| {
-                            let bad_timeout = !self.inject.grub_timeout.trim().is_empty()
-                                && self.inject.grub_timeout.trim().parse::<u32>().is_err();
-                            ui.label(RichText::new("Timeout (seconds)").size(12.0).color(if bad_timeout { RED } else { MUTED }));
-                            ui.add_enabled(!running, egui::TextEdit::singleline(&mut self.inject.grub_timeout).hint_text("5").desired_width(col3_w_grub));
-                            if bad_timeout { ui.label(RichText::new("Must be a whole number").size(10.0).color(RED)); }
+                            lbl(ui, "Output Directory");
+                            ui.horizontal(|ui| {
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::singleline(&mut self.inject.output_dir)
+                                        .desired_width(col_w - 44.0)
+                                        .min_size(Vec2::new(0.0, 28.0)),
+                                );
+                                if ui
+                                    .add_enabled(
+                                        !running,
+                                        egui::Button::new("📂")
+                                            .fill(SURFACE)
+                                            .stroke(Stroke::new(1.0, BORDER))
+                                            .min_size(Vec2::new(32.0, 28.0)),
+                                    )
+                                    .on_hover_text("Pick output folder")
+                                    .clicked()
+                                {
+                                    worker::pick_folder(PickTarget::InjectOutputDir, self.tx.clone());
+                                }
+                            });
                         });
                         ui.vertical(|ui| {
-                            ui.label(RichText::new("Default Entry Label").size(12.0).color(MUTED));
-                            ui.add_enabled(!running, egui::TextEdit::singleline(&mut self.inject.grub_default).hint_text("Ubuntu").desired_width(col3_w_grub));
-                        });
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new("Extra Kernel Args").size(12.0).color(MUTED));
-                            ui.add_enabled(!running, egui::TextEdit::singleline(&mut self.inject.grub_cmdline).hint_text("quiet splash").desired_width(col3_w_grub));
+                            lbl(ui, "Output Filename");
+                            ui.add_enabled(
+                                !running,
+                                egui::TextEdit::singleline(&mut self.inject.out_name)
+                                    .hint_text("forgeiso-local.iso")
+                                    .desired_width(col_w)
+                                    .min_size(Vec2::new(0.0, 28.0)),
+                            );
                         });
                         ui.end_row();
                     });
 
-                ui.add_space(10.0);
-                ui.separator();
-                ui.add_space(8.0);
+                rule(ui);
 
-                // Swap
-                ui.label(RichText::new("Swap File").strong().size(13.0).color(TEXT));
-                ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Size (MiB) — 0 or blank to disable").size(12.0).color(MUTED));
-                    ui.add_space(8.0);
-                    ui.add_enabled(!running, egui::TextEdit::singleline(&mut self.inject.swap_size_mb).hint_text("2048").desired_width(100.0));
-                    if !self.inject.swap_size_mb.trim().is_empty() && self.inject.swap_size_mb.trim().parse::<u32>().is_err() {
-                        ui.label(RichText::new("Must be a number").size(11.0).color(RED));
-                    }
+                // ── Identity ───────────────────────────────────────────────
+                section(ui, "Identity");
+                egui::Grid::new("identity_grid")
+                    .num_columns(2)
+                    .spacing([12.0, 8.0])
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            lbl(ui, "Hostname");
+                            ui.add_enabled(
+                                !running,
+                                egui::TextEdit::singleline(&mut self.inject.hostname)
+                                    .hint_text("my-server")
+                                    .desired_width(col_w)
+                                    .min_size(Vec2::new(0.0, 28.0)),
+                            );
+                        });
+                        ui.vertical(|ui| {
+                            lbl(ui, "Username");
+                            ui.add_enabled(
+                                !running,
+                                egui::TextEdit::singleline(&mut self.inject.username)
+                                    .hint_text("admin")
+                                    .desired_width(col_w)
+                                    .min_size(Vec2::new(0.0, 28.0)),
+                            );
+                        });
+                        ui.end_row();
+                        ui.vertical(|ui| {
+                            lbl(ui, "Password");
+                            ui.add_enabled(
+                                !running,
+                                egui::TextEdit::singleline(&mut self.inject.password)
+                                    .password(true)
+                                    .desired_width(col_w)
+                                    .min_size(Vec2::new(0.0, 28.0)),
+                            );
+                        });
+                        ui.vertical(|ui| {
+                            lbl(ui, "Confirm Password");
+                            let mismatch = !self.inject.password.is_empty()
+                                && !self.inject.password_confirm.is_empty()
+                                && self.inject.password != self.inject.password_confirm;
+                            let te = egui::TextEdit::singleline(&mut self.inject.password_confirm)
+                                .password(true)
+                                .desired_width(col_w)
+                                .min_size(Vec2::new(0.0, 28.0));
+                            let resp = ui.add_enabled(!running, te);
+                            if mismatch {
+                                resp.on_hover_text(
+                                    RichText::new("Passwords do not match").color(RED),
+                                );
+                                ui.label(
+                                    RichText::new("Passwords do not match").size(11.0).color(RED),
+                                );
+                            }
+                        });
+                        ui.end_row();
+                    });
+
+                rule(ui);
+
+                // ── Advanced Options ───────────────────────────────────────
+                egui::CollapsingHeader::new(
+                    RichText::new("Advanced Options").size(13.0).color(MUTED),
+                )
+                .default_open(false)
+                .show(ui, |ui| {
+                    ui.add_space(6.0);
+                    self.show_inject_advanced(ui, running);
                 });
 
-                ui.add_space(10.0);
-                ui.separator();
-                ui.add_space(8.0);
+                rule(ui);
 
-                // Sysctl
-                ui.label(RichText::new("Sysctl Parameters").strong().size(13.0).color(TEXT));
-                ui.add_space(4.0);
-                ui.label(RichText::new("One key=value per line — applied via /etc/sysctl.d/ on the installed system").size(11.0).color(MUTED));
-                ui.add_space(4.0);
-                ui.add_enabled(!running, egui::TextEdit::multiline(&mut self.inject.sysctl_pairs).hint_text("net.ipv4.ip_forward=1\nvm.swappiness=10").desired_width(ui.available_width()).desired_rows(3));
-                let bad_sysctl = crate::state::lines(&self.inject.sysctl_pairs).iter().filter(|s| !s.contains('=')).count();
-                if bad_sysctl > 0 {
-                    ui.label(RichText::new(format!("⚠ {bad_sysctl} line{} missing '=' will be ignored", if bad_sysctl == 1 { "" } else { "s" })).size(11.0).color(AMBER));
-                }
-
-                ui.add_space(10.0);
-                ui.separator();
-                ui.add_space(8.0);
-
-                // SHA-256 Verification
-                ui.label(RichText::new("Source ISO SHA-256 Verification (optional)").strong().size(13.0).color(TEXT));
-                ui.label(RichText::new("If provided, the source ISO is verified before injection begins. Leave blank to skip.").size(11.0).color(MUTED));
-                ui.add_space(4.0);
+                // ── Validation & Run ───────────────────────────────────────
+                let source_empty = self.inject.source.trim().is_empty();
+                let pw_mismatch = !self.inject.password.is_empty()
+                    && !self.inject.password_confirm.is_empty()
+                    && self.inject.password != self.inject.password_confirm;
                 let sha_invalid = {
                     let s = self.inject.expected_sha256.trim();
-                    !s.is_empty() && (s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()))
+                    !s.is_empty()
+                        && (s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()))
                 };
-                ui.add_enabled(
-                    !running,
-                    egui::TextEdit::singleline(&mut self.inject.expected_sha256)
-                        .hint_text("64-character hex SHA-256 (leave blank to skip check)")
-                        .desired_width(ui.available_width()),
-                );
-                if sha_invalid {
-                    ui.label(RichText::new("⚠ SHA-256 must be exactly 64 hex characters").size(11.0).color(RED));
-                }
-            });
-        });
 
-        ui.add_space(16.0);
-
-        // ── Run button + validation summary ───────────────────────────────────
-        let pw_mismatch = !self.inject.password.is_empty()
-            && !self.inject.password_confirm.is_empty()
-            && self.inject.password != self.inject.password_confirm;
-        let source_empty = self.inject.source.trim().is_empty();
-        let sha_invalid = {
-            let s = self.inject.expected_sha256.trim();
-            !s.is_empty() && (s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()))
-        };
-
-        Frame::new()
-            .fill(Color32::from_rgb(15, 20, 36))
-            .stroke(Stroke::new(1.0, CARD_BORDER))
-            .inner_margin(16.0f32)
-            .corner_radius(8.0f32)
-            .show(ui, |ui| {
-                ui.set_min_width(ui.available_width());
                 if source_empty {
                     ui.label(
-                        RichText::new("⚠  Source ISO is required before you can inject.")
+                        RichText::new("Source ISO is required to proceed.")
                             .size(12.0)
                             .color(AMBER),
                     );
-                    ui.add_space(6.0);
+                    ui.add_space(4.0);
                 }
                 if pw_mismatch {
                     ui.label(
-                        RichText::new("⚠  Passwords do not match.")
+                        RichText::new("Passwords do not match.")
                             .size(12.0)
                             .color(RED),
                     );
-                    ui.add_space(6.0);
+                    ui.add_space(4.0);
                 }
                 if sha_invalid {
                     ui.label(
-                        RichText::new("⚠  SHA-256 must be a 64-character hex string.")
+                        RichText::new("SHA-256 must be 64 hex characters.")
                             .size(12.0)
                             .color(RED),
                     );
-                    ui.add_space(6.0);
+                    ui.add_space(4.0);
                 }
-                let can_run = !source_empty && !pw_mismatch && !sha_invalid && !running;
-                let btn_label = if running {
-                    "⏳  Injecting…  (see Log below)"
-                } else {
-                    "🚀  Run Inject"
-                };
-                let btn_fill = if can_run {
-                    ACCENT
-                } else {
-                    Color32::from_rgb(40, 50, 80)
-                };
-                let btn = egui::Button::new(
-                    RichText::new(btn_label)
-                        .size(16.0)
-                        .color(Color32::WHITE)
-                        .strong(),
-                )
-                .fill(btn_fill)
-                .min_size(Vec2::new(ui.available_width(), 44.0));
-                if ui.add_enabled(can_run, btn).clicked() {
+
+                let can = !source_empty && !pw_mismatch && !sha_invalid && !running;
+                let btn_label = if running { "⏳  Injecting…" } else { "Inject ISO" };
+                if action_btn(ui, btn_label, can) {
                     do_inject = true;
                 }
+
+                // ── Result ────────────────────────────────────────────────
+                if let Some(r) = self.inject_result.clone() {
+                    ui.add_space(12.0);
+                    result_box(
+                        ui,
+                        Color32::from_rgb(13, 28, 18),
+                        Color32::from_rgb(40, 100, 55),
+                        |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new("✓  Inject Complete")
+                                        .size(14.0)
+                                        .strong()
+                                        .color(GREEN),
+                                );
+                            });
+                            ui.add_space(8.0);
+                            for a in &r.artifacts {
+                                let path_str = a.to_string_lossy();
+                                let avail = ui.available_width();
+                                ui.horizontal(|ui| {
+                                    ui.add(
+                                        egui::TextEdit::singleline(
+                                            &mut path_str.as_ref().to_string(),
+                                        )
+                                        .desired_width(avail - 130.0)
+                                        .interactive(false)
+                                        .font(egui::FontId::monospace(12.0)),
+                                    );
+                                    if ui
+                                        .add(
+                                            egui::Button::new("📋 Copy")
+                                                .fill(SURFACE)
+                                                .stroke(Stroke::new(1.0, BORDER)),
+                                        )
+                                        .clicked()
+                                    {
+                                        ui.ctx().copy_text(path_str.into_owned());
+                                    }
+                                    if ui
+                                        .add(
+                                            egui::Button::new("📂 Open")
+                                                .fill(SURFACE)
+                                                .stroke(Stroke::new(1.0, BORDER)),
+                                        )
+                                        .clicked()
+                                    {
+                                        if let Some(dir) = a.parent() {
+                                            let _ = std::process::Command::new("xdg-open")
+                                                .arg(dir)
+                                                .spawn();
+                                        }
+                                    }
+                                });
+                            }
+                            ui.add_space(8.0);
+                            ui.horizontal(|ui| {
+                                if continue_btn(ui, "→  Verify") {
+                                    self.active_tab = Tab::Verify;
+                                }
+                                ui.add_space(8.0);
+                                if continue_btn(ui, "→  Diff") {
+                                    self.active_tab = Tab::Diff;
+                                }
+                            });
+                        },
+                    );
+                }
+
+                ui.add_space(16.0);
             });
 
         if do_inject {
             self.spawn_inject();
         }
-
-        if let Some(r) = self.inject_result.clone() {
-            ui.add_space(12.0);
-            card_green(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("✓").size(24.0).color(GREEN));
-                    ui.add_space(8.0);
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Inject Complete").size(16.0).strong().color(GREEN));
-                        ui.label(RichText::new("Your ISO has been created. Copy the path below or open the folder.").size(12.0).color(MUTED));
-                    });
-                });
-                ui.add_space(10.0);
-                for a in &r.artifacts {
-                    let path_str = a.to_string_lossy();
-                    let full_w = ui.available_width();
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("💿").size(18.0));
-                        ui.add_space(4.0);
-                        ui.add(
-                            egui::TextEdit::singleline(&mut path_str.as_ref().to_string())
-                                .desired_width(full_w - 120.0)
-                                .interactive(false)
-                                .font(egui::FontId::monospace(12.0)),
-                        );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui
-                                .button("📂 Open")
-                                .on_hover_text("Open containing folder")
-                                .clicked()
-                            {
-                                if let Some(dir) = a.parent() {
-                                    let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
-                                }
-                            }
-                            if ui
-                                .button("📋 Copy")
-                                .on_hover_text("Copy full path")
-                                .clicked()
-                            {
-                                ui.ctx().copy_text(a.to_string_lossy().into_owned());
-                            }
-                        });
-                    });
-                }
-                ui.add_space(12.0);
-                ui.horizontal(|ui| {
-                    if continue_btn(ui, "Continue to Verify →") {
-                        self.active_stage = Stage::Verify;
-                    }
-                    ui.add_space(12.0);
-                    if ghost_btn(ui, "→ Skip to Results", true) {
-                        self.active_stage = Stage::Completion;
-                    }
-                });
-            });
-        }
     }
 
-    // ── Stage: Verify ─────────────────────────────────────────────────────────
+    fn show_inject_advanced(&mut self, ui: &mut Ui, running: bool) {
+        let full_w = ui.available_width();
+        let col_w = (full_w - 12.0) / 2.0;
 
-    fn show_verify(&mut self, ui: &mut Ui) {
-        stage_header(ui, 2, "Verify", "Verify the ISO checksum against official sources and confirm the image is a valid ISO-9660 filesystem. Both checks must pass before safe deployment.");
-
-        let running = self.job_running;
-        let mut do_verify = false;
-        let mut do_iso9660 = false;
-
-        card(ui, |ui| {
-            ui.label(
-                RichText::new("SHA-256 Checksum")
-                    .strong()
-                    .size(15.0)
-                    .color(TEXT),
-            );
-            ui.add_space(4.0);
-            ui.label(RichText::new("Verify the original source ISO against official checksums. Auto-detected for Ubuntu releases. For injected ISOs, the computed SHA-256 is shown even if no matching SUMS entry is found.").size(12.0).color(MUTED));
-            ui.add_space(10.0);
-
-            ui.label(RichText::new("ISO path *").size(12.0).color(MUTED));
-            ui.horizontal(|ui| {
-                ui.add_enabled(
-                    !running,
-                    egui::TextEdit::singleline(&mut self.verify.source)
-                        .hint_text("/path/to/ubuntu.iso or https://…")
-                        .desired_width(ui.available_width() - 82.0),
-                );
-                if ui
-                    .add_enabled(!running, egui::Button::new("📂 Browse"))
-                    .clicked()
-                {
-                    worker::pick_iso(PickTarget::VerifySource, self.tx.clone());
-                }
-            });
-            ui.add_space(6.0);
-            ui.label(
-                RichText::new("SHA256SUMS URL (optional — auto-detected for Ubuntu)")
-                    .size(12.0)
-                    .color(MUTED),
-            );
+        // ── SSH ──────────────────────────────────────────────────────────
+        section(ui, "SSH");
+        lbl(ui, "Authorized Public Keys  (one per line)");
+        ui.add_enabled(
+            !running,
+            egui::TextEdit::multiline(&mut self.inject.ssh_keys)
+                .hint_text("ssh-ed25519 AAAA…")
+                .desired_width(full_w)
+                .desired_rows(3),
+        );
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
             ui.add_enabled(
                 !running,
-                egui::TextEdit::singleline(&mut self.verify.sums_url)
-                    .hint_text("https://releases.ubuntu.com/24.04/SHA256SUMS")
-                    .desired_width(ui.available_width()),
+                egui::Checkbox::new(&mut self.inject.ssh_install_server, "Install OpenSSH server"),
             );
-            ui.add_space(12.0);
-            let can = !self.verify.source.trim().is_empty() && !running;
-            if primary_btn(
-                ui,
-                if running {
-                    "⏳ Verifying…"
-                } else {
-                    "✓ Verify Checksum"
-                },
-                can,
-            ) {
-                do_verify = true;
-            }
+            ui.add_space(16.0);
+            ui.add_enabled(
+                !running,
+                egui::Checkbox::new(&mut self.inject.ssh_password_auth, "Allow password auth"),
+            );
         });
 
-        if let Some(r) = self.verify_result.clone() {
-            let (bg, border, icon) = if r.matched {
-                (
-                    Color32::from_rgb(14, 36, 24),
-                    Color32::from_rgb(34, 100, 60),
-                    "✅",
-                )
-            } else {
-                (
-                    Color32::from_rgb(36, 14, 14),
-                    Color32::from_rgb(100, 34, 34),
-                    "❌",
-                )
-            };
-            Frame::new()
-                .fill(bg)
-                .stroke(Stroke::new(1.0, border))
-                .inner_margin(16.0f32)
-                .corner_radius(8.0f32)
-                .show(ui, |ui| {
+        rule(ui);
+
+        // ── Network ───────────────────────────────────────────────────────
+        section(ui, "Network");
+        egui::Grid::new("adv_net_grid")
+            .num_columns(2)
+            .spacing([12.0, 8.0])
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    lbl(ui, "DNS Servers  (one per line)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.dns_servers)
+                            .hint_text("8.8.8.8\n1.1.1.1")
+                            .desired_width(col_w)
+                            .desired_rows(2),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "NTP Servers  (one per line)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.ntp_servers)
+                            .hint_text("pool.ntp.org")
+                            .desired_width(col_w)
+                            .desired_rows(2),
+                    );
+                });
+                ui.end_row();
+                ui.vertical(|ui| {
+                    lbl(ui, "Static IP / CIDR  (blank = DHCP)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.static_ip)
+                            .hint_text("192.168.1.10/24")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "Gateway");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.gateway)
+                            .hint_text("192.168.1.1")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.end_row();
+                ui.vertical(|ui| {
+                    lbl(ui, "HTTP Proxy");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.http_proxy)
+                            .hint_text("http://proxy:3128")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "HTTPS Proxy");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.https_proxy)
+                            .hint_text("http://proxy:3128")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.end_row();
+            });
+        lbl(ui, "No-proxy (comma-separated)");
+        ui.add_enabled(
+            !running,
+            egui::TextEdit::singleline(&mut self.inject.no_proxy)
+                .hint_text("localhost,127.0.0.1,.internal")
+                .desired_width(full_w),
+        );
+
+        rule(ui);
+
+        // ── System ────────────────────────────────────────────────────────
+        section(ui, "System");
+        egui::Grid::new("adv_sys_grid")
+            .num_columns(2)
+            .spacing([12.0, 8.0])
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    lbl(ui, "Timezone");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.timezone)
+                            .hint_text("America/Chicago")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "Locale");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.locale)
+                            .hint_text("en_US.UTF-8")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.end_row();
+                ui.vertical(|ui| {
+                    lbl(ui, "Keyboard Layout");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.keyboard_layout)
+                            .hint_text("us")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "Storage Layout");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.storage_layout)
+                            .hint_text("lvm  (blank = direct)")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.end_row();
+                ui.vertical(|ui| {
+                    lbl(ui, "APT Mirror");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.apt_mirror)
+                            .hint_text("http://mirror.example.com/ubuntu")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "Wallpaper  (image path)");
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new(icon).size(24.0));
-                        ui.add_space(8.0);
-                        ui.vertical(|ui| {
-                            let col = if r.matched { GREEN } else { RED };
-                            ui.label(
-                                RichText::new(if r.matched {
-                                    "Checksum Matched"
-                                } else {
-                                    "Checksum MISMATCH"
-                                })
-                                .size(15.0)
-                                .strong()
-                                .color(col),
-                            );
-                            ui.label(RichText::new(&r.filename).size(12.0).color(MUTED));
-                        });
+                        ui.add_enabled(
+                            !running,
+                            egui::TextEdit::singleline(&mut self.inject.wallpaper_path)
+                                .desired_width(col_w - 44.0),
+                        );
+                        if ui
+                            .add_enabled(
+                                !running,
+                                egui::Button::new("📂")
+                                    .fill(SURFACE)
+                                    .stroke(Stroke::new(1.0, BORDER))
+                                    .min_size(Vec2::new(32.0, 24.0)),
+                            )
+                            .clicked()
+                        {
+                            worker::pick_file(PickTarget::InjectWallpaper, self.tx.clone());
+                        }
                     });
-                    ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Expected:").size(11.0).color(MUTED));
+                });
+                ui.end_row();
+            });
+
+        rule(ui);
+
+        // ── Packages ──────────────────────────────────────────────────────
+        section(ui, "Packages");
+        egui::Grid::new("adv_pkg_grid")
+            .num_columns(2)
+            .spacing([12.0, 8.0])
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    lbl(ui, "Extra Packages  (one per line)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.packages)
+                            .hint_text("curl\ngit\nvim")
+                            .desired_width(col_w)
+                            .desired_rows(3),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "Extra APT Repos  (one per line)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.apt_repos)
+                            .hint_text("ppa:example/ppa")
+                            .desired_width(col_w)
+                            .desired_rows(3),
+                    );
+                });
+                ui.end_row();
+            });
+
+        rule(ui);
+
+        // ── Commands ──────────────────────────────────────────────────────
+        section(ui, "Run Commands");
+        egui::Grid::new("adv_cmd_grid")
+            .num_columns(2)
+            .spacing([12.0, 8.0])
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    lbl(ui, "Early Commands  (run before packages)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.run_commands)
+                            .hint_text("apt-get update -qq")
+                            .desired_width(col_w)
+                            .desired_rows(3),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "Late Commands  (run at end of install)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.late_commands)
+                            .hint_text("systemctl enable myservice")
+                            .desired_width(col_w)
+                            .desired_rows(3),
+                    );
+                });
+                ui.end_row();
+            });
+
+        rule(ui);
+
+        // ── Services & Containers ─────────────────────────────────────────
+        section(ui, "Services & Containers");
+        egui::Grid::new("adv_svc_grid")
+            .num_columns(2)
+            .spacing([12.0, 8.0])
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    lbl(ui, "Enable Services  (one per line)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.enable_services)
+                            .hint_text("docker\nssh")
+                            .desired_width(col_w)
+                            .desired_rows(2),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "Disable Services  (one per line)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.disable_services)
+                            .hint_text("snapd")
+                            .desired_width(col_w)
+                            .desired_rows(2),
+                    );
+                });
+                ui.end_row();
+                ui.vertical(|ui| {
+                    lbl(ui, "User Groups  (one per line)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.user_groups)
+                            .hint_text("docker\nsudo")
+                            .desired_width(col_w)
+                            .desired_rows(2),
+                    );
+                });
+                ui.vertical(|ui| {
+                    ui.add_space(16.0);
+                    ui.add_enabled(
+                        !running,
+                        egui::Checkbox::new(&mut self.inject.docker, "Install Docker"),
+                    );
+                    ui.add_space(4.0);
+                    ui.add_enabled(
+                        !running,
+                        egui::Checkbox::new(&mut self.inject.podman, "Install Podman"),
+                    );
+                    ui.add_space(4.0);
+                    ui.add_enabled(
+                        !running,
+                        egui::Checkbox::new(
+                            &mut self.inject.no_user_interaction,
+                            "No user interaction",
+                        ),
+                    );
+                });
+                ui.end_row();
+            });
+
+        rule(ui);
+
+        // ── Firewall ──────────────────────────────────────────────────────
+        section(ui, "Firewall  (UFW)");
+        ui.horizontal(|ui| {
+            ui.add_enabled(
+                !running,
+                egui::Checkbox::new(&mut self.inject.firewall_enabled, "Enable UFW"),
+            );
+            if self.inject.firewall_enabled {
+                ui.add_space(16.0);
+                lbl(ui, "Default policy:");
+                ui.add_space(4.0);
+                ui.add_enabled(
+                    !running,
+                    egui::TextEdit::singleline(&mut self.inject.firewall_policy)
+                        .hint_text("deny")
+                        .desired_width(80.0),
+                );
+            }
+        });
+        if self.inject.firewall_enabled {
+            ui.add_space(6.0);
+            egui::Grid::new("adv_fw_grid")
+                .num_columns(2)
+                .spacing([12.0, 8.0])
+                .show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        lbl(ui, "Allow Ports  (one per line, e.g. 22/tcp)");
+                        ui.add_enabled(
+                            !running,
+                            egui::TextEdit::multiline(&mut self.inject.allow_ports)
+                                .hint_text("22/tcp\n443")
+                                .desired_width(col_w)
+                                .desired_rows(3),
+                        );
+                    });
+                    ui.vertical(|ui| {
+                        lbl(ui, "Deny Ports  (one per line)");
+                        ui.add_enabled(
+                            !running,
+                            egui::TextEdit::multiline(&mut self.inject.deny_ports)
+                                .hint_text("23")
+                                .desired_width(col_w)
+                                .desired_rows(3),
+                        );
+                    });
+                    ui.end_row();
+                });
+        }
+
+        rule(ui);
+
+        // ── Boot & Storage ────────────────────────────────────────────────
+        section(ui, "Boot & Storage");
+        egui::Grid::new("adv_boot_grid")
+            .num_columns(2)
+            .spacing([12.0, 8.0])
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    lbl(ui, "GRUB Timeout  (seconds)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.grub_timeout)
+                            .hint_text("5")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "GRUB Default Entry");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.grub_default)
+                            .hint_text("Ubuntu")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.end_row();
+                ui.vertical(|ui| {
+                    lbl(ui, "Extra Kernel Cmdline Args");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.grub_cmdline)
+                            .hint_text("quiet splash")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "Swap Size  (MB, blank = none)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.swap_size_mb)
+                            .hint_text("2048")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.end_row();
+            });
+        lbl(ui, "Sysctl  (key=value, one per line)");
+        ui.add_enabled(
+            !running,
+            egui::TextEdit::multiline(&mut self.inject.sysctl_pairs)
+                .hint_text("net.ipv4.ip_forward=1\nvm.swappiness=10")
+                .desired_width(full_w)
+                .desired_rows(3),
+        );
+
+        rule(ui);
+
+        // ── Output Options ────────────────────────────────────────────────
+        section(ui, "Output Options");
+        egui::Grid::new("adv_out_grid")
+            .num_columns(2)
+            .spacing([12.0, 8.0])
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    lbl(ui, "Volume Label  (blank = keep original)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.output_label)
+                            .hint_text("MY-UBUNTU")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "Expected SHA-256  (blank = skip check)");
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.expected_sha256)
+                            .hint_text("64-char hex")
+                            .desired_width(col_w),
+                    );
+                });
+                ui.end_row();
+            });
+        ui.add_space(4.0);
+        ui.add_enabled(
+            !running,
+            egui::Checkbox::new(
+                &mut self.inject.no_user_interaction,
+                "No user interaction  (fully unattended install)",
+            ),
+        );
+        ui.add_space(6.0);
+    }
+
+    fn show_verify(&mut self, ui: &mut Ui) {
+        let running = self.job_running;
+        let mut do_verify = false;
+        let mut do_9660 = false;
+
+        egui::ScrollArea::vertical()
+            .id_salt("verify_scroll")
+            .show(ui, |ui| {
+                ui.set_max_width(740.0);
+                ui.add_space(8.0);
+
+                // ── SHA-256 Checksum ────────────────────────────────────
+                ui.label(
+                    RichText::new("SHA-256 Checksum Verification")
+                        .size(15.0)
+                        .strong()
+                        .color(TEXT),
+                );
+                ui.add_space(4.0);
+                ui.label(
+                    RichText::new(
+                        "Verifies an ISO against its official SHA256SUMS file. \
+                         Auto-detected for Ubuntu. For injected or renamed ISOs, \
+                         the computed hash is displayed for your records.",
+                    )
+                    .size(12.0)
+                    .color(MUTED),
+                );
+                ui.add_space(10.0);
+
+                lbl(ui, "ISO Path  (local path or URL)");
+                ui.horizontal(|ui| {
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.verify.source)
+                            .hint_text("/path/to/ubuntu.iso")
+                            .desired_width(ui.available_width() - 72.0)
+                            .min_size(Vec2::new(0.0, 28.0)),
+                    );
+                    if browse_btn(ui, !running) {
+                        worker::pick_iso(PickTarget::VerifySource, self.tx.clone());
+                    }
+                });
+
+                ui.add_space(6.0);
+                lbl(ui, "SHA256SUMS URL  (optional — auto-detected for Ubuntu)");
+                ui.add_enabled(
+                    !running,
+                    egui::TextEdit::singleline(&mut self.verify.sums_url)
+                        .hint_text("https://releases.ubuntu.com/24.04/SHA256SUMS")
+                        .desired_width(ui.available_width()),
+                );
+
+                ui.add_space(12.0);
+                let can_verify = !self.verify.source.trim().is_empty() && !running;
+                let verify_lbl = if running && self.job_phase.to_lowercase().contains("verify") {
+                    "⏳  Verifying…"
+                } else {
+                    "Verify Checksum"
+                };
+                if action_btn(ui, verify_lbl, can_verify) {
+                    do_verify = true;
+                }
+
+                // ── Verify result ────────────────────────────────────────
+                if let Some(r) = self.verify_result.clone() {
+                    ui.add_space(12.0);
+                    let (fill, border, icon) = if r.matched {
+                        (
+                            Color32::from_rgb(13, 28, 18),
+                            Color32::from_rgb(40, 100, 55),
+                            "✅",
+                        )
+                    } else {
+                        (
+                            Color32::from_rgb(30, 15, 15),
+                            Color32::from_rgb(100, 40, 40),
+                            "⚠️",
+                        )
+                    };
+                    result_box(ui, fill, border, |ui| {
+                        let col = if r.matched { GREEN } else { AMBER };
+                        ui.label(
+                            RichText::new(format!(
+                                "{}  {}",
+                                icon,
+                                if r.matched { "Checksum Matched" } else { "Checksum Not Matched" }
+                            ))
+                            .size(14.0)
+                            .strong()
+                            .color(col),
+                        );
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("File:    ").size(12.0).monospace().color(MUTED));
+                            ui.label(RichText::new(&r.filename).size(12.0).monospace().color(TEXT));
+                        });
+                        // Expected
                         let exp_display = if r.expected.len() == 64
                             && r.expected.chars().all(|c| c.is_ascii_hexdigit())
                         {
@@ -2233,782 +1742,666 @@ impl ForgeApp {
                         } else {
                             r.expected.clone()
                         };
-                        ui.label(
-                            RichText::new(exp_display)
-                                .size(11.0)
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new("Expected:").size(12.0).monospace().color(MUTED),
+                            );
+                            ui.label(
+                                RichText::new(exp_display).size(12.0).monospace().color(MUTED),
+                            );
+                        });
+                        // Actual
+                        let act_col = if r.matched { GREEN } else { AMBER };
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new("Actual:  ").size(12.0).monospace().color(MUTED),
+                            );
+                            ui.label(
+                                RichText::new(format!(
+                                    "{}…",
+                                    &r.actual[..32.min(r.actual.len())]
+                                ))
+                                .size(12.0)
                                 .monospace()
-                                .color(MUTED),
-                        );
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Actual:  ").size(11.0).color(MUTED));
-                        let col = if r.matched { GREEN } else { RED };
-                        ui.label(
-                            RichText::new(format!("{}…", &r.actual[..32.min(r.actual.len())]))
-                                .size(11.0)
-                                .monospace()
-                                .color(col),
-                        );
-                        if ui
-                            .small_button("📋")
-                            .on_hover_text("Copy full SHA-256")
-                            .clicked()
-                        {
-                            ui.ctx().copy_text(r.actual.clone());
-                        }
-                    });
-                });
-            ui.add_space(12.0);
-        }
-
-        card(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.label(
-                        RichText::new("ISO-9660 Compliance")
-                            .strong()
-                            .size(15.0)
-                            .color(TEXT),
-                    );
-                    ui.label(
-                        RichText::new("Confirms valid ISO-9660 PVD and El Torito boot catalog.")
-                            .size(12.0)
-                            .color(MUTED),
-                    );
-                });
-                if let Some(ref r) = self.iso9660_result {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                        let (col, lbl) = if r.compliant {
-                            (GREEN, "Compliant")
-                        } else {
-                            (RED, "Non-Compliant")
-                        };
-                        badge(
-                            ui,
-                            lbl,
-                            if r.compliant {
-                                Color32::from_rgb(14, 36, 24)
-                            } else {
-                                Color32::from_rgb(36, 14, 14)
-                            },
-                            col,
-                        );
-                    });
-                }
-            });
-            ui.add_space(10.0);
-            let can = !self.verify.source.trim().is_empty() && !running;
-            if ghost_btn(
-                ui,
-                if running {
-                    "⏳ Checking…"
-                } else {
-                    "Validate ISO-9660"
-                },
-                can,
-            ) {
-                do_iso9660 = true;
-            }
-
-            if let Some(ref r) = self.iso9660_result {
-                ui.add_space(10.0);
-                let rows: &[(bool, &str, String)] = &[
-                    (
-                        r.compliant,
-                        "ISO-9660 PVD (CD001)",
-                        if r.compliant {
-                            "Confirmed at sector 16".into()
-                        } else {
-                            "Not found".into()
-                        },
-                    ),
-                    (r.size_bytes > 0, "Image size", fmt_bytes(r.size_bytes)),
-                    (
-                        r.el_torito_present,
-                        "El Torito boot catalog",
-                        if r.el_torito_present {
-                            "Present".into()
-                        } else {
-                            "Not found".into()
-                        },
-                    ),
-                    (
-                        r.boot_bios,
-                        "BIOS boot entry",
-                        if r.boot_bios {
-                            "Detected".into()
-                        } else {
-                            "Not detected".into()
-                        },
-                    ),
-                    (
-                        r.boot_uefi,
-                        "UEFI boot entry",
-                        if r.boot_uefi {
-                            "Detected".into()
-                        } else {
-                            "Not detected".into()
-                        },
-                    ),
-                ];
-                for (ok, label, detail) in rows {
-                    ui.horizontal(|ui| {
-                        ui.label(if *ok { "✅" } else { "❌" });
-                        ui.label(
-                            RichText::new(*label)
-                                .size(13.0)
-                                .color(Color32::from_rgb(180, 190, 210)),
-                        );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(RichText::new(detail).size(12.0).color(MUTED).monospace());
+                                .color(act_col),
+                            );
+                            if ui
+                                .small_button("📋")
+                                .on_hover_text("Copy full SHA-256")
+                                .clicked()
+                            {
+                                ui.ctx().copy_text(r.actual.clone());
+                            }
                         });
                     });
-                    ui.separator();
                 }
+
+                rule(ui);
+
+                // ── ISO-9660 Validation ──────────────────────────────────
                 ui.label(
-                    RichText::new(format!("Method: {}", r.check_method))
-                        .size(11.0)
-                        .color(MUTED),
+                    RichText::new("ISO-9660 Structure Validation")
+                        .size(15.0)
+                        .strong()
+                        .color(TEXT),
                 );
-            }
-        });
+                ui.add_space(4.0);
+                ui.label(
+                    RichText::new(
+                        "Checks that the ISO has a valid ISO-9660 filesystem header. \
+                         Uses the same source path as checksum verification above.",
+                    )
+                    .size(12.0)
+                    .color(MUTED),
+                );
+                ui.add_space(10.0);
+                let can_9660 = !self.verify.source.trim().is_empty() && !running;
+                let iso_lbl = if running && self.job_phase.to_lowercase().contains("9660") {
+                    "⏳  Validating…"
+                } else {
+                    "Validate ISO-9660"
+                };
+                if small_btn(ui, iso_lbl, can_9660) {
+                    do_9660 = true;
+                }
+
+                if let Some(r) = self.iso9660_result.clone() {
+                    ui.add_space(8.0);
+                    let (fill, border, msg, col) = if r.compliant {
+                        (
+                            Color32::from_rgb(13, 28, 18),
+                            Color32::from_rgb(40, 100, 55),
+                            "✅  ISO-9660 Compliant",
+                            GREEN,
+                        )
+                    } else {
+                        (
+                            Color32::from_rgb(30, 15, 15),
+                            Color32::from_rgb(100, 40, 40),
+                            "❌  Not Compliant",
+                            RED,
+                        )
+                    };
+                    result_box(ui, fill, border, |ui| {
+                        ui.label(RichText::new(msg).size(13.0).strong().color(col));
+                        if let Some(vid) = &r.volume_id {
+                            ui.label(
+                                RichText::new(format!("Volume ID: {vid}"))
+                                    .size(12.0)
+                                    .color(MUTED),
+                            );
+                        }
+                        if let Some(err) = &r.error {
+                            ui.label(RichText::new(err).size(11.0).color(RED));
+                        }
+                    });
+                }
+
+                ui.add_space(16.0);
+            });
 
         if do_verify {
             self.spawn_verify();
         }
-        if do_iso9660 {
+        if do_9660 {
             self.spawn_iso9660();
-        }
-
-        if self.verify_result.is_some() || self.iso9660_result.is_some() {
-            let can_proceed = self
-                .verify_result
-                .as_ref()
-                .map(|r| r.matched)
-                .unwrap_or(false)
-                && self
-                    .iso9660_result
-                    .as_ref()
-                    .map(|r| r.compliant)
-                    .unwrap_or(false);
-            card_green(ui, |ui| {
-                let title = if can_proceed {
-                    "✓ Verification Passed"
-                } else {
-                    "⚠ Verification Complete"
-                };
-                let col = if can_proceed { GREEN } else { AMBER };
-                ui.label(RichText::new(title).size(16.0).strong().color(col));
-                if !can_proceed {
-                    ui.add_space(4.0);
-                    ui.label(RichText::new("One or more checks did not pass. You can still continue, but deployment risk is elevated.").size(12.0).color(AMBER));
-                }
-                ui.add_space(10.0);
-                if continue_btn(ui, "Continue to Diff →") {
-                    self.active_stage = Stage::Diff;
-                }
-            });
         }
     }
 
-    // ── Stage: Diff ───────────────────────────────────────────────────────────
-
     fn show_diff(&mut self, ui: &mut Ui) {
-        stage_header(ui, 3, "Diff", "Compare the original and injected ISOs to see exactly what changed — added, removed, and modified files.");
-
         let running = self.job_running;
         let mut do_diff = false;
 
-        card(ui, |ui| {
-            ui.label(RichText::new("ISO Diff").strong().size(15.0).color(TEXT));
-            ui.add_space(4.0);
-            ui.label(
-                RichText::new("Compare two ISOs to see added, removed, and modified files.")
+        egui::ScrollArea::vertical()
+            .id_salt("diff_scroll")
+            .show(ui, |ui| {
+                ui.set_max_width(740.0);
+                ui.add_space(8.0);
+
+                ui.label(
+                    RichText::new("Compare Two ISO Images")
+                        .size(15.0)
+                        .strong()
+                        .color(TEXT),
+                );
+                ui.add_space(4.0);
+                ui.label(
+                    RichText::new(
+                        "Select the original (base) and modified (target) ISOs \
+                         to see what files were added, removed, or changed.",
+                    )
                     .size(12.0)
                     .color(MUTED),
-            );
-            ui.add_space(10.0);
-            let diff_col2_w = (ui.available_width() - 16.0) / 2.0;
-            egui::Grid::new("diff_grid")
-                .num_columns(2)
-                .spacing([16.0, 8.0])
-                .show(ui, |ui| {
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Base ISO path").size(12.0).color(MUTED));
-                        ui.horizontal(|ui| {
-                            ui.add_enabled(
-                                !running,
-                                egui::TextEdit::singleline(&mut self.diff.base)
-                                    .hint_text("/path/to/original.iso")
-                                    .desired_width(diff_col2_w - 42.0),
-                            );
-                            if ui.add_enabled(!running, egui::Button::new("📂")).clicked() {
-                                worker::pick_iso(PickTarget::DiffBase, self.tx.clone());
+                );
+                ui.add_space(12.0);
+
+                let full_w = ui.available_width();
+                let col_w = (full_w - 12.0) / 2.0;
+
+                egui::Grid::new("diff_paths")
+                    .num_columns(2)
+                    .spacing([12.0, 0.0])
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            lbl(ui, "Base ISO  (original)");
+                            ui.horizontal(|ui| {
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::singleline(&mut self.diff.base)
+                                        .hint_text("/path/to/original.iso")
+                                        .desired_width(col_w - 44.0)
+                                        .min_size(Vec2::new(0.0, 28.0)),
+                                );
+                                if ui
+                                    .add_enabled(
+                                        !running,
+                                        egui::Button::new("📂")
+                                            .fill(SURFACE)
+                                            .stroke(Stroke::new(1.0, BORDER))
+                                            .min_size(Vec2::new(32.0, 28.0)),
+                                    )
+                                    .on_hover_text("Browse for base ISO")
+                                    .clicked()
+                                {
+                                    worker::pick_iso(PickTarget::DiffBase, self.tx.clone());
+                                }
+                            });
+                        });
+                        ui.vertical(|ui| {
+                            lbl(ui, "Target ISO  (modified)");
+                            ui.horizontal(|ui| {
+                                ui.add_enabled(
+                                    !running,
+                                    egui::TextEdit::singleline(&mut self.diff.target)
+                                        .hint_text("/path/to/modified.iso")
+                                        .desired_width(col_w - 44.0)
+                                        .min_size(Vec2::new(0.0, 28.0)),
+                                );
+                                if ui
+                                    .add_enabled(
+                                        !running,
+                                        egui::Button::new("📂")
+                                            .fill(SURFACE)
+                                            .stroke(Stroke::new(1.0, BORDER))
+                                            .min_size(Vec2::new(32.0, 28.0)),
+                                    )
+                                    .on_hover_text("Browse for target ISO")
+                                    .clicked()
+                                {
+                                    worker::pick_iso(PickTarget::DiffTarget, self.tx.clone());
+                                }
+                            });
+                        });
+                        ui.end_row();
+                    });
+
+                ui.add_space(12.0);
+                let can = !self.diff.base.trim().is_empty()
+                    && !self.diff.target.trim().is_empty()
+                    && !running;
+                let diff_lbl = if running { "⏳  Comparing…" } else { "Compare ISOs" };
+                if action_btn(ui, diff_lbl, can) {
+                    do_diff = true;
+                }
+
+                // ── Results ──────────────────────────────────────────────
+                if let Some(r) = self.diff_result.clone() {
+                    let added = r.added.len();
+                    let removed = r.removed.len();
+                    let modified = r.modified.len();
+                    let unchanged = r.unchanged;
+
+                    ui.add_space(16.0);
+
+                    // Summary row
+                    ui.horizontal(|ui| {
+                        for (n, label, col) in [
+                            (added, "Added", GREEN),
+                            (removed, "Removed", RED),
+                            (modified, "Modified", AMBER),
+                            (unchanged, "Unchanged", MUTED),
+                        ] {
+                            Frame::new()
+                                .fill(SURFACE)
+                                .stroke(Stroke::new(1.0, BORDER))
+                                .inner_margin(12.0f32)
+                                .corner_radius(6.0f32)
+                                .show(ui, |ui| {
+                                    ui.set_min_width(90.0);
+                                    ui.vertical_centered(|ui| {
+                                        ui.label(
+                                            RichText::new(n.to_string())
+                                                .size(22.0)
+                                                .strong()
+                                                .color(col),
+                                        );
+                                        ui.label(RichText::new(label).size(11.0).color(MUTED));
+                                    });
+                                });
+                            ui.add_space(8.0);
+                        }
+                    });
+
+                    ui.add_space(10.0);
+
+                    // Filter + search
+                    ui.horizontal(|ui| {
+                        for (filter, label) in [
+                            (DiffFilter::All, "All"),
+                            (DiffFilter::Added, "Added"),
+                            (DiffFilter::Removed, "Removed"),
+                            (DiffFilter::Modified, "Modified"),
+                        ] {
+                            let active = self.diff_filter == filter;
+                            let fill = if active { ACCENT } else { SURFACE };
+                            let col = if active { Color32::WHITE } else { MUTED };
+                            if ui
+                                .add(
+                                    egui::Button::new(RichText::new(label).size(12.0).color(col))
+                                        .fill(fill)
+                                        .stroke(Stroke::new(1.0, if active { ACCENT } else { BORDER }))
+                                        .min_size(Vec2::new(64.0, 24.0)),
+                                )
+                                .clicked()
+                            {
+                                self.diff_filter = filter;
+                            }
+                            ui.add_space(4.0);
+                        }
+                        ui.add_space(12.0);
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.diff_search)
+                                .hint_text("Filter paths…")
+                                .desired_width(200.0),
+                        );
+                    });
+
+                    ui.add_space(6.0);
+
+                    egui::ScrollArea::vertical()
+                        .id_salt("diff_results_scroll")
+                        .max_height(360.0)
+                        .show(ui, |ui| {
+                            let search = self.diff_search.to_lowercase();
+
+                            // Added
+                            if matches!(self.diff_filter, DiffFilter::All | DiffFilter::Added) {
+                                for p in &r.added {
+                                    let s = p.to_lowercase();
+                                    if !search.is_empty() && !s.contains(&search) {
+                                        continue;
+                                    }
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new("+")
+                                                .size(12.0)
+                                                .monospace()
+                                                .color(GREEN),
+                                        );
+                                        ui.label(RichText::new(p).size(12.0).monospace().color(TEXT));
+                                    });
+                                }
+                            }
+
+                            // Removed
+                            if matches!(self.diff_filter, DiffFilter::All | DiffFilter::Removed) {
+                                for p in &r.removed {
+                                    let s = p.to_lowercase();
+                                    if !search.is_empty() && !s.contains(&search) {
+                                        continue;
+                                    }
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new("-")
+                                                .size(12.0)
+                                                .monospace()
+                                                .color(RED),
+                                        );
+                                        ui.label(RichText::new(p).size(12.0).monospace().color(TEXT));
+                                    });
+                                }
+                            }
+
+                            // Modified
+                            if matches!(self.diff_filter, DiffFilter::All | DiffFilter::Modified) {
+                                for entry in &r.modified {
+                                    let s = entry.path.to_lowercase();
+                                    if !search.is_empty() && !s.contains(&search) {
+                                        continue;
+                                    }
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new("~")
+                                                .size(12.0)
+                                                .monospace()
+                                                .color(AMBER),
+                                        );
+                                        ui.label(
+                                            RichText::new(&entry.path)
+                                                .size(12.0)
+                                                .monospace()
+                                                .color(TEXT),
+                                        );
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "  {} → {}",
+                                                fmt_bytes(entry.base_size),
+                                                fmt_bytes(entry.target_size)
+                                            ))
+                                            .size(11.0)
+                                            .color(MUTED),
+                                        );
+                                    });
+                                }
                             }
                         });
-                    });
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Target ISO path").size(12.0).color(MUTED));
-                        ui.horizontal(|ui| {
-                            ui.add_enabled(
-                                !running,
-                                egui::TextEdit::singleline(&mut self.diff.target)
-                                    .hint_text("/path/to/modified.iso")
-                                    .desired_width(diff_col2_w - 42.0),
-                            );
-                            if ui.add_enabled(!running, egui::Button::new("📂")).clicked() {
-                                worker::pick_iso(PickTarget::DiffTarget, self.tx.clone());
-                            }
-                        });
-                    });
-                    ui.end_row();
-                });
-            ui.add_space(12.0);
-            let can = !self.diff.base.trim().is_empty()
-                && !self.diff.target.trim().is_empty()
-                && !running;
-            if primary_btn(
-                ui,
-                if running {
-                    "⏳ Comparing…"
-                } else {
-                    "Compare ISOs"
-                },
-                can,
-            ) {
-                do_diff = true;
-            }
-        });
+                }
+
+                ui.add_space(16.0);
+            });
 
         if do_diff {
             self.spawn_diff();
         }
-
-        if let Some(r) = self.diff_result.clone() {
-            let added = r.added.len();
-            let removed = r.removed.len();
-            let modified = r.modified.len();
-            let unchanged = r.unchanged;
-            let total = added + removed + modified;
-
-            // Summary stats row
-            egui::Grid::new("diff_stats")
-                .num_columns(4)
-                .spacing([8.0, 8.0])
-                .show(ui, |ui| {
-                    for (count, label, color) in [
-                        (added, "Added", GREEN),
-                        (removed, "Removed", RED),
-                        (modified, "Modified", AMBER),
-                        (unchanged, "Unchanged", MUTED),
-                    ] {
-                        Frame::new()
-                            .fill(CARD)
-                            .stroke(Stroke::new(1.0, CARD_BORDER))
-                            .inner_margin(12.0f32)
-                            .corner_radius(8.0f32)
-                            .show(ui, |ui| {
-                                ui.set_min_width(80.0);
-                                ui.vertical_centered(|ui| {
-                                    ui.label(
-                                        RichText::new(count.to_string())
-                                            .size(24.0)
-                                            .strong()
-                                            .color(color),
-                                    );
-                                    ui.label(RichText::new(label).size(12.0).color(MUTED));
-                                });
-                            });
-                    }
-                    ui.end_row();
-                });
-            ui.add_space(12.0);
-
-            // Filter + search + list
-            card(ui, |ui| {
-                ui.horizontal(|ui| {
-                    for (f, lbl) in [
-                        (DiffFilter::All, format!("All ({total})")),
-                        (DiffFilter::Added, format!("Added ({added})")),
-                        (DiffFilter::Removed, format!("Removed ({removed})")),
-                        (DiffFilter::Modified, format!("Modified ({modified})")),
-                    ] {
-                        let active = self.diff_filter == f;
-                        let btn = egui::Button::new(RichText::new(&lbl).size(12.0))
-                            .fill(if active { ACCENT } else { Color32::TRANSPARENT })
-                            .stroke(Stroke::new(1.0, if active { ACCENT } else { CARD_BORDER }));
-                        if ui.add(btn).clicked() {
-                            self.diff_filter = f;
-                        }
-                    }
-                });
-                ui.add_space(8.0);
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.diff_search)
-                        .hint_text("Filter by path…")
-                        .desired_width(ui.available_width()),
-                );
-                ui.add_space(8.0);
-
-                let search = self.diff_search.to_lowercase();
-                let filter = self.diff_filter.clone();
-
-                let mut rows: Vec<(char, String, Option<u64>)> = Vec::new();
-                if matches!(filter, DiffFilter::All | DiffFilter::Added) {
-                    for p in &r.added {
-                        if search.is_empty() || p.to_lowercase().contains(&search) {
-                            rows.push(('A', p.clone(), None));
-                        }
-                    }
-                }
-                if matches!(filter, DiffFilter::All | DiffFilter::Removed) {
-                    for p in &r.removed {
-                        if search.is_empty() || p.to_lowercase().contains(&search) {
-                            rows.push(('R', p.clone(), None));
-                        }
-                    }
-                }
-                if matches!(filter, DiffFilter::All | DiffFilter::Modified) {
-                    for e in &r.modified {
-                        if search.is_empty() || e.path.to_lowercase().contains(&search) {
-                            rows.push(('M', e.path.clone(), Some(e.target_size)));
-                        }
-                    }
-                }
-
-                egui::ScrollArea::vertical()
-                    .max_height(300.0)
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        if rows.is_empty() {
-                            ui.vertical_centered(|ui| {
-                                ui.add_space(12.0);
-                                let msg = if self.diff_search.is_empty() {
-                                    "No changes in this category"
-                                } else {
-                                    "No files match the search filter"
-                                };
-                                ui.label(RichText::new(msg).size(12.0).color(MUTED));
-                            });
-                        } else {
-                            for (tag, path, size) in &rows {
-                                let (tc, bg) = match tag {
-                                    'A' => (GREEN, Color32::from_rgb(14, 36, 24)),
-                                    'R' => (RED, Color32::from_rgb(36, 14, 14)),
-                                    _ => (AMBER, Color32::from_rgb(36, 28, 10)),
-                                };
-                                ui.horizontal(|ui| {
-                                    Frame::new()
-                                        .fill(bg)
-                                        .inner_margin(Vec2::new(6.0, 2.0))
-                                        .corner_radius(3.0f32)
-                                        .show(ui, |ui| {
-                                            ui.label(
-                                                RichText::new(tag.to_string())
-                                                    .size(11.0)
-                                                    .strong()
-                                                    .color(tc)
-                                                    .monospace(),
-                                            );
-                                        });
-                                    ui.add_space(4.0);
-                                    ui.label(
-                                        RichText::new(path).size(12.0).monospace().color(TEXT),
-                                    );
-                                    if let Some(sz) = size {
-                                        ui.with_layout(
-                                            egui::Layout::right_to_left(egui::Align::Center),
-                                            |ui| {
-                                                ui.label(
-                                                    RichText::new(fmt_bytes(*sz))
-                                                        .size(11.0)
-                                                        .color(MUTED),
-                                                );
-                                            },
-                                        );
-                                    }
-                                });
-                                ui.separator();
-                            }
-                        }
-                    });
-            });
-
-            card_green(ui, |ui| {
-                ui.label(
-                    RichText::new("✓ Diff Complete")
-                        .size(16.0)
-                        .strong()
-                        .color(GREEN),
-                );
-                ui.add_space(8.0);
-                if continue_btn(ui, "Continue to Build →") {
-                    self.active_stage = Stage::Build;
-                }
-            });
-        }
     }
 
-    // ── Stage: Build ──────────────────────────────────────────────────────────
-
     fn show_build(&mut self, ui: &mut Ui) {
-        stage_header(
-            ui,
-            4,
-            "Build",
-            "Optionally build a custom ISO — fetch a base image, apply an overlay, and repackage.",
-        );
-
         let running = self.job_running;
-        let has_artifact = self
-            .build_result
-            .as_ref()
-            .map(|r| !r.artifacts.is_empty())
-            .unwrap_or(false);
-
         let mut do_build = false;
         let mut do_inspect = false;
-        let mut do_scan = false;
-        let mut do_test = false;
-        let mut do_html = false;
-        let mut do_json = false;
 
-        // Distro selector
-        card(ui, |ui| {
-            ui.label(
-                RichText::new("Target Distribution")
-                    .strong()
-                    .size(15.0)
-                    .color(TEXT),
-            );
-            ui.add_space(4.0);
-            ui.label(
-                RichText::new("Auto-detected from the source ISO")
+        egui::ScrollArea::vertical()
+            .id_salt("build_scroll")
+            .show(ui, |ui| {
+                ui.set_max_width(740.0);
+                ui.add_space(8.0);
+
+                ui.label(
+                    RichText::new("Fetch & Build ISO")
+                        .size(15.0)
+                        .strong()
+                        .color(TEXT),
+                );
+                ui.add_space(4.0);
+                ui.label(
+                    RichText::new(
+                        "Download, verify, and repack an ISO with optional overlay files \
+                         and configuration.",
+                    )
                     .size(12.0)
                     .color(MUTED),
-            );
-        });
+                );
+                ui.add_space(12.0);
 
-        let avail = ui.available_width();
-        let col_w = (avail - 12.0) / 2.0;
+                let full_w = ui.available_width();
+                let col_w = (full_w - 12.0) / 2.0;
 
-        ui.horizontal(|ui| {
-            // Left: config
-            ui.vertical(|ui| {
-                ui.set_max_width(col_w);
-                card(ui, |ui| {
-                    ui.label(
-                        RichText::new("Build Configuration")
-                            .strong()
-                            .size(15.0)
-                            .color(TEXT),
+                lbl(ui, "Source ISO  (local path or URL)");
+                ui.horizontal(|ui| {
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.build.source)
+                            .hint_text("/path/to/ubuntu.iso  or  https://releases.ubuntu.com/…")
+                            .desired_width(ui.available_width() - 72.0)
+                            .min_size(Vec2::new(0.0, 28.0)),
                     );
-                    ui.add_space(8.0);
-                    // col_w is the parent vertical's max width (half panel).
-                    // Card inner_margin is 16 each side → content width = col_w - 32.
-                    let build_cell_w = ((col_w - 32.0) - 12.0) / 2.0;
-                    egui::Grid::new("build_grid")
-                        .num_columns(2)
-                        .spacing([12.0, 8.0])
-                        .show(ui, |ui| {
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("Source ISO / URL *").size(12.0).color(MUTED),
-                                );
-                                ui.horizontal(|ui| {
-                                    ui.add_enabled(
-                                        !running,
-                                        egui::TextEdit::singleline(&mut self.build.source)
-                                            .hint_text("/path/to/ubuntu.iso or https://…")
-                                            .desired_width(build_cell_w - 42.0),
-                                    );
-                                    if ui.add_enabled(!running, egui::Button::new("📂")).clicked()
-                                    {
-                                        worker::pick_iso(PickTarget::BuildSource, self.tx.clone());
-                                    }
-                                });
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("Output directory *").size(12.0).color(MUTED),
-                                );
-                                ui.horizontal(|ui| {
-                                    ui.add_enabled(
-                                        !running,
-                                        egui::TextEdit::singleline(&mut self.build.output_dir)
-                                            .hint_text("./artifacts")
-                                            .desired_width(build_cell_w - 42.0),
-                                    );
-                                    if ui.add_enabled(!running, egui::Button::new("📂")).clicked()
-                                    {
-                                        worker::pick_folder(
-                                            PickTarget::BuildOutputDir,
-                                            self.tx.clone(),
-                                        );
-                                    }
-                                });
-                            });
-                            ui.end_row();
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("Build name").size(12.0).color(MUTED));
+                    if browse_btn(ui, !running) {
+                        worker::pick_iso(PickTarget::BuildSource, self.tx.clone());
+                    }
+                });
+
+                ui.add_space(8.0);
+
+                egui::Grid::new("build_grid")
+                    .num_columns(2)
+                    .spacing([12.0, 8.0])
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            lbl(ui, "Output Directory");
+                            ui.horizontal(|ui| {
                                 ui.add_enabled(
                                     !running,
-                                    egui::TextEdit::singleline(&mut self.build.build_name)
-                                        .hint_text("forgeiso-local")
-                                        .desired_width(build_cell_w),
+                                    egui::TextEdit::singleline(&mut self.build.output_dir)
+                                        .desired_width(col_w - 44.0)
+                                        .min_size(Vec2::new(0.0, 28.0)),
                                 );
+                                if ui
+                                    .add_enabled(
+                                        !running,
+                                        egui::Button::new("📂")
+                                            .fill(SURFACE)
+                                            .stroke(Stroke::new(1.0, BORDER))
+                                            .min_size(Vec2::new(32.0, 28.0)),
+                                    )
+                                    .clicked()
+                                {
+                                    worker::pick_folder(PickTarget::BuildOutputDir, self.tx.clone());
+                                }
                             });
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("Volume label").size(12.0).color(MUTED));
+                        });
+                        ui.vertical(|ui| {
+                            lbl(ui, "Build Name");
+                            ui.add_enabled(
+                                !running,
+                                egui::TextEdit::singleline(&mut self.build.build_name)
+                                    .hint_text("forgeiso-local")
+                                    .desired_width(col_w),
+                            );
+                        });
+                        ui.end_row();
+                        ui.vertical(|ui| {
+                            lbl(ui, "Overlay Directory  (optional)");
+                            ui.horizontal(|ui| {
                                 ui.add_enabled(
                                     !running,
-                                    egui::TextEdit::singleline(&mut self.build.output_label)
-                                        .hint_text("FORGEISO")
-                                        .desired_width(build_cell_w),
+                                    egui::TextEdit::singleline(&mut self.build.overlay_dir)
+                                        .hint_text("/path/to/overlay/")
+                                        .desired_width(col_w - 44.0),
                                 );
-                            });
-                            ui.end_row();
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    RichText::new("Overlay directory").size(12.0).color(MUTED),
-                                );
-                                ui.horizontal(|ui| {
-                                    ui.add_enabled(
+                                if ui
+                                    .add_enabled(
                                         !running,
-                                        egui::TextEdit::singleline(&mut self.build.overlay_dir)
-                                            .hint_text("/path/to/overlay")
-                                            .desired_width(build_cell_w - 42.0),
+                                        egui::Button::new("📂")
+                                            .fill(SURFACE)
+                                            .stroke(Stroke::new(1.0, BORDER))
+                                            .min_size(Vec2::new(32.0, 28.0)),
+                                    )
+                                    .clicked()
+                                {
+                                    worker::pick_folder(PickTarget::BuildOverlay, self.tx.clone());
+                                }
+                            });
+                        });
+                        ui.vertical(|ui| {
+                            lbl(ui, "Volume Label  (optional)");
+                            ui.add_enabled(
+                                !running,
+                                egui::TextEdit::singleline(&mut self.build.output_label)
+                                    .hint_text("MY-UBUNTU")
+                                    .desired_width(col_w),
+                            );
+                        });
+                        ui.end_row();
+                        ui.vertical(|ui| {
+                            lbl(ui, "Profile");
+                            egui::ComboBox::from_id_salt("profile_combo")
+                                .selected_text(if self.build.profile == "desktop" {
+                                    "Desktop"
+                                } else {
+                                    "Minimal"
+                                })
+                                .width(col_w)
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut self.build.profile,
+                                        "minimal".into(),
+                                        "Minimal",
                                     );
-                                    if ui.add_enabled(!running, egui::Button::new("📂")).clicked()
-                                    {
-                                        worker::pick_folder(
-                                            PickTarget::BuildOverlay,
-                                            self.tx.clone(),
-                                        );
-                                    }
+                                    ui.selectable_value(
+                                        &mut self.build.profile,
+                                        "desktop".into(),
+                                        "Desktop",
+                                    );
                                 });
-                            });
-                            ui.vertical(|ui| {
-                                ui.label(RichText::new("Profile").size(12.0).color(MUTED));
-                                egui::ComboBox::from_id_salt("build_profile")
-                                    .selected_text(&self.build.profile)
-                                    .show_ui(ui, |ui| {
-                                        ui.selectable_value(
-                                            &mut self.build.profile,
-                                            "minimal".into(),
-                                            "Minimal",
-                                        );
-                                        ui.selectable_value(
-                                            &mut self.build.profile,
-                                            "desktop".into(),
-                                            "Desktop",
-                                        );
-                                    });
-                            });
-                            ui.end_row();
-                            ui.vertical(|ui| {
+                        });
+                        ui.vertical(|ui| {
+                            lbl(ui, "Expected SHA-256  (optional)");
+                            ui.add_enabled(
+                                !running,
+                                egui::TextEdit::singleline(&mut self.build.expected_sha256)
+                                    .hint_text("64-char hex")
+                                    .desired_width(col_w),
+                            );
+                        });
+                        ui.end_row();
+                    });
+
+                ui.add_space(12.0);
+                ui.horizontal(|ui| {
+                    let can_build = !self.build.source.trim().is_empty() && !running;
+                    let build_lbl = if running { "⏳  Building…" } else { "Build ISO" };
+                    let btn = egui::Button::new(
+                        RichText::new(build_lbl)
+                            .size(14.0)
+                            .strong()
+                            .color(if can_build { Color32::WHITE } else { MUTED }),
+                    )
+                    .fill(if can_build { ACCENT } else { SURFACE })
+                    .stroke(Stroke::new(1.0, if can_build { ACCENT } else { BORDER }))
+                    .min_size(Vec2::new(160.0, 40.0));
+                    if ui.add_enabled(can_build, btn).clicked() {
+                        do_build = true;
+                    }
+                    ui.add_space(12.0);
+                    let can_inspect = !self.build.source.trim().is_empty() && !running;
+                    if small_btn(ui, "Inspect ISO", can_inspect) {
+                        do_inspect = true;
+                    }
+                });
+
+                // ── Inspect result ───────────────────────────────────────
+                if let Some(m) = self.inspect_result.clone() {
+                    ui.add_space(12.0);
+                    result_box(ui, SURFACE, BORDER, |ui| {
+                        ui.label(
+                            RichText::new("ISO Information")
+                                .size(13.0)
+                                .strong()
+                                .color(TEXT),
+                        );
+                        ui.add_space(4.0);
+                        for (k, v) in [
+                            (
+                                "Distro",
+                                m.distro.as_ref().map(distro_label).unwrap_or_default(),
+                            ),
+                            ("Release", m.release.clone().unwrap_or_default()),
+                            ("Arch", m.architecture.clone().unwrap_or_default()),
+                            ("Size", fmt_bytes(m.size_bytes)),
+                            (
+                                "Volume ID",
+                                m.volume_id.clone().unwrap_or_else(|| "—".into()),
+                            ),
+                            (
+                                "SHA-256",
+                                format!("{}…", &m.sha256[..32.min(m.sha256.len())]),
+                            ),
+                            (
+                                "Boot",
+                                format!(
+                                    "{}{}",
+                                    if m.boot.bios { "BIOS " } else { "" },
+                                    if m.boot.uefi { "UEFI" } else { "" }
+                                ),
+                            ),
+                        ] {
+                            if v.is_empty() {
+                                continue;
+                            }
+                            ui.horizontal(|ui| {
                                 ui.label(
-                                    RichText::new("Expected SHA-256 (optional)")
+                                    RichText::new(format!("{k}:"))
                                         .size(12.0)
                                         .color(MUTED),
                                 );
-                                ui.add_enabled(
-                                    !running,
-                                    egui::TextEdit::singleline(&mut self.build.expected_sha256)
-                                        .hint_text("abcdef… (leave blank to skip check)")
-                                        .desired_width(build_cell_w),
-                                );
+                                ui.label(RichText::new(&v).size(12.0).monospace().color(TEXT));
                             });
-                            ui.end_row();
-                        });
+                        }
+                    });
+                }
+
+                // ── Build result ─────────────────────────────────────────
+                if let Some(r) = self.build_result.clone() {
                     ui.add_space(12.0);
-                    ui.horizontal(|ui| {
-                        let build_sha_invalid = {
-                            let s = self.build.expected_sha256.trim();
-                            !s.is_empty()
-                                && (s.len() != 64 || !s.chars().all(|c| c.is_ascii_hexdigit()))
-                        };
-                        if build_sha_invalid {
-                            ui.label(
-                                RichText::new("⚠ SHA-256 must be a 64-character hex string")
-                                    .size(12.0)
-                                    .color(RED),
-                            );
-                        }
-                        let can_build = !self.build.source.trim().is_empty()
-                            && !self.build.output_dir.trim().is_empty()
-                            && !build_sha_invalid
-                            && !running;
-                        if primary_btn(
-                            ui,
-                            if running {
-                                "⏳ Building…"
-                            } else {
-                                "Build ISO"
-                            },
-                            can_build,
-                        ) {
-                            do_build = true;
-                        }
-                        ui.add_space(8.0);
-                        if ghost_btn(
-                            ui,
-                            "Inspect",
-                            !self.build.source.trim().is_empty() && !running,
-                        ) {
-                            do_inspect = true;
-                        }
-                    });
-                    ui.add_space(6.0);
-                    ui.horizontal_wrapped(|ui| {
-                        if ghost_btn(ui, "Scan", !running && has_artifact) {
-                            do_scan = true;
-                        }
-                        ui.add_space(4.0);
-                        if ghost_btn(ui, "Test Boot", !running && has_artifact) {
-                            do_test = true;
-                        }
-                        ui.add_space(4.0);
-                        if ghost_btn(ui, "HTML Report", !running && self.build_result.is_some()) {
-                            do_html = true;
-                        }
-                        ui.add_space(4.0);
-                        if ghost_btn(ui, "JSON Report", !running && self.build_result.is_some()) {
-                            do_json = true;
-                        }
-                    });
-                });
-            });
-
-            // Right: ISO metadata
-            ui.vertical(|ui| {
-                ui.set_max_width(col_w);
-                card(ui, |ui| {
-                    ui.label(
-                        RichText::new("Detected ISO")
-                            .strong()
-                            .size(15.0)
-                            .color(TEXT),
-                    );
-                    ui.add_space(8.0);
-
-                    let has_meta = self.inspect_result.is_some() || self.build_result.is_some();
-                    if !has_meta {
-                        ui.vertical_centered(|ui| {
-                            ui.add_space(20.0);
-                            ui.label(RichText::new("🔍").size(32.0));
-                            ui.add_space(8.0);
-                            ui.label(RichText::new("No ISO inspected yet").size(14.0).color(TEXT));
-                            ui.label(
-                                RichText::new("Enter a source path and click Inspect.")
-                                    .size(12.0)
-                                    .color(MUTED),
-                            );
-                        });
-                    } else {
-                        let distro_str = self
-                            .inspect_result
-                            .as_ref()
-                            .and_then(|m| m.distro.as_ref().map(distro_label))
-                            .or_else(|| {
-                                self.build_result
-                                    .as_ref()
-                                    .and_then(|r| r.iso.distro.as_ref().map(distro_label))
-                            })
-                            .unwrap_or_else(|| "Unknown".into());
-                        let release_str = self
-                            .inspect_result
-                            .as_ref()
-                            .and_then(|m| m.release.clone())
-                            .or_else(|| {
-                                self.build_result
-                                    .as_ref()
-                                    .and_then(|r| r.iso.release.clone())
-                            })
-                            .unwrap_or_else(|| "Unknown".into());
-                        let arch_str = self
-                            .inspect_result
-                            .as_ref()
-                            .and_then(|m| m.architecture.clone())
-                            .or_else(|| {
-                                self.build_result
-                                    .as_ref()
-                                    .and_then(|r| r.iso.architecture.clone())
-                            })
-                            .unwrap_or_else(|| "Unknown".into());
-                        let vol_str = self
-                            .inspect_result
-                            .as_ref()
-                            .and_then(|m| m.volume_id.clone())
-                            .or_else(|| {
-                                self.build_result
-                                    .as_ref()
-                                    .and_then(|r| r.iso.volume_id.clone())
-                            })
-                            .unwrap_or_else(|| "—".into());
-                        let sha_str = self
-                            .inspect_result
-                            .as_ref()
-                            .map(|m| format!("{}…", &m.sha256[..20.min(m.sha256.len())]))
-                            .or_else(|| {
-                                self.build_result.as_ref().map(|r| {
-                                    format!("{}…", &r.iso.sha256[..20.min(r.iso.sha256.len())])
-                                })
-                            })
-                            .unwrap_or_else(|| "—".into());
-                        let size_str = self
-                            .inspect_result
-                            .as_ref()
-                            .map(|m| fmt_bytes(m.size_bytes))
-                            .or_else(|| {
-                                self.build_result
-                                    .as_ref()
-                                    .map(|r| fmt_bytes(r.iso.size_bytes))
-                            })
-                            .unwrap_or_else(|| "Unknown".into());
-
-                        egui::Grid::new("meta_grid")
-                            .num_columns(3)
-                            .spacing([8.0, 4.0])
-                            .show(ui, |ui| {
-                                for (k, v) in [
-                                    ("Distro", &distro_str),
-                                    ("Release", &release_str),
-                                    ("Architecture", &arch_str),
-                                    ("Volume ID", &vol_str),
-                                    ("SHA-256", &sha_str),
-                                    ("Size", &size_str),
-                                ] {
-                                    ui.label(RichText::new(k).size(12.0).color(MUTED));
-                                    ui.label(RichText::new(v).size(12.0).color(TEXT).monospace());
-                                    if k == "SHA-256" {
-                                        let full_sha = self
-                                            .inspect_result
-                                            .as_ref()
-                                            .map(|m| m.sha256.clone())
-                                            .or_else(|| {
-                                                self.build_result
-                                                    .as_ref()
-                                                    .map(|r| r.iso.sha256.clone())
-                                            })
-                                            .unwrap_or_default();
-                                        if ui
-                                            .small_button("📋")
-                                            .on_hover_text("Copy full SHA-256")
-                                            .clicked()
-                                        {
-                                            ui.ctx().copy_text(full_sha);
-                                        }
-                                    } else {
-                                        ui.label(""); // keep grid aligned
+                    card_green(ui, |ui| {
+                        ui.label(
+                            RichText::new("✓  Build Complete")
+                                .size(14.0)
+                                .strong()
+                                .color(GREEN),
+                        );
+                        ui.add_space(6.0);
+                        for a in &r.artifacts {
+                            let path_str = a.to_string_lossy();
+                            let avail = ui.available_width();
+                            ui.horizontal(|ui| {
+                                ui.add(
+                                    egui::TextEdit::singleline(
+                                        &mut path_str.as_ref().to_string(),
+                                    )
+                                    .desired_width(avail - 130.0)
+                                    .interactive(false)
+                                    .font(egui::FontId::monospace(12.0)),
+                                );
+                                if ui
+                                    .add(
+                                        egui::Button::new("📋 Copy")
+                                            .fill(SURFACE)
+                                            .stroke(Stroke::new(1.0, BORDER)),
+                                    )
+                                    .clicked()
+                                {
+                                    ui.ctx().copy_text(path_str.into_owned());
+                                }
+                                if ui
+                                    .add(
+                                        egui::Button::new("📂 Open")
+                                            .fill(SURFACE)
+                                            .stroke(Stroke::new(1.0, BORDER)),
+                                    )
+                                    .clicked()
+                                {
+                                    if let Some(dir) = a.parent() {
+                                        let _ = std::process::Command::new("xdg-open")
+                                            .arg(dir)
+                                            .spawn();
                                     }
-                                    ui.end_row();
                                 }
                             });
-                    }
-                });
+                        }
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            if small_btn(ui, "Scan", !running) {
+                                self.spawn_scan();
+                            }
+                            ui.add_space(8.0);
+                            if small_btn(ui, "Boot Test", !running) {
+                                self.spawn_test_iso();
+                            }
+                            ui.add_space(8.0);
+                            if small_btn(ui, "HTML Report", !running) {
+                                self.spawn_report("html");
+                            }
+                            ui.add_space(8.0);
+                            if small_btn(ui, "JSON Report", !running) {
+                                self.spawn_report("json");
+                            }
+                        });
+                    });
+                }
+
+                ui.add_space(16.0);
             });
-        });
 
         if do_build {
             self.spawn_build();
@@ -3016,266 +2409,142 @@ impl ForgeApp {
         if do_inspect {
             self.spawn_inspect();
         }
-        if do_scan {
-            self.spawn_scan();
-        }
-        if do_test {
-            self.spawn_test_iso();
-        }
-        if do_html {
-            self.spawn_report("html");
-        }
-        if do_json {
-            self.spawn_report("json");
-        }
-
-        if let Some(r) = self.build_result.clone() {
-            card_green(ui, |ui| {
-                ui.label(
-                    RichText::new("✓ Build Complete")
-                        .size(16.0)
-                        .strong()
-                        .color(GREEN),
-                );
-                ui.add_space(8.0);
-                for a in &r.artifacts {
-                    ui.horizontal(|ui| {
-                        ui.label("💿");
-                        ui.label(
-                            RichText::new(a.to_string_lossy().as_ref())
-                                .size(13.0)
-                                .monospace()
-                                .color(TEXT),
-                        );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("📋").on_hover_text("Copy path").clicked() {
-                                ui.ctx().copy_text(a.to_string_lossy().into_owned());
-                            }
-                            if ui.small_button("📂").on_hover_text("Open folder").clicked() {
-                                if let Some(dir) = a.parent() {
-                                    let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
-                                }
-                            }
-                        });
-                    });
-                }
-                ui.add_space(10.0);
-                if continue_btn(ui, "Continue to Completion →") {
-                    self.active_stage = Stage::Completion;
-                }
-            });
-        }
     }
 
-    // ── Stage: Completion ─────────────────────────────────────────────────────
+    fn show_doctor(&mut self, ui: &mut Ui) {
+        let running = self.job_running;
 
-    fn show_completion(&mut self, ui: &mut Ui) {
-        stage_header(
-            ui,
-            5,
-            "Complete",
-            "Pipeline finished. Review artifacts and results below.",
-        );
+        egui::ScrollArea::vertical()
+            .id_salt("doctor_scroll")
+            .show(ui, |ui| {
+                ui.set_max_width(740.0);
+                ui.add_space(8.0);
 
-        card(ui, |ui| {
-            ui.label(
-                RichText::new("Pipeline Summary")
-                    .strong()
-                    .size(15.0)
-                    .color(TEXT),
-            );
-            ui.add_space(12.0);
-
-            let inj_detail = self.inject_result.as_ref().map(|r| {
-                r.artifacts
-                    .first()
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .unwrap_or_default()
-            });
-            let ver_detail = self.verify_result.as_ref().map(|r| {
-                if r.matched {
-                    "Checksum matched ✓".into()
-                } else {
-                    "Checksum mismatch ✗".into()
-                }
-            });
-            let diff_detail = self.diff_result.as_ref().map(|r| {
-                format!(
-                    "{} added, {} removed, {} modified",
-                    r.added.len(),
-                    r.removed.len(),
-                    r.modified.len()
-                )
-            });
-            let bld_detail = self.build_result.as_ref().map(|r| {
-                r.artifacts
-                    .first()
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .unwrap_or_default()
-            });
-
-            for (num, name, done, detail) in [
-                (1, "Inject", self.inject_done, &inj_detail),
-                (2, "Verify", self.verify_done, &ver_detail),
-                (3, "Diff", self.diff_done, &diff_detail),
-                (4, "Build", self.build_done, &bld_detail),
-            ] {
-                let (icon, col) = if done { ("✓", GREEN) } else { ("○", MUTED) };
-                Frame::new()
-                    .fill(if done {
-                        Color32::from_rgb(14, 36, 24)
-                    } else {
-                        Color32::from_rgb(22, 27, 42)
-                    })
-                    .stroke(Stroke::new(
-                        1.0,
-                        if done {
-                            Color32::from_rgb(34, 100, 60)
-                        } else {
-                            CARD_BORDER
-                        },
-                    ))
-                    .inner_margin(12.0f32)
-                    .corner_radius(6.0f32)
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                RichText::new(format!("{icon} Step {num}: {name}"))
-                                    .size(14.0)
-                                    .strong()
-                                    .color(col),
-                            );
-                            if let Some(d) = detail {
-                                if !d.is_empty() {
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            ui.label(
-                                                RichText::new(d.as_str())
-                                                    .size(12.0)
-                                                    .color(MUTED)
-                                                    .monospace(),
-                                            );
-                                        },
-                                    );
-                                }
-                            }
-                        });
-                    });
-                ui.add_space(6.0);
-            }
-        });
-
-        // Artifacts
-        let all_artifacts: Vec<String> = self
-            .inject_result
-            .iter()
-            .flat_map(|r| r.artifacts.iter().map(|p| p.to_string_lossy().into_owned()))
-            .chain(
-                self.build_result
-                    .iter()
-                    .flat_map(|r| r.artifacts.iter().map(|p| p.to_string_lossy().into_owned())),
-            )
-            .collect();
-
-        if !all_artifacts.is_empty() {
-            card(ui, |ui| {
                 ui.label(
-                    RichText::new("Output Artifacts")
-                        .strong()
+                    RichText::new("System Dependencies")
                         .size(15.0)
+                        .strong()
                         .color(TEXT),
                 );
-                ui.add_space(8.0);
-                for path in &all_artifacts {
-                    let size_str = std::fs::metadata(path)
-                        .map(|m| fmt_bytes(m.len()))
-                        .unwrap_or_else(|_| "—".into());
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("💿").size(16.0));
-                        ui.add_space(6.0);
-                        ui.label(RichText::new(path).size(13.0).monospace().color(TEXT));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui
-                                .small_button("📋 Copy")
-                                .on_hover_text("Copy path to clipboard")
-                                .clicked()
-                            {
-                                ui.ctx().copy_text(path.clone());
-                            }
-                            if ui.small_button("📂").on_hover_text("Open folder").clicked() {
-                                if let Some(dir) = std::path::Path::new(path).parent() {
-                                    let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
-                                }
-                            }
-                            ui.label(RichText::new(&size_str).size(11.0).color(MUTED));
-                        });
-                    });
-                    ui.add_space(4.0);
-                }
-            });
-        }
+                ui.add_space(4.0);
+                ui.label(
+                    RichText::new(
+                        "Checks that all required tools (xorriso, grub, squashfs-tools, etc.) \
+                         are installed and accessible.",
+                    )
+                    .size(12.0)
+                    .color(MUTED),
+                );
+                ui.add_space(10.0);
 
-        ui.add_space(8.0);
-        ui.horizontal_wrapped(|ui| {
-            let stages = [
-                ("← Back to Inject", Stage::Inject),
-                ("← Back to Verify", Stage::Verify),
-                ("← Back to Diff", Stage::Diff),
-                ("← Back to Build", Stage::Build),
-            ];
-            for (label, target) in stages {
-                if ghost_btn(ui, label, self.stage_unlocked(&target)) {
-                    self.active_stage = target;
+                let lbl = if running { "⏳  Checking…" } else { "Run Dependency Check" };
+                if small_btn(ui, lbl, !running) {
+                    self.spawn_doctor();
                 }
-                ui.add_space(8.0);
-            }
-        });
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
-            if ghost_btn(ui, "🔄 New Pipeline", true) {
-                self.inject_result = None;
-                self.verify_result = None;
-                self.iso9660_result = None;
-                self.diff_result = None;
-                self.build_result = None;
-                self.inspect_result = None;
-                self.inject_done = false;
-                self.verify_done = false;
-                self.diff_done = false;
-                self.build_done = false;
-                self.log_entries.clear();
-                self.status = None;
-                self.status_since = None;
-                self.active_stage = Stage::Inject;
-            }
-            ui.add_space(8.0);
-            if ghost_btn(ui, "🗑 Clear Forms", true) {
-                self.inject = InjectState::default();
-                self.verify = VerifyState::default();
-                self.diff = DiffState::default();
-                self.build = BuildState::default();
-                self.set_status(StatusMsg::ok("Form state cleared"));
-            }
-        });
+
+                if let Some(r) = self.doctor_result.clone() {
+                    ui.add_space(12.0);
+                    let all_ok = r.tooling.values().all(|&ok| ok);
+                    let (fill, border) = if all_ok {
+                        (
+                            Color32::from_rgb(13, 28, 18),
+                            Color32::from_rgb(40, 100, 55),
+                        )
+                    } else {
+                        (Color32::from_rgb(28, 18, 10), Color32::from_rgb(100, 60, 20))
+                    };
+
+                    result_box(ui, fill, border, |ui| {
+                        ui.label(
+                            RichText::new(if all_ok {
+                                "✅  All dependencies satisfied"
+                            } else {
+                                "⚠️  Some dependencies missing"
+                            })
+                            .size(13.0)
+                            .strong()
+                            .color(if all_ok { GREEN } else { AMBER }),
+                        );
+                        ui.add_space(8.0);
+                        egui::Grid::new("doctor_grid")
+                            .num_columns(2)
+                            .spacing([16.0, 4.0])
+                            .striped(true)
+                            .show(ui, |ui| {
+                                ui.label(
+                                    RichText::new("Tool").size(11.0).strong().color(MUTED),
+                                );
+                                ui.label(
+                                    RichText::new("Status").size(11.0).strong().color(MUTED),
+                                );
+                                ui.end_row();
+                                for (name, &ok) in &r.tooling {
+                                    ui.label(
+                                        RichText::new(name).size(12.0).monospace().color(TEXT),
+                                    );
+                                    let (status_text, status_col) = if ok {
+                                        ("✓ OK", GREEN)
+                                    } else {
+                                        ("✗ Missing", RED)
+                                    };
+                                    ui.label(
+                                        RichText::new(status_text).size(12.0).color(status_col),
+                                    );
+                                    ui.end_row();
+                                }
+                            });
+                    });
+
+                    if !all_ok {
+                        ui.add_space(8.0);
+                        ui.label(
+                            RichText::new("Install missing tools with:")
+                                .size(12.0)
+                                .color(MUTED),
+                        );
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new("sudo dnf install xorriso grub2-tools squashfs-tools")
+                                    .size(12.0)
+                                    .monospace()
+                                    .color(TEXT),
+                            );
+                        });
+                    }
+                }
+
+                ui.add_space(16.0);
+            });
     }
 }
 
-// ── eframe::App impl ──────────────────────────────────────────────────────────
+// ── eframe::App impl ─────────────────────────────────────────────────────────
 
 impl eframe::App for ForgeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.drain_messages(ctx);
-        if self.job_running || self.status_since.is_some() {
-            ctx.request_repaint_after(std::time::Duration::from_millis(50));
+
+        // Request repaint while a job is running so progress shows smoothly
+        if self.job_running {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
-        self.render_sidebar(ctx);
-        self.render_log_panel(ctx);
-        if self.doctor_open {
-            self.render_doctor_panel(ctx);
-        }
-        self.render_main(ctx);
+
+        self.render_header(ctx);
+        self.render_tabs(ctx);
+        self.render_log(ctx);
+
+        egui::CentralPanel::default()
+            .frame(Frame::new().fill(BG).inner_margin(egui::Margin::symmetric(16, 12)))
+            .show(ctx, |ui| {
+                match self.active_tab {
+                    Tab::Inject => self.show_inject(ui),
+                    Tab::Verify => self.show_verify(ui),
+                    Tab::Diff => self.show_diff(ui),
+                    Tab::Build => self.show_build(ui),
+                    Tab::Doctor => self.show_doctor(ui),
+                }
+            });
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

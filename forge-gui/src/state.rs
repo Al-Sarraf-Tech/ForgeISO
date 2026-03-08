@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 // ── Stage ordering ─────────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Stage {
     Inject,
@@ -13,6 +14,7 @@ pub enum Stage {
     Completion,
 }
 
+#[allow(dead_code)]
 impl Stage {
     pub const ALL: &'static [Stage] = &[
         Stage::Inject,
