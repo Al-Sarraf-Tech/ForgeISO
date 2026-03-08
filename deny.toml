@@ -18,9 +18,9 @@ ignore = [
     # Tracked: swap indicatif for a maintained alternative when available.
     { id = "RUSTSEC-2025-0119", reason = "number_prefix is unmaintained but has no vulnerability; indicatif has no safe upgrade path yet" },
 
-    # paste: unmaintained, no vulnerability, pulled in by ratatui
-    # Tracked: update ratatui when a version dropping paste is released.
-    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained but has no vulnerability; ratatui has no safe upgrade path yet" },
+    # paste: unmaintained, no vulnerability, pulled in by ratatui via macros.
+    # ratatui 0.30+ still transitively uses paste; no upgrade path available.
+    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained but has no vulnerability; ratatui 0.30 still depends on it transitively" },
 
 ]
 
@@ -69,11 +69,11 @@ wildcards = "allow"
 
 # Duplicate-version skips for known ecosystem splits
 skip = [
-    { crate = "crossterm",    reason = "ratatui 0.29 pulls crossterm 0.28, we use 0.29 directly" },
+    # getrandom: rand 0.8 (via some deps) still uses 0.2; newer crates use 0.4
     { crate = "getrandom",    reason = "rand 0.8 uses getrandom 0.2, newer crates use 0.4" },
-    { crate = "linux-raw-sys", reason = "crossterm 0.28 pulls rustix 0.38 which uses 0.4.x" },
-    { crate = "rustix",       reason = "crossterm 0.28 (via ratatui) pulls rustix 0.38" },
-    { crate = "unicode-width", reason = "ratatui + indicatif use different unicode-width versions" },
+    # linux-raw-sys / rustix: version splits from different wayland/winit chains
+    { crate = "linux-raw-sys", reason = "winit/wayland ecosystem version split" },
+    { crate = "rustix",       reason = "winit/wayland ecosystem version split" },
 ]
 
 # ── Sources ──────────────────────────────────────────────────────────────────

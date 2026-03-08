@@ -5,6 +5,8 @@ use crate::error::{EngineError, EngineResult};
 
 /// Build all feature-specific late-commands in canonical order.
 /// `pub` so that `kickstart.rs` can reuse this logic for Kickstart `%post`.
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::missing_errors_doc)]
 pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<String>> {
     let mut cmds = Vec::new();
 
@@ -26,13 +28,11 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
                     .and_then(|e| e.to_str())
                     .unwrap_or("jpg");
                 cmds.push(format!(
-                    "cp /cdrom/wallpaper/{} /target/usr/share/backgrounds/forgeiso-wallpaper.{}",
-                    filename_str, ext
+                    "cp /cdrom/wallpaper/{filename_str} /target/usr/share/backgrounds/forgeiso-wallpaper.{ext}"
                 ));
                 cmds.push("mkdir -p /target/etc/dconf/db/local.d".to_string());
                 cmds.push(format!(
-                    "printf '[org/gnome/desktop/background]\\npicture-uri=\"file:///usr/share/backgrounds/forgeiso-wallpaper.{}\\\"\\n' > /target/etc/dconf/db/local.d/00-forgeiso-background",
-                    ext
+                    "printf '[org/gnome/desktop/background]\\npicture-uri=\"file:///usr/share/backgrounds/forgeiso-wallpaper.{ext}\\\"\\n' > /target/etc/dconf/db/local.d/00-forgeiso-background"
                 ));
                 cmds.push("chroot /target dconf update".to_string());
             }
@@ -66,7 +66,7 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
 
     // 4. Proxy
     // /etc/environment is distro-agnostic; APT proxy config is Ubuntu-only.
-    let is_ubuntu = !matches!(cfg.distro, Some(Distro::Fedora) | Some(Distro::Arch));
+    let is_ubuntu = !matches!(cfg.distro, Some(Distro::Fedora | Distro::Arch));
     if cfg.proxy.http_proxy.is_some() || cfg.proxy.https_proxy.is_some() {
         if let Some(hp) = &cfg.proxy.http_proxy {
             cmds.push(format!(
@@ -211,12 +211,12 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
     if grub_changed {
         if let Some(t) = cfg.grub.timeout {
             cmds.push(format!(
-                r#"sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT={t}/' /target/etc/default/grub"#
+                r"sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT={t}/' /target/etc/default/grub"
             ));
         }
         if let Some(entry) = &cfg.grub.default_entry {
             cmds.push(format!(
-                r#"sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT={entry}/' /target/etc/default/grub"#
+                r"sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT={entry}/' /target/etc/default/grub"
             ));
         }
         for param in &cfg.grub.cmdline_extra {
@@ -247,15 +247,19 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
 }
 
 /// Hash a plaintext password to SHA512-crypt format ($6$...)
+#[allow(clippy::missing_errors_doc)]
+#[allow(clippy::missing_panics_doc)]
 pub fn hash_password(plaintext: &str) -> EngineResult<String> {
     let params = Sha512Params::new(10_000)
-        .map_err(|e| EngineError::Runtime(format!("Failed to create SHA512 params: {:?}", e)))?;
+        .map_err(|e| EngineError::Runtime(format!("Failed to create SHA512 params: {e:?}")))?;
     sha512_simple(plaintext, &params)
-        .map_err(|e| EngineError::Runtime(format!("Failed to hash password: {:?}", e)))
+        .map_err(|e| EngineError::Runtime(format!("Failed to hash password: {e:?}")))
 }
 
-/// Generate a complete autoinstall YAML document from InjectConfig.
+/// Generate a complete autoinstall YAML document from `InjectConfig`.
 /// Returns a YAML string prefixed with `#cloud-config\n`.
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::missing_errors_doc)]
 pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
     let mut root = serde_yaml::Mapping::new();
     root.insert("cloud-config".into(), serde_yaml::Value::Null);
@@ -493,7 +497,7 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
 
     // Serialize and prepend cloud-config header
     let yaml_str = serde_yaml::to_string(&root)
-        .map_err(|e| EngineError::Runtime(format!("Failed to serialize YAML: {}", e)))?;
+        .map_err(|e| EngineError::Runtime(format!("Failed to serialize YAML: {e}")))?;
 
     // Remove the "cloud-config: null" line that serde_yaml adds
     let lines: Vec<&str> = yaml_str.lines().collect();
@@ -506,12 +510,15 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
     Ok(format!("#cloud-config\n{}", filtered.join("\n")))
 }
 
-/// Merge InjectConfig into an existing autoinstall YAML string.
+/// Merge `InjectConfig` into an existing autoinstall YAML string.
 /// CLI config fields override YAML fields. late-commands are appended, packages/keys are merged.
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::missing_errors_doc)]
+#[allow(clippy::missing_panics_doc)]
 pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResult<String> {
     // Parse existing YAML
     let mut root: serde_yaml::Value = serde_yaml::from_str(existing)
-        .map_err(|e| EngineError::Runtime(format!("Failed to parse YAML: {}", e)))?;
+        .map_err(|e| EngineError::Runtime(format!("Failed to parse YAML: {e}")))?;
 
     // Get or create autoinstall mapping
     let autoinstall_map = if let Some(ai) = root.get_mut("autoinstall") {
@@ -806,11 +813,11 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
 
     // Serialize back
     let yaml_str = serde_yaml::to_string(&root)
-        .map_err(|e| EngineError::Runtime(format!("Failed to serialize YAML: {}", e)))?;
+        .map_err(|e| EngineError::Runtime(format!("Failed to serialize YAML: {e}")))?;
 
     // Preserve cloud-config header if original had it
     if existing.starts_with("#cloud-config") {
-        Ok(format!("#cloud-config\n{}", yaml_str))
+        Ok(format!("#cloud-config\n{yaml_str}"))
     } else {
         Ok(yaml_str)
     }
@@ -819,7 +826,10 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::IsoSource;
+    use crate::config::{
+        ContainerConfig, FirewallConfig, GrubConfig, IsoSource, NetworkConfig, ProxyConfig,
+        SshConfig, UserConfig,
+    };
 
     #[test]
     fn test_hash_password_format() {
@@ -839,8 +849,8 @@ mod tests {
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -850,9 +860,9 @@ mod tests {
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -860,8 +870,8 @@ mod tests {
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -900,8 +910,8 @@ mod tests {
             username: Some("testuser".to_string()),
             password: Some("testpass".to_string()),
             realname: Some("Test User".to_string()),
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -911,9 +921,9 @@ mod tests {
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -921,8 +931,8 @@ mod tests {
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -965,7 +975,7 @@ mod tests {
                 allow_password_auth: None,
                 install_server: None,
             },
-            network: Default::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -975,9 +985,9 @@ mod tests {
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -985,8 +995,8 @@ mod tests {
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1020,7 +1030,7 @@ mod tests {
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
+            ssh: SshConfig::default(),
             network: crate::config::NetworkConfig {
                 dns_servers: vec!["1.1.1.1".to_string(), "8.8.8.8".to_string()],
                 ntp_servers: vec![],
@@ -1034,9 +1044,9 @@ mod tests {
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1044,8 +1054,8 @@ mod tests {
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1078,8 +1088,8 @@ mod tests {
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1089,9 +1099,9 @@ mod tests {
             wallpaper: Some(std::path::PathBuf::from("/tmp/bg.jpg")),
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1099,8 +1109,8 @@ mod tests {
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1133,13 +1143,13 @@ mod tests {
 
     #[test]
     fn test_merge_preserves_existing() {
-        let existing = r#"
+        let existing = r"
 autoinstall:
   version: 1
   storage:
     layout:
       name: lvm
-"#;
+";
         let cfg = InjectConfig {
             source: crate::config::IsoSource::from_raw("/tmp/test.iso"),
             autoinstall_yaml: None,
@@ -1150,8 +1160,8 @@ autoinstall:
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1161,9 +1171,9 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1171,8 +1181,8 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1194,12 +1204,12 @@ autoinstall:
 
     #[test]
     fn test_merge_overrides_identity() {
-        let existing = r#"
+        let existing = r"
 autoinstall:
   identity:
     username: olduser
     hostname: oldhost
-"#;
+";
         let cfg = InjectConfig {
             source: crate::config::IsoSource::from_raw("/tmp/test.iso"),
             autoinstall_yaml: None,
@@ -1210,8 +1220,8 @@ autoinstall:
             username: Some("newuser".to_string()),
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1221,9 +1231,9 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1231,8 +1241,8 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1268,8 +1278,8 @@ autoinstall:
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1279,9 +1289,9 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec!["echo new".to_string()],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1289,8 +1299,8 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1325,8 +1335,8 @@ autoinstall:
             username: Some("testuser".to_string()),
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1342,8 +1352,8 @@ autoinstall:
                 sudo_nopasswd: false,
                 sudo_commands: vec![],
             },
-            firewall: Default::default(),
-            proxy: Default::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1351,8 +1361,8 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1383,8 +1393,8 @@ autoinstall:
             username: Some("testuser".to_string()),
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1400,8 +1410,8 @@ autoinstall:
                 sudo_nopasswd: true,
                 sudo_commands: vec![],
             },
-            firewall: Default::default(),
-            proxy: Default::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1409,8 +1419,8 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1442,8 +1452,8 @@ autoinstall:
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1453,14 +1463,14 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
+            user: UserConfig::default(),
             firewall: crate::config::FirewallConfig {
                 enabled: true,
                 default_policy: Some("deny".to_string()),
                 allow_ports: vec!["22".to_string(), "443".to_string()],
                 deny_ports: vec![],
             },
-            proxy: Default::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1468,8 +1478,8 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1499,8 +1509,8 @@ autoinstall:
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1510,9 +1520,9 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: Some("10.0.0.5/24".to_string()),
             gateway: Some("10.0.0.1".to_string()),
             enable_services: vec![],
@@ -1520,8 +1530,8 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1554,8 +1564,8 @@ autoinstall:
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1565,8 +1575,8 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
             proxy: crate::config::ProxyConfig {
                 http_proxy: Some("http://proxy.example.com:8080".to_string()),
                 https_proxy: Some("http://proxy.example.com:8443".to_string()),
@@ -1579,8 +1589,8 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1610,8 +1620,8 @@ autoinstall:
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1621,9 +1631,9 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec!["nginx".to_string()],
@@ -1631,8 +1641,8 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1664,8 +1674,8 @@ autoinstall:
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1675,9 +1685,9 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1688,8 +1698,8 @@ autoinstall:
             ],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1721,8 +1731,8 @@ autoinstall:
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1732,9 +1742,9 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1746,8 +1756,8 @@ autoinstall:
                 swappiness: Some(10),
             }),
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1777,8 +1787,8 @@ autoinstall:
             username: Some("admin".to_string()),
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1788,9 +1798,9 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1803,7 +1813,7 @@ autoinstall:
                 podman: false,
                 docker_users: vec!["admin".to_string()],
             },
-            grub: Default::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec![],
@@ -1833,8 +1843,8 @@ autoinstall:
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1844,9 +1854,9 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1854,7 +1864,7 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
+            containers: ContainerConfig::default(),
             grub: crate::config::GrubConfig {
                 timeout: Some(5),
                 cmdline_extra: vec!["quiet".to_string(), "iommu=on".to_string()],
@@ -1888,8 +1898,8 @@ autoinstall:
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1899,9 +1909,9 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1909,8 +1919,8 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: false,
             encrypt_passphrase: None,
             mounts: vec!["/dev/sdb1 /data ext4 defaults 0 2".to_string()],
@@ -1939,8 +1949,8 @@ autoinstall:
             username: None,
             password: None,
             realname: None,
-            ssh: Default::default(),
-            network: Default::default(),
+            ssh: SshConfig::default(),
+            network: NetworkConfig::default(),
             timezone: None,
             locale: None,
             keyboard_layout: None,
@@ -1950,9 +1960,9 @@ autoinstall:
             wallpaper: None,
             extra_late_commands: vec![],
             no_user_interaction: false,
-            user: Default::default(),
-            firewall: Default::default(),
-            proxy: Default::default(),
+            user: UserConfig::default(),
+            firewall: FirewallConfig::default(),
+            proxy: ProxyConfig::default(),
             static_ip: None,
             gateway: None,
             enable_services: vec![],
@@ -1960,8 +1970,8 @@ autoinstall:
             sysctl: vec![],
             swap: None,
             apt_repos: vec![],
-            containers: Default::default(),
-            grub: Default::default(),
+            containers: ContainerConfig::default(),
+            grub: GrubConfig::default(),
             encrypt: true,
             encrypt_passphrase: Some("secret".to_string()),
             mounts: vec![],

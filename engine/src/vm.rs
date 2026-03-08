@@ -670,7 +670,7 @@ mod tests {
             "-m".to_string(),
             "2048M".to_string(),
         ];
-        let result = maybe_remove_kvm(args.clone());
+        let result = maybe_remove_kvm(args);
         // -enable-kvm was never in the list; other args preserved regardless of KVM.
         assert!(result.contains(&"-m".to_string()));
         assert!(result.contains(&"2048M".to_string()));

@@ -128,6 +128,7 @@ impl ForgeIsoEngine {
         self.events.subscribe()
     }
 
+    #[allow(clippy::unused_async)] // async kept for API consistency
     pub async fn doctor(&self) -> DoctorReport {
         self.emit(EngineEvent::info(
             EventPhase::Doctor,
@@ -390,7 +391,7 @@ impl ForgeIsoEngine {
             report_json,
             report_html,
             artifacts: vec![output_iso],
-            source_iso: resolved.source_path.clone(),
+            source_iso: resolved.source_path,
             iso,
         })
     }
@@ -487,6 +488,7 @@ impl ForgeIsoEngine {
         })
     }
 
+    #[allow(clippy::unused_async)] // async kept for API consistency
     pub async fn report(&self, build_dir: &Path, format: &str) -> EngineResult<PathBuf> {
         let input = build_dir.join("build-report.json");
         let raw = std::fs::read_to_string(&input)?;
@@ -515,6 +517,7 @@ impl ForgeIsoEngine {
         Ok(output)
     }
 
+    #[allow(clippy::unused_async)] // async kept for API consistency
     pub async fn inspect_iso(&self, iso: &Path) -> EngineResult<serde_json::Value> {
         let metadata = inspect_iso(iso, SourceKind::LocalPath, iso.display().to_string())?;
         serde_json::to_value(metadata).map_err(EngineError::from)
@@ -615,6 +618,7 @@ impl ForgeIsoEngine {
             .ok_or_else(|| EngineError::InvalidConfig("Unable to get ISO filename".to_string()))?;
 
         // Determine the SHA256SUMS URL — graceful degradation if unavailable.
+        #[allow(clippy::option_if_let_else)] // multi-branch, map_or would be less readable
         let effective_sums_url: Option<String> = if let Some(url) = sums_url {
             Some(url.to_string())
         } else if let Some(distro) = metadata.distro {
@@ -1053,11 +1057,12 @@ impl ForgeIsoEngine {
             report_json: work_dir.join("report.json"),
             report_html: work_dir.join("report.html"),
             artifacts: vec![output_path],
-            source_iso: resolved.source_path.clone(),
+            source_iso: resolved.source_path,
             iso: metadata,
         })
     }
 
+    #[allow(clippy::unused_async)] // async kept for API consistency
     pub async fn diff_isos(&self, base: &Path, target: &Path) -> EngineResult<IsoDiff> {
         self.emit(EngineEvent::info(
             EventPhase::Diff,
@@ -1117,6 +1122,7 @@ impl ForgeIsoEngine {
     ///
     /// Returns a structured `Iso9660Compliance` result without emitting errors —
     /// failure information is encoded in the result's `compliant` and `error` fields.
+    #[allow(clippy::unused_async)] // async kept for API consistency
     pub async fn validate_iso9660(&self, path_str: &str) -> EngineResult<Iso9660Compliance> {
         use crate::iso::read_primary_volume_id;
 
@@ -1369,7 +1375,8 @@ fn require_tools(tools: &[&str]) -> EngineResult<()> {
 }
 
 fn is_squashfs_path(path: &str) -> bool {
-    path.ends_with(".squashfs") || path.ends_with(".sfs") || path.ends_with(".erofs")
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".squashfs") || lower.ends_with(".sfs") || lower.ends_with(".erofs")
 }
 
 fn write_iso_manifest(
@@ -1597,10 +1604,7 @@ fn ovmf_path() -> EngineResult<PathBuf> {
 fn remove_dir_all_force(path: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     for entry in WalkDir::new(path).into_iter().filter_map(Result::ok) {
-        let meta = match entry.metadata() {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
+        let Ok(meta) = entry.metadata() else { continue };
         let mut perms = meta.permissions();
         perms.set_mode(perms.mode() | 0o700);
         let _ = std::fs::set_permissions(entry.path(), perms);
@@ -1611,10 +1615,7 @@ fn remove_dir_all_force(path: &Path) -> std::io::Result<()> {
 fn chmod_recursive_writable(path: &Path) {
     use std::os::unix::fs::PermissionsExt;
     for entry in WalkDir::new(path).into_iter().filter_map(Result::ok) {
-        let meta = match entry.metadata() {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
+        let Ok(meta) = entry.metadata() else { continue };
         let mut perms = meta.permissions();
         perms.set_mode(perms.mode() | 0o700);
         let _ = std::fs::set_permissions(entry.path(), perms);

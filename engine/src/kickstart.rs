@@ -130,10 +130,10 @@ pub fn generate_kickstart_cfg(cfg: &InjectConfig) -> EngineResult<String> {
     if let Some(mirror) = &cfg.dnf_mirror {
         // Write a custom .repo file that overrides the fedora + updates baseurl
         dnf_post.push(format!(
-            r#"sed -i 's|^baseurl=.*|baseurl={mirror}/$releasever/Everything/$basearch/os/|' /etc/yum.repos.d/fedora.repo 2>/dev/null || true"#
+            r"sed -i 's|^baseurl=.*|baseurl={mirror}/$releasever/Everything/$basearch/os/|' /etc/yum.repos.d/fedora.repo 2>/dev/null || true"
         ));
         dnf_post.push(format!(
-            r#"sed -i 's|^baseurl=.*|baseurl={mirror}/$releasever/Everything/$basearch/os/|' /etc/yum.repos.d/fedora-updates.repo 2>/dev/null || true"#
+            r"sed -i 's|^baseurl=.*|baseurl={mirror}/$releasever/Everything/$basearch/os/|' /etc/yum.repos.d/fedora-updates.repo 2>/dev/null || true"
         ));
     }
 
@@ -145,7 +145,7 @@ pub fn generate_kickstart_cfg(cfg: &InjectConfig) -> EngineResult<String> {
         }
         if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
             // Plain URL — install the RPM or .repo file directly
-            if trimmed.ends_with(".rpm") {
+            if trimmed.to_ascii_lowercase().ends_with(".rpm") {
                 dnf_post.push(format!("dnf install -y '{trimmed}' 2>/dev/null || true"));
             } else {
                 // Assume it's a .repo URL
@@ -314,6 +314,42 @@ mod tests {
             ks.contains("services --enabled=sshd,docker")
                 || ks.contains("sshd") && ks.contains("docker"),
             "enabled services not found in kickstart: {ks}"
+        );
+    }
+
+    #[test]
+    fn test_kickstart_rpm_url_uppercase_extension() {
+        // Regression: .RPM (uppercase) must install the same as .rpm
+        let mut cfg = base_cfg();
+        cfg.dnf_repos = vec!["https://example.com/package.RPM".to_string()];
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        assert!(
+            ks.contains("dnf install") || ks.contains("package.RPM"),
+            "uppercase .RPM URL not handled: {ks}"
+        );
+    }
+
+    #[test]
+    fn test_kickstart_repo_url_install() {
+        // Plain .rpm URLs should use dnf install
+        let mut cfg = base_cfg();
+        cfg.dnf_repos = vec!["https://example.com/package.rpm".to_string()];
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        assert!(
+            ks.contains("dnf install"),
+            "rpm URL should use dnf install: {ks}"
+        );
+    }
+
+    #[test]
+    fn test_kickstart_repo_stanza_inline() {
+        // Non-URL entries should be written as .repo stanza content
+        let mut cfg = base_cfg();
+        cfg.dnf_repos = vec!["[myrepo]\nbaseurl=https://example.com/repo\nenabled=1".to_string()];
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        assert!(
+            ks.contains("forgeiso-extra-0.repo") || ks.contains("myrepo"),
+            "repo stanza should be written to a file: {ks}"
         );
     }
 }
