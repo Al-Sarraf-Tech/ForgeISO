@@ -393,9 +393,26 @@ pub struct InjectConfig {
     #[serde(default)]
     pub swap: Option<SwapConfig>,
 
-    // APT repositories
+    // APT repositories (Ubuntu/Debian)
     #[serde(default)]
     pub apt_repos: Vec<String>,
+
+    // DNF repositories (Fedora/RHEL) — each entry is a full `[id]\nbaseurl=...` stanza
+    // or a shorthand URL string that gets wrapped into a minimal stanza.
+    #[serde(default)]
+    pub dnf_repos: Vec<String>,
+
+    // Optional override for the primary DNF mirror base URL.
+    #[serde(default)]
+    pub dnf_mirror: Option<String>,
+
+    // Pacman repositories (Arch Linux) — each entry is a `Server = https://...` mirror line.
+    #[serde(default)]
+    pub pacman_repos: Vec<String>,
+
+    // Optional primary pacman mirror URL (written as the first Server= line in mirrorlist).
+    #[serde(default)]
+    pub pacman_mirror: Option<String>,
 
     // Container runtimes
     #[serde(default)]

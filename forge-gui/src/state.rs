@@ -112,7 +112,11 @@ pub struct InjectState {
     pub apt_mirror: String,
     // Packages
     pub packages: String,
-    pub apt_repos: String,
+    pub apt_repos: String,  // Ubuntu/Debian: ppa: lines or deb http://... lines
+    pub dnf_repos: String,  // Fedora/RHEL: repo stanza or URL, one per line
+    pub dnf_mirror: String, // primary DNF mirror override
+    pub pacman_repos: String, // Arch: Server = https://... lines
+    pub pacman_mirror: String, // primary pacman mirror override
     // Commands
     pub run_commands: String,
     pub late_commands: String,
@@ -175,6 +179,10 @@ impl Default for InjectState {
             apt_mirror: String::new(),
             packages: String::new(),
             apt_repos: String::new(),
+            dnf_repos: String::new(),
+            dnf_mirror: String::new(),
+            pacman_repos: String::new(),
+            pacman_mirror: String::new(),
             run_commands: String::new(),
             late_commands: String::new(),
             firewall_enabled: false,

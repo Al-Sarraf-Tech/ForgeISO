@@ -162,6 +162,28 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
         }
     }
 
+    // 9b. Pacman repos + mirror — Arch Linux only.
+    let is_arch = matches!(cfg.distro, Some(Distro::Arch));
+    if is_arch {
+        // Override primary mirror
+        if let Some(mirror) = &cfg.pacman_mirror {
+            cmds.push(format!(
+                "echo 'Server = {mirror}/$repo/os/$arch' > /target/etc/pacman.d/mirrorlist"
+            ));
+        }
+        // Append extra Server= lines to mirrorlist
+        for repo in &cfg.pacman_repos {
+            let line = repo.trim();
+            if !line.is_empty() {
+                cmds.push(format!("echo '{line}' >> /target/etc/pacman.d/mirrorlist"));
+            }
+        }
+        // Refresh package database after mirror changes
+        if cfg.pacman_mirror.is_some() || !cfg.pacman_repos.is_empty() {
+            cmds.push("chroot /target pacman -Sy --noconfirm".to_string());
+        }
+    }
+
     // 10. Docker — Ubuntu apt-based install only; Fedora adds docker-ce via dnf separately.
     if cfg.containers.docker && is_ubuntu {
         cmds.push("install -m 0755 -d /target/etc/apt/keyrings".to_string());
@@ -845,6 +867,10 @@ mod tests {
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -902,6 +928,10 @@ mod tests {
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -962,6 +992,10 @@ mod tests {
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1017,6 +1051,10 @@ mod tests {
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1068,6 +1106,10 @@ mod tests {
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1136,6 +1178,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let result = merge_autoinstall_yaml(existing, &cfg).unwrap();
@@ -1192,6 +1238,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let result = merge_autoinstall_yaml(existing, &cfg).unwrap();
@@ -1246,6 +1296,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let result = merge_autoinstall_yaml(existing, &cfg).unwrap();
@@ -1304,6 +1358,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1358,6 +1416,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1413,6 +1475,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1461,6 +1527,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1516,6 +1586,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1564,6 +1638,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1617,6 +1695,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1671,6 +1753,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1723,6 +1809,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1775,6 +1865,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1822,6 +1916,10 @@ autoinstall:
             mounts: vec!["/dev/sdb1 /data ext4 defaults 0 2".to_string()],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1869,6 +1967,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();

@@ -207,9 +207,23 @@ enum Commands {
         #[arg(long)]
         swappiness: Option<u8>,
 
-        // APT repos
+        // APT repos (Ubuntu/Debian)
         #[arg(long, action = clap::ArgAction::Append)]
         apt_repo: Vec<String>,
+
+        // DNF repos (Fedora/RHEL) — full "[id]\nbaseurl=..." stanza or URL
+        #[arg(long, action = clap::ArgAction::Append)]
+        dnf_repo: Vec<String>,
+        /// Override the primary Fedora/RHEL DNF mirror base URL
+        #[arg(long)]
+        dnf_mirror: Option<String>,
+
+        // Pacman repos (Arch) — "Server = https://..." mirror lines
+        #[arg(long, action = clap::ArgAction::Append)]
+        pacman_repo: Vec<String>,
+        /// Override the primary Arch Linux pacman mirror URL
+        #[arg(long)]
+        pacman_mirror: Option<String>,
 
         // Containers
         #[arg(long)]
@@ -493,6 +507,10 @@ async fn main() -> anyhow::Result<()> {
             swap_file,
             swappiness,
             apt_repo,
+            dnf_repo,
+            dnf_mirror,
+            pacman_repo,
+            pacman_mirror,
             docker,
             podman,
             docker_user,
@@ -638,6 +656,10 @@ async fn main() -> anyhow::Result<()> {
                     })
                 },
                 apt_repos: apt_repo,
+                dnf_repos: dnf_repo,
+                dnf_mirror,
+                pacman_repos: pacman_repo,
+                pacman_mirror,
                 containers: ContainerConfig {
                     docker,
                     podman,

@@ -1418,15 +1418,6 @@ impl ForgeApp {
                 });
                 ui.end_row();
                 ui.vertical(|ui| {
-                    lbl(ui, "APT Mirror");
-                    ui.add_enabled(
-                        !running,
-                        egui::TextEdit::singleline(&mut self.inject.apt_mirror)
-                            .hint_text("http://mirror.example.com/ubuntu")
-                            .desired_width(f32::INFINITY),
-                    );
-                });
-                ui.vertical(|ui| {
                     lbl(ui, "Wallpaper  (image path)");
                     ui.horizontal(|ui| {
                         ui.add_enabled(
@@ -1453,8 +1444,10 @@ impl ForgeApp {
 
         rule(ui);
 
-        // ── Packages ──────────────────────────────────────────────────────
-        section(ui, "Packages");
+        // ── Packages & Repositories ────────────────────────────────────────
+        section(ui, "Packages & Repositories");
+
+        // Row 1: packages + APT repos/mirror
         egui::Grid::new("adv_pkg_grid")
             .num_columns(2)
             .min_col_width(col_w)
@@ -1465,17 +1458,221 @@ impl ForgeApp {
                     ui.add_enabled(
                         !running,
                         egui::TextEdit::multiline(&mut self.inject.packages)
-                            .hint_text("curl\ngit\nvim")
+                            .hint_text(
+                                "curl\ngit\nvim\nhtop\nunzip\nrsync\nwget\njq\nnet-tools",
+                            )
+                            .desired_width(f32::INFINITY)
+                            .desired_rows(5),
+                    );
+                });
+                ui.vertical(|ui| {
+                    lbl(ui, "APT Mirror  (Ubuntu/Debian — click to preset)");
+                    ui.horizontal_wrapped(|ui| {
+                        ui.style_mut().spacing.item_spacing.x = 6.0;
+                        for (label, url) in [
+                            ("official",   "http://archive.ubuntu.com/ubuntu"),
+                            ("US",         "http://us.archive.ubuntu.com/ubuntu"),
+                            ("kernel.org", "http://mirrors.edge.kernel.org/ubuntu"),
+                            ("MIT",        "http://mirrors.mit.edu/ubuntu"),
+                        ] {
+                            if ui.add_enabled(
+                                !running,
+                                egui::Button::new(label)
+                                    .fill(SURFACE)
+                                    .stroke(Stroke::new(1.0, BORDER))
+                                    .min_size(Vec2::new(0.0, 28.0)),
+                            ).on_hover_text(url).clicked() {
+                                self.inject.apt_mirror = url.to_owned();
+                            }
+                        }
+                    });
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.apt_mirror)
+                            .hint_text("http://archive.ubuntu.com/ubuntu")
+                            .desired_width(f32::INFINITY)
+                            .min_size(Vec2::new(0.0, 34.0)),
+                    );
+                    ui.add_space(8.0);
+                    lbl(ui, "Extra APT Repos  (one per line — click to add)");
+                    ui.horizontal_wrapped(|ui| {
+                        ui.style_mut().spacing.item_spacing.x = 6.0;
+                        for (label, repo) in [
+                            ("universe",     "deb http://archive.ubuntu.com/ubuntu noble universe"),
+                            ("multiverse",   "deb http://archive.ubuntu.com/ubuntu noble multiverse"),
+                            ("Docker CE",    "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable"),
+                            ("GitHub CLI",   "deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main"),
+                            ("HashiCorp",    "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com noble main"),
+                            ("NodeSource 20","deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main"),
+                            ("MongoDB 7",    "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/7.0 multiverse"),
+                            ("Grafana",      "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main"),
+                        ] {
+                            if ui.add_enabled(
+                                !running,
+                                egui::Button::new(label)
+                                    .fill(SURFACE)
+                                    .stroke(Stroke::new(1.0, BORDER))
+                                    .min_size(Vec2::new(0.0, 28.0)),
+                            ).on_hover_text(repo).clicked() && !self.inject.apt_repos.contains(repo) {
+                                if !self.inject.apt_repos.is_empty()
+                                    && !self.inject.apt_repos.ends_with('\n')
+                                {
+                                    self.inject.apt_repos.push('\n');
+                                }
+                                self.inject.apt_repos.push_str(repo);
+                            }
+                        }
+                    });
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.apt_repos)
+                            .hint_text("ppa:ondrej/php\ndeb http://archive.ubuntu.com/ubuntu noble universe")
+                            .desired_width(f32::INFINITY)
+                            .desired_rows(4),
+                    );
+                });
+                ui.end_row();
+            });
+
+        ui.add_space(12.0);
+
+        // Row 2: DNF (Fedora) + Pacman (Arch)
+        egui::Grid::new("adv_dnf_pacman_grid")
+            .num_columns(2)
+            .min_col_width(col_w)
+            .spacing([20.0, 16.0])
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    lbl(ui, "DNF Mirror  (Fedora/RHEL — click to preset)");
+                    ui.horizontal_wrapped(|ui| {
+                        ui.style_mut().spacing.item_spacing.x = 6.0;
+                        for (label, url) in [
+                            ("official",  "https://download.fedoraproject.org/pub/fedora/linux"),
+                            ("MIT",       "https://mirrors.mit.edu/fedora/linux"),
+                            ("OSUOSL",    "https://ftp.osuosl.org/pub/fedora/linux"),
+                            ("kernel.org","https://mirrors.kernel.org/fedora"),
+                        ] {
+                            if ui.add_enabled(
+                                !running,
+                                egui::Button::new(label)
+                                    .fill(SURFACE)
+                                    .stroke(Stroke::new(1.0, BORDER))
+                                    .min_size(Vec2::new(0.0, 28.0)),
+                            ).on_hover_text(url).clicked() {
+                                self.inject.dnf_mirror = url.to_owned();
+                            }
+                        }
+                    });
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::singleline(&mut self.inject.dnf_mirror)
+                            .hint_text("https://download.fedoraproject.org/pub/fedora/linux")
+                            .desired_width(f32::INFINITY)
+                            .min_size(Vec2::new(0.0, 34.0)),
+                    );
+                    ui.add_space(8.0);
+                    lbl(ui, "Extra DNF Repos  (URL or stanza — click to add)");
+                    ui.horizontal_wrapped(|ui| {
+                        ui.style_mut().spacing.item_spacing.x = 6.0;
+                        for (label, repo) in [
+                            ("EPEL",              "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${releasever}.noarch.rpm"),
+                            ("RPMFusion Free",    "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${releasever}.noarch.rpm"),
+                            ("RPMFusion NonFree", "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${releasever}.noarch.rpm"),
+                            ("Docker CE",         "https://download.docker.com/linux/fedora/docker-ce.repo"),
+                            ("HashiCorp",         "https://rpm.releases.hashicorp.com/fedora/hashicorp.repo"),
+                            ("GitHub CLI",        "https://cli.github.com/packages/rpm/gh-cli.repo"),
+                            ("VS Code",           "https://packages.microsoft.com/yumrepos/vscode"),
+                            ("Google Chrome",     "https://dl.google.com/linux/chrome/rpm/stable/x86_64"),
+                            ("NodeSource 20",     "https://rpm.nodesource.com/pub_20.x/nodistro/nodejs/${arch}/nodesource-release-nodistro-1.noarch.rpm"),
+                            ("Grafana",           "https://rpm.grafana.com/oss/release"),
+                        ] {
+                            if ui.add_enabled(
+                                !running,
+                                egui::Button::new(label)
+                                    .fill(SURFACE)
+                                    .stroke(Stroke::new(1.0, BORDER))
+                                    .min_size(Vec2::new(0.0, 28.0)),
+                            ).on_hover_text(repo).clicked() && !self.inject.dnf_repos.contains(repo) {
+                                if !self.inject.dnf_repos.is_empty()
+                                    && !self.inject.dnf_repos.ends_with('\n')
+                                {
+                                    self.inject.dnf_repos.push('\n');
+                                }
+                                self.inject.dnf_repos.push_str(repo);
+                            }
+                        }
+                    });
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.dnf_repos)
+                            .hint_text("https://dl.fedoraproject.org/pub/epel/epel-release-latest-${releasever}.noarch.rpm")
                             .desired_width(f32::INFINITY)
                             .desired_rows(4),
                     );
                 });
                 ui.vertical(|ui| {
-                    lbl(ui, "Extra APT Repos  (one per line)");
+                    lbl(ui, "Pacman Mirror  (Arch Linux — click to preset)");
+                    ui.horizontal_wrapped(|ui| {
+                        ui.style_mut().spacing.item_spacing.x = 6.0;
+                        for (label, url) in [
+                            ("Cloudflare", "https://cloudflaremirrors.com/archlinux"),
+                            ("MIT",        "https://mirrors.mit.edu/archlinux"),
+                            ("OSUOSL",     "https://ftp.osuosl.org/pub/archlinux"),
+                            ("kernel.org", "https://mirrors.edge.kernel.org/archlinux"),
+                            ("Rackspace",  "https://mirror.rackspace.com/archlinux"),
+                        ] {
+                            if ui.add_enabled(
+                                !running,
+                                egui::Button::new(label)
+                                    .fill(SURFACE)
+                                    .stroke(Stroke::new(1.0, BORDER))
+                                    .min_size(Vec2::new(0.0, 28.0)),
+                            ).on_hover_text(url).clicked() {
+                                self.inject.pacman_mirror = url.to_owned();
+                            }
+                        }
+                    });
                     ui.add_enabled(
                         !running,
-                        egui::TextEdit::multiline(&mut self.inject.apt_repos)
-                            .hint_text("ppa:example/ppa")
+                        egui::TextEdit::singleline(&mut self.inject.pacman_mirror)
+                            .hint_text("https://cloudflaremirrors.com/archlinux")
+                            .desired_width(f32::INFINITY)
+                            .min_size(Vec2::new(0.0, 34.0)),
+                    );
+                    ui.add_space(8.0);
+                    lbl(ui, "Extra Pacman Repos  (Server = lines — click to add)");
+                    ui.horizontal_wrapped(|ui| {
+                        ui.style_mut().spacing.item_spacing.x = 6.0;
+                        for (label, repo) in [
+                            ("Cloudflare",  "Server = https://cloudflaremirrors.com/archlinux/$repo/os/$arch"),
+                            ("kernel.org",  "Server = https://mirrors.edge.kernel.org/archlinux/$repo/os/$arch"),
+                            ("MIT",         "Server = https://mirrors.mit.edu/archlinux/$repo/os/$arch"),
+                            ("OSUOSL",      "Server = https://ftp.osuosl.org/pub/archlinux/$repo/os/$arch"),
+                            ("Rackspace",   "Server = https://mirror.rackspace.com/archlinux/$repo/os/$arch"),
+                            ("Chaotic-AUR", "Server = https://cdn-mirror.chaotic.cx/$repo/$arch"),
+                            ("ArchLinuxCN", "Server = https://repo.archlinuxcn.org/$arch"),
+                            ("BlackArch",   "Server = https://blackarch.org/blackarch/$repo/os/$arch"),
+                        ] {
+                            if ui.add_enabled(
+                                !running,
+                                egui::Button::new(label)
+                                    .fill(SURFACE)
+                                    .stroke(Stroke::new(1.0, BORDER))
+                                    .min_size(Vec2::new(0.0, 28.0)),
+                            ).on_hover_text(repo).clicked() && !self.inject.pacman_repos.contains(repo) {
+                                if !self.inject.pacman_repos.is_empty()
+                                    && !self.inject.pacman_repos.ends_with('\n')
+                                {
+                                    self.inject.pacman_repos.push('\n');
+                                }
+                                self.inject.pacman_repos.push_str(repo);
+                            }
+                        }
+                    });
+                    ui.add_enabled(
+                        !running,
+                        egui::TextEdit::multiline(&mut self.inject.pacman_repos)
+                            .hint_text("Server = https://cloudflaremirrors.com/archlinux/$repo/os/$arch")
                             .desired_width(f32::INFINITY)
                             .desired_rows(4),
                     );
@@ -2764,6 +2961,10 @@ fn build_inject_config(inject: &InjectState) -> InjectConfig {
                 swappiness: None,
             }),
         apt_repos: lines(&inject.apt_repos),
+        dnf_repos: lines(&inject.dnf_repos),
+        dnf_mirror: opt(&inject.dnf_mirror),
+        pacman_repos: lines(&inject.pacman_repos),
+        pacman_mirror: opt(&inject.pacman_mirror),
         containers: ContainerConfig {
             docker: inject.docker,
             podman: inject.podman,
