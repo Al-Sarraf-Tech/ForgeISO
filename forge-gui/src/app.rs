@@ -203,7 +203,7 @@ pub struct ForgeApp {
     doctor_result: Option<DoctorReport>,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
     Inject,
     Verify,
@@ -490,6 +490,8 @@ impl ForgeApp {
     }
 
     fn spawn_inject(&mut self) {
+        self.inject_done = false;
+        self.inject_result = None;
         self.start_job("Injecting…");
         let engine = Arc::clone(&self.engine);
         let tx = self.tx.clone();
@@ -509,6 +511,9 @@ impl ForgeApp {
     }
 
     fn spawn_verify(&mut self) {
+        self.verify_done = false;
+        self.verify_result = None;
+        self.iso9660_result = None;
         self.start_job("Verifying checksum…");
         let engine = Arc::clone(&self.engine);
         let tx = self.tx.clone();
@@ -544,6 +549,8 @@ impl ForgeApp {
     }
 
     fn spawn_diff(&mut self) {
+        self.diff_done = false;
+        self.diff_result = None;
         self.start_job("Comparing ISOs…");
         let engine = Arc::clone(&self.engine);
         let tx = self.tx.clone();
@@ -562,6 +569,8 @@ impl ForgeApp {
     }
 
     fn spawn_build(&mut self) {
+        self.build_done = false;
+        self.build_result = None;
         self.start_job("Building ISO…");
         let engine = Arc::clone(&self.engine);
         let tx = self.tx.clone();
@@ -624,14 +633,17 @@ impl ForgeApp {
     }
 
     fn spawn_scan(&mut self) {
-        self.start_job("Scanning artifact…");
-        let engine = Arc::clone(&self.engine);
-        let tx = self.tx.clone();
-        let iso = self
+        let Some(iso) = self
             .build_result
             .as_ref()
             .and_then(|r| r.artifacts.first().cloned())
-            .unwrap_or_default();
+        else {
+            self.set_status(StatusMsg::err("No build artifact to scan"));
+            return;
+        };
+        self.start_job("Scanning artifact…");
+        let engine = Arc::clone(&self.engine);
+        let tx = self.tx.clone();
         let out = iso
             .parent()
             .map(|p| p.join("scan"))
@@ -649,14 +661,17 @@ impl ForgeApp {
     }
 
     fn spawn_test_iso(&mut self) {
-        self.start_job("Running boot test…");
-        let engine = Arc::clone(&self.engine);
-        let tx = self.tx.clone();
-        let iso = self
+        let Some(iso) = self
             .build_result
             .as_ref()
             .and_then(|r| r.artifacts.first().cloned())
-            .unwrap_or_default();
+        else {
+            self.set_status(StatusMsg::err("No build artifact to test"));
+            return;
+        };
+        self.start_job("Running boot test…");
+        let engine = Arc::clone(&self.engine);
+        let tx = self.tx.clone();
         let out = iso
             .parent()
             .map(|p| p.join("test"))
@@ -674,14 +689,13 @@ impl ForgeApp {
     }
 
     fn spawn_report(&mut self, format: &str) {
+        let Some(build_dir) = self.build_result.as_ref().map(|r| r.output_dir.clone()) else {
+            self.set_status(StatusMsg::err("No build result to report on"));
+            return;
+        };
         self.start_job(&format!("Rendering {format} report…"));
         let engine = Arc::clone(&self.engine);
         let tx = self.tx.clone();
-        let build_dir = self
-            .build_result
-            .as_ref()
-            .map(|r| r.output_dir.clone())
-            .unwrap_or_default();
         let fmt = format.to_string();
         self.current_task = Some(self.rt.spawn(async move {
             match engine.report(&build_dir, &fmt).await {
@@ -750,7 +764,7 @@ impl ForgeApp {
                                         .color(ACCENT),
                                 );
                             }
-                        } else if let Some(s) = &self.status.clone() {
+                        } else if let Some(s) = self.status.as_ref() {
                             let col = if s.is_error { RED } else { GREEN };
                             ui.label(RichText::new(&s.text).size(12.0).color(col));
                         }
@@ -802,7 +816,7 @@ impl ForgeApp {
                         ))
                         .min_size(Vec2::new(0.0, 34.0));
                         if ui.add(btn).clicked() {
-                            self.active_tab = tab.clone();
+                            self.active_tab = *tab;
                         }
                         ui.add_space(2.0);
                     }
@@ -1067,6 +1081,7 @@ impl ForgeApp {
 
                 // ── Validation & Run ───────────────────────────────────────
                 let source_empty = self.inject.source.trim().is_empty();
+                let out_empty = self.inject.output_dir.trim().is_empty();
                 let pw_mismatch = !self.inject.password.is_empty()
                     && !self.inject.password_confirm.is_empty()
                     && self.inject.password != self.inject.password_confirm;
@@ -1079,6 +1094,14 @@ impl ForgeApp {
                 if source_empty {
                     ui.label(
                         RichText::new("Source ISO is required to proceed.")
+                            .size(12.0)
+                            .color(AMBER),
+                    );
+                    ui.add_space(4.0);
+                }
+                if out_empty {
+                    ui.label(
+                        RichText::new("Output directory is required.")
                             .size(12.0)
                             .color(AMBER),
                     );
@@ -1101,7 +1124,7 @@ impl ForgeApp {
                     ui.add_space(4.0);
                 }
 
-                let can = !source_empty && !pw_mismatch && !sha_invalid && !running;
+                let can = !source_empty && !out_empty && !pw_mismatch && !sha_invalid && !running;
                 let btn_label = if running { "⏳  Injecting…" } else { "Inject ISO" };
                 if action_btn(ui, btn_label, can) {
                     do_inject = true;
@@ -1155,9 +1178,15 @@ impl ForgeApp {
                                         .clicked()
                                     {
                                         if let Some(dir) = a.parent() {
-                                            let _ = std::process::Command::new("xdg-open")
+                                            if std::process::Command::new("xdg-open")
                                                 .arg(dir)
-                                                .spawn();
+                                                .spawn()
+                                                .is_err()
+                                            {
+                                                self.set_status(StatusMsg::err(
+                                                    "xdg-open failed — open the folder manually",
+                                                ));
+                                            }
                                         }
                                     }
                                 });
@@ -2258,7 +2287,9 @@ impl ForgeApp {
 
                 ui.add_space(12.0);
                 ui.horizontal(|ui| {
-                    let can_build = !self.build.source.trim().is_empty() && !running;
+                    let can_build = !self.build.source.trim().is_empty()
+                    && !self.build.output_dir.trim().is_empty()
+                    && !running;
                     let build_lbl = if running { "⏳  Building…" } else { "Build ISO" };
                     let btn = egui::Button::new(
                         RichText::new(build_lbl)

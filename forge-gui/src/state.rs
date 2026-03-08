@@ -57,7 +57,7 @@ impl Stage {
 
 // ── File picker target ─────────────────────────────────────────────────────────
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PickTarget {
     InjectSource,
     InjectOutputDir,
