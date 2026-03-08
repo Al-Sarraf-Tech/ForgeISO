@@ -18,10 +18,12 @@ ignore = [
     # Tracked: swap indicatif for a maintained alternative when available.
     { id = "RUSTSEC-2025-0119", reason = "number_prefix is unmaintained but has no vulnerability; indicatif has no safe upgrade path yet" },
 
-    # paste: unmaintained, no vulnerability, pulled in by ratatui via macros.
-    # ratatui 0.30+ still transitively uses paste; no upgrade path available.
-    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained but has no vulnerability; ratatui 0.30 still depends on it transitively" },
-
+    # NOTE: RUSTSEC-2024-0436 (paste unmaintained) is NOT listed here.
+    # On Linux targets (x86_64-unknown-linux-{gnu,musl}) paste only appears via
+    # metal→wgpu-hal, which is the macOS GPU backend and is compiled-out.
+    # cargo-deny correctly does not encounter it.  cargo-audit sees it in Cargo.lock
+    # because it scans all lock entries regardless of target — that is expected.
+    # If macOS targets are ever added, re-add the suppress for RUSTSEC-2024-0436.
 ]
 
 # ── Licenses ─────────────────────────────────────────────────────────────────
@@ -74,6 +76,19 @@ skip = [
     # linux-raw-sys / rustix: version splits from different wayland/winit chains
     { crate = "linux-raw-sys", reason = "winit/wayland ecosystem version split" },
     { crate = "rustix",       reason = "winit/wayland ecosystem version split" },
+    # wayland / egui / winit split: smithay-client-toolkit 0.19 (sctk-adwaita / winit)
+    # and 0.20 (smithay-clipboard / egui-winit) are both pulled by eframe 0.33.
+    { crate = "smithay-client-toolkit", reason = "eframe 0.33 pulls sctk 0.19 via winit/sctk-adwaita and 0.20 via smithay-clipboard; no single upgrade available" },
+    { crate = "calloop",               reason = "sctk 0.19 uses calloop 0.13; sctk 0.20 uses calloop 0.14 — upstream split from eframe 0.33" },
+    { crate = "calloop-wayland-source", reason = "follows calloop version split (0.3 with sctk 0.19, 0.4 with sctk 0.20)" },
+    # hashbrown / foldhash: accesskit (egui a11y) still on hashbrown 0.15; ratatui/lru use 0.16
+    { crate = "hashbrown", reason = "accesskit_consumer uses hashbrown 0.15; ratatui-core/lru uses 0.16 — no single version satisfies both" },
+    { crate = "foldhash",  reason = "follows hashbrown version split (0.1 with 0.15, 0.2 with 0.16)" },
+    # quick-xml: zbus_xml uses 0.38; wayland-scanner uses 0.39
+    { crate = "quick-xml", reason = "zbus_xml 5.1 uses quick-xml 0.38; wayland-scanner uses 0.39 — egui/accessibility chain" },
+    # thiserror: accesskit / sctk 0.19 pull thiserror 1.x; our engine + ratatui use 2.x
+    { crate = "thiserror",      reason = "accesskit/sctk 0.19 still on thiserror 1.x; engine and ratatui upgraded to 2.x" },
+    { crate = "thiserror-impl", reason = "proc-macro companion to thiserror; follows the same 1.x/2.x split" },
 ]
 
 # ── Sources ──────────────────────────────────────────────────────────────────

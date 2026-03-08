@@ -479,4 +479,108 @@ mod tests {
             );
         }
     }
+
+    // ── Additional coverage ──────────────────────────────────────────────────
+
+    #[test]
+    fn find_preset_by_id_returns_matching_struct() {
+        let preset = find_preset(&PresetId::ArchLinux);
+        assert!(preset.is_some(), "find_preset by ID must return Some");
+        assert_eq!(preset.unwrap().id, PresetId::ArchLinux);
+    }
+
+    #[test]
+    fn centos_stream_has_direct_url() {
+        let p = find_preset_by_str("centos-stream").expect("centos-stream must exist");
+        assert_eq!(p.strategy, AcquisitionStrategy::DirectUrl);
+        let url = resolve_url(p).unwrap();
+        assert!(url.is_some(), "centos-stream should have a direct URL");
+        assert!(
+            url.unwrap().contains("centos.org"),
+            "centos-stream URL should point to centos.org"
+        );
+    }
+
+    #[test]
+    fn mint_cinnamon_is_discovery_page() {
+        let p = find_preset_by_str("linux-mint-cinnamon").expect("linux-mint-cinnamon must exist");
+        assert_eq!(p.strategy, AcquisitionStrategy::DiscoveryPage);
+        assert!(
+            resolve_url(p).unwrap().is_none(),
+            "DiscoveryPage preset should resolve to None"
+        );
+    }
+
+    #[test]
+    fn format_preset_detail_shows_none_for_missing_url() {
+        // rhel-custom has no direct_url
+        let p = find_preset_by_str("rhel-custom").unwrap();
+        let d = format_preset_detail(p);
+        assert!(
+            d.contains("Direct URL:    none"),
+            "missing 'none' for absent direct_url: {d}"
+        );
+    }
+
+    #[test]
+    fn preset_id_parse_returns_none_for_garbage_input() {
+        for bad in &["", " ", "ubuntu", "ARCH", "centos", "fake-distro-9999"] {
+            assert!(
+                PresetId::parse(bad).is_none(),
+                "PresetId::parse should return None for {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn all_architectures_are_nonempty() {
+        for p in all_presets() {
+            assert!(
+                !p.architecture.is_empty(),
+                "preset '{}' has empty architecture",
+                p.id.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn ubuntu_desktop_checksum_url_points_to_noble() {
+        let p = find_preset_by_str("ubuntu-desktop-lts").unwrap();
+        let cu = p
+            .checksum_url
+            .expect("ubuntu-desktop-lts must have checksum_url");
+        assert!(
+            cu.contains("noble"),
+            "ubuntu-desktop-lts checksum URL should reference 'noble': {cu}"
+        );
+    }
+
+    #[test]
+    fn almalinux_has_direct_url_pointing_to_almalinux_org() {
+        let p = find_preset_by_str("almalinux").unwrap();
+        assert_eq!(p.strategy, AcquisitionStrategy::DirectUrl);
+        let url = resolve_url(p).unwrap().unwrap();
+        assert!(url.contains("almalinux.org"), "AlmaLinux URL: {url}");
+    }
+
+    #[test]
+    fn rocky_linux_checksum_url_is_set() {
+        let p = find_preset_by_str("rocky-linux").unwrap();
+        assert!(
+            p.checksum_url.is_some(),
+            "rocky-linux must have a checksum URL"
+        );
+    }
+
+    #[test]
+    fn acquisition_strategy_as_str_roundtrip() {
+        let variants = [
+            (AcquisitionStrategy::DirectUrl, "direct_url"),
+            (AcquisitionStrategy::DiscoveryPage, "discovery_page"),
+            (AcquisitionStrategy::UserProvided, "user_provided"),
+        ];
+        for (variant, expected) in &variants {
+            assert_eq!(variant.as_str(), *expected);
+        }
+    }
 }

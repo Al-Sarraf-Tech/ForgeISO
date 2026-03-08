@@ -903,4 +903,182 @@ mod tests {
         // BIOS mode must never attempt OVMF discovery.
         assert!(spec.ovmf_path.is_none());
     }
+
+    // ── Additional coverage ──────────────────────────────────────────────────
+
+    #[test]
+    fn proxmox_cmds_bios_has_seabios() {
+        let spec = test_spec(Hypervisor::Proxmox, FirmwareMode::Bios);
+        let cmds = proxmox_cmds(&spec);
+        let has_seabios = cmds.iter().any(|c| c.contains("seabios"));
+        assert!(
+            has_seabios,
+            "BIOS Proxmox command should contain 'seabios': {cmds:?}"
+        );
+    }
+
+    #[test]
+    fn proxmox_cmds_uefi_has_ovmf_bios_flag() {
+        let spec = test_spec(Hypervisor::Proxmox, FirmwareMode::Uefi);
+        let cmds = proxmox_cmds(&spec);
+        let has_ovmf = cmds.iter().any(|c| c.contains("ovmf"));
+        assert!(
+            has_ovmf,
+            "UEFI Proxmox command should contain 'ovmf': {cmds:?}"
+        );
+    }
+
+    #[test]
+    fn proxmox_cmds_contains_qm_start() {
+        for fw in [FirmwareMode::Bios, FirmwareMode::Uefi] {
+            let spec = test_spec(Hypervisor::Proxmox, fw);
+            let cmds = proxmox_cmds(&spec);
+            let has_start = cmds.iter().any(|c| c.starts_with("qm start"));
+            assert!(
+                has_start,
+                "Proxmox {fw} commands must include 'qm start': {cmds:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn proxmox_cmds_contains_vm_name() {
+        let spec = test_spec(Hypervisor::Proxmox, FirmwareMode::Bios);
+        let cmds = proxmox_cmds(&spec);
+        let has_name = cmds.iter().any(|c| c.contains("test-ubuntu"));
+        assert!(
+            has_name,
+            "Proxmox commands should embed the VM name: {cmds:?}"
+        );
+    }
+
+    #[test]
+    fn emit_launch_qemu_uefi_no_ovmf_path_emits_note() {
+        let mut spec = test_spec(Hypervisor::Qemu, FirmwareMode::Uefi);
+        spec.ovmf_path = None;
+        let out = emit_launch(&spec);
+        let has_ovmf_note = out.notes.iter().any(|n| n.contains("OVMF"));
+        assert!(
+            has_ovmf_note,
+            "QEMU UEFI without ovmf_path should warn about OVMF: {:?}",
+            out.notes
+        );
+    }
+
+    #[test]
+    fn emit_launch_vbox_note_mentions_version() {
+        let spec = test_spec(Hypervisor::VirtualBox, FirmwareMode::Bios);
+        let out = emit_launch(&spec);
+        let has_version = out.notes.iter().any(|n| n.contains("6.1"));
+        assert!(
+            has_version,
+            "VirtualBox emit_launch should note minimum version: {:?}",
+            out.notes
+        );
+    }
+
+    #[test]
+    fn hyperv_ps1_contains_start_vm() {
+        let spec = test_spec(Hypervisor::HyperV, FirmwareMode::Uefi);
+        let script = hyperv_ps1(&spec);
+        assert!(
+            script.contains("Start-VM"),
+            "Hyper-V script should contain Start-VM: {script}"
+        );
+    }
+
+    #[test]
+    fn hyperv_ps1_uefi_generation_is_2() {
+        let spec = test_spec(Hypervisor::HyperV, FirmwareMode::Uefi);
+        let script = hyperv_ps1(&spec);
+        assert!(
+            script.contains("Generation 2"),
+            "UEFI Hyper-V should use Generation 2: {script}"
+        );
+    }
+
+    #[test]
+    fn hyperv_ps1_bios_generation_is_1() {
+        let spec = test_spec(Hypervisor::HyperV, FirmwareMode::Bios);
+        let script = hyperv_ps1(&spec);
+        assert!(
+            script.contains("Generation 1"),
+            "BIOS Hyper-V should use Generation 1: {script}"
+        );
+    }
+
+    #[test]
+    fn maybe_remove_kvm_does_not_remove_when_flag_absent() {
+        // Args that never contained -enable-kvm — function must be idempotent
+        let args = vec!["qemu-system-x86_64".to_string(), "-m".to_string()];
+        let result = maybe_remove_kvm(args.clone());
+        assert_eq!(
+            result, args,
+            "args without -enable-kvm must pass through unchanged"
+        );
+    }
+
+    #[test]
+    fn qemu_bios_args_ram_matches_spec() {
+        let mut spec = test_spec(Hypervisor::Qemu, FirmwareMode::Bios);
+        spec.ram_mb = 4096;
+        let args = qemu_bios_args(&spec);
+        let has_ram = args.iter().any(|a| a == "4096M");
+        assert!(
+            has_ram,
+            "BIOS args should contain 4096M for ram_mb=4096: {args:?}"
+        );
+    }
+
+    #[test]
+    fn qemu_uefi_args_ram_matches_spec() {
+        let mut spec = test_spec(Hypervisor::Qemu, FirmwareMode::Uefi);
+        spec.ram_mb = 8192;
+        let args = qemu_uefi_args(&spec);
+        let has_ram = args.iter().any(|a| a == "8192M");
+        assert!(
+            has_ram,
+            "UEFI args should contain 8192M for ram_mb=8192: {args:?}"
+        );
+    }
+
+    #[test]
+    fn emit_launch_proxmox_note_mentions_vmid() {
+        let spec = test_spec(Hypervisor::Proxmox, FirmwareMode::Bios);
+        let out = emit_launch(&spec);
+        let has_vmid_note = out.notes.iter().any(|n| n.contains("9000"));
+        assert!(
+            has_vmid_note,
+            "Proxmox emit_launch should note VMID 9000 convention: {:?}",
+            out.notes
+        );
+    }
+
+    #[test]
+    fn emit_launch_hyperv_note_mentions_elevated() {
+        let spec = test_spec(Hypervisor::HyperV, FirmwareMode::Bios);
+        let out = emit_launch(&spec);
+        let has_note = out
+            .notes
+            .iter()
+            .any(|n| n.to_lowercase().contains("powershell"));
+        assert!(
+            has_note,
+            "Hyper-V emit_launch should note PowerShell requirement: {:?}",
+            out.notes
+        );
+    }
+
+    #[test]
+    fn firmware_as_str_bios_and_uefi() {
+        assert_eq!(FirmwareMode::Bios.as_str(), "bios");
+        assert_eq!(FirmwareMode::Uefi.as_str(), "uefi");
+    }
+
+    #[test]
+    fn hypervisor_display_matches_as_str() {
+        for &hv in Hypervisor::all() {
+            assert_eq!(format!("{hv}"), hv.as_str());
+        }
+    }
 }
