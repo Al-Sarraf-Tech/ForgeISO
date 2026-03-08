@@ -1,6 +1,7 @@
 # Rust
 target/
 **/*.rs.bk
+*.rlib
 Cargo.lock
 .cargo-tmp/
 
@@ -17,6 +18,9 @@ agent/.cache/
 # Python
 __pycache__/
 *.pyc
+
+# Claude Code session state
+.claude/
 
 # Generic
 .DS_Store

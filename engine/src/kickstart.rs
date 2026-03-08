@@ -103,6 +103,12 @@ pub fn generate_kickstart_cfg(cfg: &InjectConfig) -> EngineResult<String> {
     // ── Reboot ───────────────────────────────────────────────────────────────
     lines.push("reboot".to_string());
 
+    // ── repo directives (DNF extra repos) ────────────────────────────────────
+    // Each entry is either a plain https:// URL (we emit a dnf install command
+    // in %post) or a [id]\nbaseurl=... stanza pasted verbatim.  URL-only entries
+    // are handled below in %post; stanza entries go into a .repo file.
+    // We emit nothing here in the header — dnf repos are consumed in %post.
+
     // ── %packages ─────────────────────────────────────────────────────────────
     lines.push(String::new());
     lines.push("%packages".to_string());
@@ -117,15 +123,60 @@ pub fn generate_kickstart_cfg(cfg: &InjectConfig) -> EngineResult<String> {
 
     // ── %post ─────────────────────────────────────────────────────────────────
     let late_cmds = build_feature_late_commands(cfg)?;
-    if !late_cmds.is_empty() {
+    // Build DNF repo and mirror commands to prepend to %post
+    let mut dnf_post: Vec<String> = Vec::new();
+
+    // Override primary mirror if requested
+    if let Some(mirror) = &cfg.dnf_mirror {
+        // Write a custom .repo file that overrides the fedora + updates baseurl
+        dnf_post.push(format!(
+            r#"sed -i 's|^baseurl=.*|baseurl={mirror}/$releasever/Everything/$basearch/os/|' /etc/yum.repos.d/fedora.repo 2>/dev/null || true"#
+        ));
+        dnf_post.push(format!(
+            r#"sed -i 's|^baseurl=.*|baseurl={mirror}/$releasever/Everything/$basearch/os/|' /etc/yum.repos.d/fedora-updates.repo 2>/dev/null || true"#
+        ));
+    }
+
+    // Install extra repos: URL entries → dnf install; stanza entries → write .repo file
+    for (idx, repo) in cfg.dnf_repos.iter().enumerate() {
+        let trimmed = repo.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
+            // Plain URL — install the RPM or .repo file directly
+            if trimmed.ends_with(".rpm") {
+                dnf_post.push(format!("dnf install -y '{trimmed}' 2>/dev/null || true"));
+            } else {
+                // Assume it's a .repo URL
+                dnf_post.push(format!(
+                    "dnf config-manager --add-repo '{trimmed}' 2>/dev/null || true"
+                ));
+            }
+        } else {
+            // Treat as a verbatim .repo stanza
+            let repo_name = format!("forgeiso-extra-{idx}");
+            dnf_post.push(format!(
+                "printf '%s\\n' {stanza:?} > /etc/yum.repos.d/{repo_name}.repo",
+                stanza = trimmed,
+                repo_name = repo_name,
+            ));
+        }
+    }
+
+    let all_post: Vec<String> = dnf_post
+        .into_iter()
+        .chain(late_cmds.iter().map(|cmd| {
+            let base = cmd.strip_prefix("chroot /target ").unwrap_or(cmd);
+            base.replace("/target/", "/").replace("/target ", "/ ")
+        }))
+        .collect();
+
+    if !all_post.is_empty() {
         lines.push(String::new());
         lines.push("%post".to_string());
-        // In Kickstart, the chroot is implicit for %post (runs inside installed system)
-        // Strip the "chroot /target " prefix that the cloud-init helper adds
-        for cmd in &late_cmds {
-            let base = cmd.strip_prefix("chroot /target ").unwrap_or(cmd);
-            let stripped = base.replace("/target/", "/").replace("/target ", "/ ");
-            lines.push(stripped);
+        for cmd in &all_post {
+            lines.push(cmd.clone());
         }
         lines.push("%end".to_string());
     }

@@ -56,9 +56,15 @@ pub fn safe_join(root: &Path, candidate: &Path) -> EngineResult<PathBuf> {
     let mut joined = root.clone();
 
     if candidate.is_absolute() {
-        let absolute = candidate
-            .canonicalize()
-            .unwrap_or_else(|_| candidate.to_path_buf());
+        // canonicalize() fails for non-existent paths; do NOT fall back to the
+        // raw string — a path like `/workspace/../../etc/passwd` would pass the
+        // starts_with check as a raw string. Return an error instead.
+        let absolute = candidate.canonicalize().map_err(|e| {
+            EngineError::PathSafety(format!(
+                "cannot resolve absolute path '{}': {e}",
+                candidate.display()
+            ))
+        })?;
         if !absolute.starts_with(&root) {
             return Err(EngineError::PathSafety(format!(
                 "path escapes workspace: {}",

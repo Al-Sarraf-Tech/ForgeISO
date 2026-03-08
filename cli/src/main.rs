@@ -42,6 +42,9 @@ enum Commands {
         volume_label: Option<String>,
         #[arg(long)]
         profile: Option<String>,
+        /// Expected SHA-256 hex digest of the source ISO; operation aborts if it does not match.
+        #[arg(long)]
+        expected_sha256: Option<String>,
         #[arg(long)]
         json: bool,
     },
@@ -88,6 +91,9 @@ enum Commands {
         name: Option<String>,
         #[arg(long)]
         volume_label: Option<String>,
+        /// Expected SHA-256 hex digest of the source ISO; operation aborts if it does not match.
+        #[arg(long)]
+        expected_sha256: Option<String>,
 
         // Identity
         #[arg(long)]
@@ -110,6 +116,12 @@ enum Commands {
         ssh_key_file: Vec<PathBuf>,
         #[arg(long)]
         ssh_password_auth: bool,
+        #[arg(long)]
+        no_ssh_password_auth: bool,
+        #[arg(long)]
+        ssh_install_server: bool,
+        #[arg(long)]
+        no_ssh_install_server: bool,
 
         // Network
         #[arg(long, action = clap::ArgAction::Append)]
@@ -195,9 +207,23 @@ enum Commands {
         #[arg(long)]
         swappiness: Option<u8>,
 
-        // APT repos
+        // APT repos (Ubuntu/Debian)
         #[arg(long, action = clap::ArgAction::Append)]
         apt_repo: Vec<String>,
+
+        // DNF repos (Fedora/RHEL) — full "[id]\nbaseurl=..." stanza or URL
+        #[arg(long, action = clap::ArgAction::Append)]
+        dnf_repo: Vec<String>,
+        /// Override the primary Fedora/RHEL DNF mirror base URL
+        #[arg(long)]
+        dnf_mirror: Option<String>,
+
+        // Pacman repos (Arch) — "Server = https://..." mirror lines
+        #[arg(long, action = clap::ArgAction::Append)]
+        pacman_repo: Vec<String>,
+        /// Override the primary Arch Linux pacman mirror URL
+        #[arg(long)]
+        pacman_mirror: Option<String>,
 
         // Containers
         #[arg(long)]
@@ -322,6 +348,7 @@ async fn main() -> anyhow::Result<()> {
             overlay,
             volume_label,
             profile,
+            expected_sha256,
             json,
         } => {
             let cfg = if let Some(project) = project {
@@ -341,6 +368,7 @@ async fn main() -> anyhow::Result<()> {
                     scanning: Default::default(),
                     testing: Default::default(),
                     keep_workdir: false,
+                    expected_sha256,
                 }
             };
 
@@ -445,6 +473,9 @@ async fn main() -> anyhow::Result<()> {
             ssh_key,
             ssh_key_file,
             ssh_password_auth,
+            no_ssh_password_auth,
+            ssh_install_server,
+            no_ssh_install_server,
             dns,
             ntp_server,
             timezone,
@@ -476,6 +507,10 @@ async fn main() -> anyhow::Result<()> {
             swap_file,
             swappiness,
             apt_repo,
+            dnf_repo,
+            dnf_mirror,
+            pacman_repo,
+            pacman_mirror,
             docker,
             podman,
             docker_user,
@@ -488,6 +523,7 @@ async fn main() -> anyhow::Result<()> {
             mount,
             run_command,
             distro,
+            expected_sha256,
             json,
         } => {
             // Resolve password (priority: stdin > file > cli arg)
@@ -526,12 +562,20 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
-            // Parse sysctl "key=value" pairs
+            // Parse sysctl "key=value" pairs — warn on malformed entries
             let sysctl_pairs: Vec<(String, String)> = sysctl
                 .iter()
                 .filter_map(|s| {
                     let mut parts = s.splitn(2, '=');
-                    Some((parts.next()?.to_string(), parts.next()?.to_string()))
+                    match (parts.next(), parts.next()) {
+                        (Some(k), Some(v)) => Some((k.to_string(), v.to_string())),
+                        _ => {
+                            eprintln!(
+                                "WARNING: --sysctl {s:?} ignored (expected key=value format)"
+                            );
+                            None
+                        }
+                    }
                 })
                 .collect();
 
@@ -546,8 +590,20 @@ async fn main() -> anyhow::Result<()> {
                 realname,
                 ssh: SshConfig {
                     authorized_keys: all_ssh_keys,
-                    allow_password_auth: if ssh_password_auth { Some(true) } else { None },
-                    install_server: None,
+                    allow_password_auth: if ssh_password_auth {
+                        Some(true)
+                    } else if no_ssh_password_auth {
+                        Some(false)
+                    } else {
+                        None
+                    },
+                    install_server: if ssh_install_server {
+                        Some(true)
+                    } else if no_ssh_install_server {
+                        Some(false)
+                    } else {
+                        None
+                    },
                 },
                 network: NetworkConfig {
                     dns_servers: dns,
@@ -584,12 +640,26 @@ async fn main() -> anyhow::Result<()> {
                 enable_services: enable_service,
                 disable_services: disable_service,
                 sysctl: sysctl_pairs,
-                swap: swap_size.map(|mb| SwapConfig {
-                    size_mb: mb,
-                    filename: swap_file,
-                    swappiness,
-                }),
+                swap: {
+                    if swap_size.is_none() {
+                        if swap_file.is_some() {
+                            eprintln!("WARNING: --swap-file ignored without --swap-size");
+                        }
+                        if swappiness.is_some() {
+                            eprintln!("WARNING: --swappiness ignored without --swap-size");
+                        }
+                    }
+                    swap_size.map(|mb| SwapConfig {
+                        size_mb: mb,
+                        filename: swap_file,
+                        swappiness,
+                    })
+                },
                 apt_repos: apt_repo,
+                dnf_repos: dnf_repo,
+                dnf_mirror,
+                pacman_repos: pacman_repo,
+                pacman_mirror,
                 containers: ContainerConfig {
                     docker,
                     podman,
@@ -605,6 +675,7 @@ async fn main() -> anyhow::Result<()> {
                 mounts: mount,
                 run_commands: run_command,
                 distro: resolved_distro,
+                expected_sha256,
             };
             let result = engine.inject_autoinstall(&cfg, &out).await?;
             if json {

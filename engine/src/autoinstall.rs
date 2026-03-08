@@ -1,6 +1,6 @@
 use sha_crypt::{sha512_simple, Sha512Params};
 
-use crate::config::InjectConfig;
+use crate::config::{Distro, InjectConfig};
 use crate::error::{EngineError, EngineResult};
 
 /// Build all feature-specific late-commands in canonical order.
@@ -30,9 +30,10 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
                     filename_str, ext
                 ));
                 cmds.push("mkdir -p /target/etc/dconf/db/local.d".to_string());
-                cmds.push(
-                    "printf '[org/gnome/desktop/background]\\npicture-uri=\"file:///usr/share/backgrounds/forgeiso-wallpaper.{}\\\"\\n' > /target/etc/dconf/db/local.d/00-forgeiso-background".to_string()
-                );
+                cmds.push(format!(
+                    "printf '[org/gnome/desktop/background]\\npicture-uri=\"file:///usr/share/backgrounds/forgeiso-wallpaper.{}\\\"\\n' > /target/etc/dconf/db/local.d/00-forgeiso-background",
+                    ext
+                ));
                 cmds.push("chroot /target dconf update".to_string());
             }
         }
@@ -64,22 +65,28 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
     }
 
     // 4. Proxy
+    // /etc/environment is distro-agnostic; APT proxy config is Ubuntu-only.
+    let is_ubuntu = !matches!(cfg.distro, Some(Distro::Fedora) | Some(Distro::Arch));
     if cfg.proxy.http_proxy.is_some() || cfg.proxy.https_proxy.is_some() {
         if let Some(hp) = &cfg.proxy.http_proxy {
             cmds.push(format!(
                 "echo 'http_proxy=\"{hp}\"' >> /target/etc/environment"
             ));
-            cmds.push(format!(
-                "printf 'Acquire::http::Proxy \"{hp}\";\n' > /target/etc/apt/apt.conf.d/99proxy"
-            ));
+            if is_ubuntu {
+                cmds.push(format!(
+                    "printf 'Acquire::http::Proxy \"{hp}\";\n' > /target/etc/apt/apt.conf.d/99proxy"
+                ));
+            }
         }
         if let Some(sp) = &cfg.proxy.https_proxy {
             cmds.push(format!(
                 "echo 'https_proxy=\"{sp}\"' >> /target/etc/environment"
             ));
-            cmds.push(format!(
-                "printf 'Acquire::https::Proxy \"{sp}\";\n' >> /target/etc/apt/apt.conf.d/99proxy"
-            ));
+            if is_ubuntu {
+                cmds.push(format!(
+                    "printf 'Acquire::https::Proxy \"{sp}\";\n' >> /target/etc/apt/apt.conf.d/99proxy"
+                ));
+            }
         }
         if !cfg.proxy.no_proxy.is_empty() {
             let np = cfg.proxy.no_proxy.join(",");
@@ -124,8 +131,8 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
         }
     }
 
-    // 8. Firewall (UFW)
-    if cfg.firewall.enabled {
+    // 8. Firewall — UFW is Ubuntu/Debian-specific; skip on other distros.
+    if cfg.firewall.enabled && is_ubuntu {
         if let Some(policy) = &cfg.firewall.default_policy {
             cmds.push(format!("chroot /target ufw default {policy} incoming"));
         }
@@ -139,22 +146,46 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
         cmds.push("chroot /target systemctl enable ufw".to_string());
     }
 
-    // 9. APT repos
-    for repo in &cfg.apt_repos {
-        if repo.starts_with("ppa:") {
-            cmds.push(format!("chroot /target add-apt-repository -y '{repo}'"));
-        } else {
-            cmds.push(format!(
-                "echo '{repo}' >> /target/etc/apt/sources.list.d/forgeiso-extra.list"
-            ));
+    // 9. APT repos — Ubuntu/Debian only.
+    if is_ubuntu {
+        for repo in &cfg.apt_repos {
+            if repo.starts_with("ppa:") {
+                cmds.push(format!("chroot /target add-apt-repository -y '{repo}'"));
+            } else {
+                cmds.push(format!(
+                    "echo '{repo}' >> /target/etc/apt/sources.list.d/forgeiso-extra.list"
+                ));
+            }
+        }
+        if !cfg.apt_repos.is_empty() {
+            cmds.push("chroot /target apt-get update".to_string());
         }
     }
-    if !cfg.apt_repos.is_empty() {
-        cmds.push("chroot /target apt-get update".to_string());
+
+    // 9b. Pacman repos + mirror — Arch Linux only.
+    let is_arch = matches!(cfg.distro, Some(Distro::Arch));
+    if is_arch {
+        // Override primary mirror
+        if let Some(mirror) = &cfg.pacman_mirror {
+            cmds.push(format!(
+                "echo 'Server = {mirror}/$repo/os/$arch' > /target/etc/pacman.d/mirrorlist"
+            ));
+        }
+        // Append extra Server= lines to mirrorlist
+        for repo in &cfg.pacman_repos {
+            let line = repo.trim();
+            if !line.is_empty() {
+                cmds.push(format!("echo '{line}' >> /target/etc/pacman.d/mirrorlist"));
+            }
+        }
+        // Refresh package database after mirror changes
+        if cfg.pacman_mirror.is_some() || !cfg.pacman_repos.is_empty() {
+            cmds.push("chroot /target pacman -Sy --noconfirm".to_string());
+        }
     }
 
-    // 10. Docker
-    if cfg.containers.docker {
+    // 10. Docker — Ubuntu apt-based install only; Fedora adds docker-ce via dnf separately.
+    if cfg.containers.docker && is_ubuntu {
         cmds.push("install -m 0755 -d /target/etc/apt/keyrings".to_string());
         cmds.push(
             "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /target/etc/apt/keyrings/docker.gpg".to_string()
@@ -380,6 +411,10 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
         layout_map.insert("name".into(), serde_yaml::Value::String(layout.clone()));
         if cfg.encrypt {
             if let Some(passphrase) = &cfg.encrypt_passphrase {
+                // NOTE: Ubuntu cloud-init autoinstall requires the LUKS passphrase in
+                // plaintext — there is no pre-hashing option for the storage.layout
+                // password field. The caller must treat this ISO as sensitive material
+                // and restrict access accordingly (chmod 600, encrypted transport, etc.).
                 layout_map.insert(
                     "password".into(),
                     serde_yaml::Value::String(passphrase.clone()),
@@ -491,9 +526,9 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
         );
         root = serde_yaml::Value::Mapping(new_root);
         root.get_mut("autoinstall")
-            .unwrap()
+            .expect("just inserted autoinstall key")
             .as_mapping_mut()
-            .unwrap()
+            .expect("just inserted autoinstall as Mapping")
     };
 
     // Override scalar fields from cfg
@@ -664,6 +699,10 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
         layout_map.insert("name".into(), serde_yaml::Value::String(layout.clone()));
         if cfg.encrypt {
             if let Some(passphrase) = &cfg.encrypt_passphrase {
+                // NOTE: Ubuntu cloud-init autoinstall requires the LUKS passphrase in
+                // plaintext — there is no pre-hashing option for the storage.layout
+                // password field. The caller must treat this ISO as sensitive material
+                // and restrict access accordingly (chmod 600, encrypted transport, etc.).
                 layout_map.insert(
                     "password".into(),
                     serde_yaml::Value::String(passphrase.clone()),
@@ -780,6 +819,7 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::IsoSource;
 
     #[test]
     fn test_hash_password_format() {
@@ -794,6 +834,7 @@ mod tests {
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -826,6 +867,10 @@ mod tests {
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -850,6 +895,7 @@ mod tests {
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: Some("test-host".to_string()),
             username: Some("testuser".to_string()),
             password: Some("testpass".to_string()),
@@ -882,6 +928,10 @@ mod tests {
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -902,6 +952,7 @@ mod tests {
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -941,6 +992,10 @@ mod tests {
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -960,6 +1015,7 @@ mod tests {
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -995,6 +1051,10 @@ mod tests {
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1013,6 +1073,7 @@ mod tests {
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -1045,6 +1106,10 @@ mod tests {
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1080,6 +1145,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: Some("newhost".to_string()),
             username: None,
             password: None,
@@ -1112,6 +1178,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let result = merge_autoinstall_yaml(existing, &cfg).unwrap();
@@ -1135,6 +1205,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: Some("newhost".to_string()),
             username: Some("newuser".to_string()),
             password: None,
@@ -1167,6 +1238,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let result = merge_autoinstall_yaml(existing, &cfg).unwrap();
@@ -1188,6 +1263,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -1220,6 +1296,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let result = merge_autoinstall_yaml(existing, &cfg).unwrap();
@@ -1240,6 +1320,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: Some("testuser".to_string()),
             password: None,
@@ -1277,6 +1358,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1293,6 +1378,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: Some("testuser".to_string()),
             password: None,
@@ -1330,6 +1416,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1347,6 +1437,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -1384,6 +1475,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1399,6 +1494,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -1431,6 +1527,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1449,6 +1549,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -1485,6 +1586,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1500,6 +1605,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -1532,6 +1638,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1549,6 +1659,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -1584,6 +1695,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1601,6 +1716,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -1637,6 +1753,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1652,6 +1772,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: Some("admin".to_string()),
             password: None,
@@ -1688,6 +1809,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1703,6 +1828,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -1739,6 +1865,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1753,6 +1883,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -1785,6 +1916,10 @@ autoinstall:
             mounts: vec!["/dev/sdb1 /data ext4 defaults 0 2".to_string()],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1799,6 +1934,7 @@ autoinstall:
             autoinstall_yaml: None,
             out_name: "out.iso".to_string(),
             output_label: None,
+            expected_sha256: None,
             hostname: None,
             username: None,
             password: None,
@@ -1831,6 +1967,10 @@ autoinstall:
             mounts: vec![],
             run_commands: vec![],
             distro: None,
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
         };
 
         let yaml = generate_autoinstall_yaml(&cfg).unwrap();
@@ -1839,5 +1979,142 @@ autoinstall:
             "encryption password in storage section"
         );
         assert!(yaml.contains("secret"), "passphrase should be in YAML");
+    }
+
+    #[test]
+    fn late_commands_omit_apt_and_ufw_for_fedora() {
+        let cfg = InjectConfig {
+            source: crate::config::IsoSource::from_raw("/tmp/fedora.iso"),
+            out_name: "out.iso".to_string(),
+            distro: Some(crate::config::Distro::Fedora),
+            apt_repos: vec!["ppa:user/ppa".to_string()],
+            containers: crate::config::ContainerConfig {
+                docker: true,
+                podman: false,
+                docker_users: vec![],
+            },
+            firewall: crate::config::FirewallConfig {
+                enabled: true,
+                default_policy: Some("deny".to_string()),
+                allow_ports: vec!["22/tcp".to_string()],
+                deny_ports: vec![],
+            },
+            proxy: crate::config::ProxyConfig {
+                http_proxy: Some("http://proxy.corp:3128".to_string()),
+                https_proxy: None,
+                no_proxy: vec![],
+            },
+            expected_sha256: None,
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(
+            !all.contains("apt"),
+            "apt commands must not appear for Fedora"
+        );
+        assert!(
+            !all.contains("ufw"),
+            "ufw commands must not appear for Fedora"
+        );
+        assert!(
+            all.contains("http_proxy"),
+            "/etc/environment proxy should still be set"
+        );
+        assert!(
+            !all.contains("apt.conf.d"),
+            "APT proxy config must not appear for Fedora"
+        );
+    }
+
+    #[test]
+    fn test_ntp_servers_appear_in_late_commands() {
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "test.iso".to_string(),
+            network: crate::config::NetworkConfig {
+                ntp_servers: vec![
+                    "ntp1.example.com".to_string(),
+                    "ntp2.example.com".to_string(),
+                ],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(all.contains("ntp1.example.com"), "NTP server 1 expected");
+        assert!(all.contains("ntp2.example.com"), "NTP server 2 expected");
+        assert!(all.contains("timesyncd"), "timesyncd config expected");
+    }
+
+    #[test]
+    fn test_sudo_commands_in_late_commands() {
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "test.iso".to_string(),
+            username: Some("admin".to_string()),
+            user: crate::config::UserConfig {
+                sudo_commands: vec!["/usr/bin/apt".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(
+            all.contains("/usr/bin/apt"),
+            "sudo command should appear in late-commands"
+        );
+    }
+
+    #[test]
+    fn test_proxy_env_in_late_commands() {
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "test.iso".to_string(),
+            proxy: crate::config::ProxyConfig {
+                http_proxy: Some("http://proxy:3128".to_string()),
+                https_proxy: Some("http://proxy:3128".to_string()),
+                no_proxy: vec!["localhost".to_string(), "127.0.0.1".to_string()],
+            },
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(all.contains("http_proxy"), "http_proxy env expected");
+        assert!(all.contains("https_proxy"), "https_proxy env expected");
+        assert!(all.contains("no_proxy"), "no_proxy env expected");
+    }
+
+    #[test]
+    fn test_mount_entries_in_late_commands() {
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "test.iso".to_string(),
+            mounts: vec!["/dev/sda2 /data ext4 defaults 0 2".to_string()],
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(all.contains("fstab"), "fstab entry expected");
+        assert!(all.contains("/dev/sda2"), "mount device expected");
+        assert!(all.contains("mkdir"), "mountpoint mkdir expected");
+    }
+
+    #[test]
+    fn test_apt_repos_in_late_commands() {
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "test.iso".to_string(),
+            apt_repos: vec!["deb http://archive.ubuntu.com/ubuntu noble main".to_string()],
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        assert!(
+            all.contains("archive.ubuntu.com"),
+            "APT repo URL expected in late commands"
+        );
     }
 }

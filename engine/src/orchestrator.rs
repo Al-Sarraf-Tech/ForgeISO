@@ -10,7 +10,7 @@ use tokio::process::Command;
 use tokio::sync::broadcast;
 use walkdir::WalkDir;
 
-use crate::autoinstall::{generate_autoinstall_yaml, merge_autoinstall_yaml};
+use crate::autoinstall::{generate_autoinstall_yaml, hash_password, merge_autoinstall_yaml};
 use crate::config::{BuildConfig, Distro, IsoSource};
 use crate::error::{EngineError, EngineResult};
 use crate::events::{EngineEvent, EventPhase};
@@ -38,6 +38,9 @@ pub struct BuildResult {
     pub report_html: PathBuf,
     pub artifacts: Vec<PathBuf>,
     pub iso: IsoMetadata,
+    /// Resolved local path of the *input* ISO used for this operation.
+    /// Always a local filesystem path (URLs are resolved/downloaded before use).
+    pub source_iso: PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -221,6 +224,13 @@ impl ForgeIsoEngine {
 
         let workspace = Workspace::create(out_dir, &cfg.name)?;
         let resolved = self.resolve_source(&cfg.source, &workspace.input).await?;
+        if let Some(expected) = &cfg.expected_sha256 {
+            self.emit(EngineEvent::info(
+                EventPhase::Verify,
+                "verifying expected SHA-256 of source ISO",
+            ));
+            check_expected_sha256(&resolved.source_path, expected)?;
+        }
         let iso = inspect_iso(
             &resolved.source_path,
             resolved.source_kind,
@@ -356,6 +366,7 @@ impl ForgeIsoEngine {
             report_json,
             report_html,
             artifacts: vec![output_iso],
+            source_iso: resolved.source_path.clone(),
             iso,
         })
     }
@@ -579,64 +590,76 @@ impl ForgeIsoEngine {
             .map(|s| s.to_string())
             .ok_or_else(|| EngineError::InvalidConfig("Unable to get ISO filename".to_string()))?;
 
-        let effective_sums_url = if let Some(url) = sums_url {
-            url.to_string()
+        // Determine the SHA256SUMS URL — graceful degradation if unavailable.
+        let effective_sums_url: Option<String> = if let Some(url) = sums_url {
+            Some(url.to_string())
         } else if let Some(distro) = metadata.distro {
             if let Some(release) = &metadata.release {
                 match distro {
-                    crate::config::Distro::Ubuntu => {
-                        format!("https://releases.ubuntu.com/{}/SHA256SUMS", release)
-                    }
-                    _ => {
-                        return Err(EngineError::InvalidConfig(
-                            "Auto-detection of sums URL not supported for this distro".to_string(),
-                        ))
-                    }
+                    crate::config::Distro::Ubuntu => Some(format!(
+                        "https://releases.ubuntu.com/{}/SHA256SUMS",
+                        release
+                    )),
+                    _ => None,
                 }
             } else {
-                return Err(EngineError::InvalidConfig(
-                    "Release information not available for auto-detection".to_string(),
-                ));
+                None
             }
         } else {
-            return Err(EngineError::InvalidConfig(
-                "sums_url must be provided or ISO must be recognized as Ubuntu".to_string(),
-            ));
+            None
         };
 
-        self.emit(EngineEvent::info(
-            EventPhase::Verify,
-            format!("fetching checksums from {}", effective_sums_url),
-        ));
+        // If we have a sums URL, fetch and compare; otherwise just report the hash.
+        let (expected, matched) = if let Some(ref url) = effective_sums_url {
+            self.emit(EngineEvent::info(
+                EventPhase::Verify,
+                format!("fetching checksums from {}", url),
+            ));
+            let sums_content = reqwest::get(url).await?.text().await?;
 
-        let sums_content = reqwest::get(&effective_sums_url).await?.text().await?;
-
-        // Parse SHA256SUMS format: <hash>  <filename>
-        let mut expected_hash = None;
-        for line in sums_content.lines() {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 2 {
-                let hash = parts[0];
-                let file_path = parts[1].trim_start_matches('*');
-                if file_path.ends_with(&filename) || file_path == filename {
-                    expected_hash = Some(hash.to_string());
-                    break;
+            // Parse SHA256SUMS format: <hash>  <filename> or <hash>  *<filename>
+            let mut expected_hash = None;
+            for line in sums_content.lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    let hash = parts[0];
+                    let file_path = parts[1].trim_start_matches('*');
+                    if file_path.ends_with(&filename) || file_path == filename {
+                        expected_hash = Some(hash.to_string());
+                        break;
+                    }
                 }
             }
-        }
 
-        let expected = expected_hash
-            .ok_or_else(|| EngineError::NotFound(format!("No checksum found for {}", filename)))?;
-
-        let matched = metadata.sha256 == expected;
-        self.emit(EngineEvent::info(
-            EventPhase::Verify,
-            if matched {
-                "checksum matches!".to_string()
+            if let Some(expected) = expected_hash {
+                let matched = metadata.sha256 == expected;
+                self.emit(EngineEvent::info(
+                    EventPhase::Verify,
+                    if matched {
+                        "checksum matches!".to_string()
+                    } else {
+                        "checksum mismatch!".to_string()
+                    },
+                ));
+                (expected, matched)
             } else {
-                "checksum mismatch!".to_string()
-            },
-        ));
+                // Filename not in SUMS file (e.g. renamed/injected ISO) — report hash only.
+                self.emit(EngineEvent::info(
+                    EventPhase::Verify,
+                    format!(
+                        "no entry for '{}' in checksums file — showing computed hash only",
+                        filename
+                    ),
+                ));
+                ("not found in checksums file".to_string(), false)
+            }
+        } else {
+            self.emit(EngineEvent::info(
+                EventPhase::Verify,
+                "no checksums URL available — showing computed hash only".to_string(),
+            ));
+            ("no checksums source provided".to_string(), false)
+        };
 
         Ok(VerifyResult {
             filename,
@@ -651,6 +674,8 @@ impl ForgeIsoEngine {
         cfg: &crate::config::InjectConfig,
         out: &Path,
     ) -> EngineResult<BuildResult> {
+        cfg.validate()?;
+
         self.emit(EngineEvent::info(
             EventPhase::Inject,
             "starting autoinstall injection",
@@ -662,6 +687,13 @@ impl ForgeIsoEngine {
 
         // Resolve the source ISO
         let resolved = self.resolve_source(&cfg.source, &work_dir).await?;
+        if let Some(expected) = &cfg.expected_sha256 {
+            self.emit(EngineEvent::info(
+                EventPhase::Verify,
+                "verifying expected SHA-256 of source ISO",
+            ));
+            check_expected_sha256(&resolved.source_path, expected)?;
+        }
         let metadata = inspect_iso(
             &resolved.source_path,
             resolved.source_kind,
@@ -702,7 +734,7 @@ impl ForgeIsoEngine {
             }
             Some(Distro::Arch) => {
                 // ── Arch Linux: archinstall JSON config ───────────────────────
-                let archinstall_cfg = build_archinstall_config(cfg);
+                let archinstall_cfg = build_archinstall_config(cfg)?;
                 let json_content = serde_json::to_string_pretty(&archinstall_cfg)
                     .map_err(|e| EngineError::Runtime(e.to_string()))?;
                 std::fs::write(work_dir.join("archinstall-config.json"), &json_content)?;
@@ -747,6 +779,8 @@ impl ForgeIsoEngine {
         let output = run_command_lossy(
             "xorriso",
             &[
+                "-osirrox".to_string(),
+                "on".to_string(),
                 "-indev".to_string(),
                 resolved.source_path.to_string_lossy().to_string(),
                 "-extract".to_string(),
@@ -767,12 +801,19 @@ impl ForgeIsoEngine {
             "extracted ISO filesystem",
         ));
 
+        // xorriso extracts files with read-only permissions; make writable
+        // so we can modify the tree and inject files without permission errors.
+        chmod_recursive_writable(&extract_dir);
+
         // Copy distro-specific files into the extracted ISO and patch boot entries
         match cfg.distro {
             None | Some(Distro::Ubuntu) | Some(Distro::Mint) => {
-                // Cloud-init nocloud overlay
+                // Cloud-init nocloud overlay.
+                // Files must be at the ISO root so that when the installer
+                // mounts the CD at /cdrom/ the datasource path resolves to
+                // /cdrom/nocloud/ — not /cdrom/cdrom/nocloud/.
                 let nocloud_dir = work_dir.join("overlay").join("nocloud");
-                let iso_nocloud = extract_dir.join("cdrom").join("nocloud");
+                let iso_nocloud = extract_dir.join("nocloud");
                 std::fs::create_dir_all(&iso_nocloud)?;
                 for entry in std::fs::read_dir(&nocloud_dir)? {
                     let entry = entry?;
@@ -780,13 +821,18 @@ impl ForgeIsoEngine {
                 }
                 self.emit(EngineEvent::info(
                     EventPhase::Inject,
-                    "injected cloud-init files",
+                    "injected cloud-init files into ISO root /nocloud/",
                 ));
 
-                // Wallpaper
+                // Wallpaper — also at ISO root so /cdrom/wallpaper/ resolves correctly.
                 if let Some(src) = &cfg.wallpaper {
-                    let fname = src.file_name().unwrap();
-                    let iso_wp = extract_dir.join("cdrom").join("wallpaper");
+                    let fname = src.file_name().ok_or_else(|| {
+                        EngineError::InvalidConfig(format!(
+                            "wallpaper path has no filename: {}",
+                            src.display()
+                        ))
+                    })?;
+                    let iso_wp = extract_dir.join("wallpaper");
                     std::fs::create_dir_all(&iso_wp)?;
                     std::fs::copy(work_dir.join("wallpaper").join(fname), iso_wp.join(fname))?;
                 }
@@ -863,7 +909,21 @@ impl ForgeIsoEngine {
 
         // Repack ISO
         std::fs::create_dir_all(out)?;
-        let output_path = out.join(&cfg.out_name);
+        // Ensure the output always has an .iso extension regardless of what the
+        // caller passed — avoids producing unrecognised files from the GUI default.
+        let out_filename = {
+            let name = if cfg.out_name.trim().is_empty() {
+                "forgeiso-local"
+            } else {
+                cfg.out_name.trim()
+            };
+            if name.to_ascii_lowercase().ends_with(".iso") {
+                name.to_string()
+            } else {
+                format!("{}.iso", name)
+            }
+        };
+        let output_path = out.join(&out_filename);
 
         let args = repack_iso_args(
             &resolved.source_path,
@@ -891,6 +951,7 @@ impl ForgeIsoEngine {
             report_json: work_dir.join("report.json"),
             report_html: work_dir.join("report.html"),
             artifacts: vec![output_path],
+            source_iso: resolved.source_path.clone(),
             iso: metadata,
         })
     }
@@ -1067,7 +1128,11 @@ pub fn default_cache_root() -> EngineResult<PathBuf> {
         return Ok(path);
     }
 
-    let path = PathBuf::from("/tmp/forgeoutput");
+    // XDG-compliant default: ~/.cache/forgeiso — avoids tmpfs quota issues
+    let base = std::env::var("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/tmp"));
+    let path = base.join(".cache").join("forgeiso");
     std::fs::create_dir_all(&path)?;
     Ok(path)
 }
@@ -1158,6 +1223,21 @@ pub fn sha256_file(path: &Path) -> EngineResult<String> {
     }
 
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// Verify a file against a caller-supplied expected SHA-256 hex digest.
+/// Returns an error if the digest does not match, allowing the operation to
+/// be aborted before any ISO content is trusted or modified.
+fn check_expected_sha256(path: &Path, expected: &str) -> EngineResult<()> {
+    let actual = sha256_file(path)?;
+    let expected_norm = expected.trim().to_ascii_lowercase();
+    if actual != expected_norm {
+        return Err(EngineError::Runtime(format!(
+            "SHA-256 mismatch for {}: expected {expected_norm}, got {actual}",
+            path.display()
+        )));
+    }
+    Ok(())
 }
 
 fn ensure_linux_host() -> EngineResult<()> {
@@ -1450,48 +1530,90 @@ impl From<TestResult> for TestSummary {
     }
 }
 
+/// List all files in an ISO with their sizes.
+///
+/// Tries two methods in order:
+///  1. `lsdl` exec action (no arg)  — all xorriso versions >= 1.5.4
+///     Output: `perms nlinks uid gid size month day time/year 'path'`
+///     Note: `.` and `{}` path tokens are NOT accepted by xorriso 1.5.6 `-find -exec`
+///  2. plain `-find / -type f`      — last resort, paths only with size = 0
 fn get_iso_file_list(iso_path: &Path) -> EngineResult<std::collections::HashMap<String, u64>> {
     use std::process::Command;
 
-    let output = Command::new("xorriso")
+    let iso_str = iso_path.to_string_lossy();
+
+    // ── Method 1: lsdl exec (works on xorriso 1.5.4–1.5.7+) ─────────────────
+    // `-exec lsdl` with NO path argument applies lsdl to each found file.
+    // xorriso 1.5.6 rejects `.` and `{}` after the exec action name.
+    if let Ok(out) = Command::new("xorriso")
         .args([
-            "-indev",
-            iso_path.to_str().unwrap(),
-            "-find",
-            "/",
-            "-type",
-            "f",
-            "-exec",
-            "stat_lstat",
-            ".",
+            "-indev", &iso_str, "-find", "/", "-type", "f", "-exec", "lsdl",
         ])
-        .output()?;
-
-    if !output.status.success() {
-        return Err(EngineError::Runtime(format!(
-            "xorriso failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-
-    let mut files = std::collections::HashMap::new();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    for line in stdout.lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let Ok(size) = parts[0].parse::<u64>() {
-                let path = parts[1..].join(" ");
-                files.insert(path, size);
-            }
+        .output()
+    {
+        let text = String::from_utf8_lossy(&out.stdout);
+        let files = parse_lsdl_output(&text);
+        if !files.is_empty() {
+            return Ok(files);
         }
     }
 
-    Ok(files)
+    // ── Method 2: paths only, no sizes (minimum viable diff) ─────────────────
+    let out = Command::new("xorriso")
+        .args(["-indev", &iso_str, "-find", "/", "-type", "f"])
+        .output()
+        .map_err(|e| EngineError::Runtime(format!("xorriso not found: {e}")))?;
+
+    if !out.status.success() {
+        return Err(EngineError::Runtime(format!(
+            "xorriso failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        )));
+    }
+
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter(|l| l.starts_with('/') || l.starts_with("'/"))
+        .map(|l| {
+            let path = l.trim_matches('\'').to_string();
+            (path, 0u64)
+        })
+        .collect())
+}
+
+fn parse_lsdl_output(text: &str) -> std::collections::HashMap<String, u64> {
+    // xorriso -find / -type f -exec lsdl output format (1.5.x):
+    // `-rwxr--r--    1 1000     1000       966664 Aug 13  2024 '/EFI/boot/bootx64.efi'`
+    // Fields: [0]perms [1]nlinks [2]uid [3]gid [4]size [5]month [6]day [7]year/time [8+]'path'
+    let mut files = std::collections::HashMap::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        // File entries start with permission chars (-, d, l, etc.)
+        let first = line.chars().next().unwrap_or(' ');
+        if !matches!(first, '-' | 'd' | 'l' | 'c' | 'b' | 'p' | 's') {
+            continue;
+        }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        // Need at least: perms nlinks uid gid size month day time/year path
+        if parts.len() >= 9 {
+            if let Ok(size) = parts[4].parse::<u64>() {
+                // Path is the last fields joined, strip surrounding single quotes
+                let raw_path = parts[8..].join(" ");
+                let path = raw_path.trim_matches('\'').to_string();
+                if path.starts_with('/') {
+                    files.insert(path, size);
+                }
+            }
+        }
+    }
+    files
 }
 
 /// Build a minimal archinstall JSON config from InjectConfig fields.
-fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> serde_json::Value {
+fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> EngineResult<serde_json::Value> {
     use serde_json::{json, Value};
 
     let packages: Value = cfg.extra_packages.to_vec().into();
@@ -1505,7 +1627,10 @@ fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> serde_json::Va
         map.insert("username".to_string(), json!(u));
     }
     if let Some(p) = &cfg.password {
-        map.insert("!password".to_string(), json!(p));
+        // Hash the password before embedding — storing plaintext in the ISO
+        // would allow anyone who mounts or extracts it to recover credentials.
+        let hashed = hash_password(p)?;
+        map.insert("!password".to_string(), json!(hashed));
     }
     if let Some(tz) = &cfg.timezone {
         map.insert("timezone".to_string(), json!(tz));
@@ -1527,22 +1652,32 @@ fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> serde_json::Va
     map.insert("services".to_string(), services);
     map.insert("script".to_string(), json!("stealth-installation"));
 
-    Value::Object(map)
+    Ok(Value::Object(map))
 }
 
 fn patch_boot_configs(extract_dir: &Path, kernel_append: &str) -> EngineResult<()> {
-    // Patch grub.cfg
+    // Patch grub.cfg — try both canonical kernel paths.
+    // Ubuntu live/desktop/server ISOs use /casper/vmlinuz since 20.04.
+    // Older ISOs (pre-20.04) and some remasters use /boot/vmlinuz.
+    // Both use a literal tab between the `linux` keyword and the path.
     let grub_path = extract_dir.join("boot").join("grub").join("grub.cfg");
     if grub_path.exists() {
         let content = std::fs::read_to_string(&grub_path)?;
-        let patched = content.replace(
-            "linux\t/boot/vmlinuz",
-            &format!("linux\t/boot/vmlinuz{}", kernel_append),
-        );
+        // Replace whichever pattern is present; only one will match per ISO.
+        let patched = content
+            .replace(
+                "linux\t/casper/vmlinuz",
+                &format!("linux\t/casper/vmlinuz{}", kernel_append),
+            )
+            .replace(
+                "linux\t/boot/vmlinuz",
+                &format!("linux\t/boot/vmlinuz{}", kernel_append),
+            );
         std::fs::write(&grub_path, patched)?;
     }
 
-    // Patch isolinux.cfg
+    // Patch isolinux.cfg — the append line contains the full kernel cmdline;
+    // /vmlinuz matches as a substring of /casper/vmlinuz and /boot/vmlinuz.
     let isolinux_path = extract_dir.join("isolinux").join("isolinux.cfg");
     if isolinux_path.exists() {
         let content = std::fs::read_to_string(&isolinux_path)?;
@@ -1594,6 +1729,87 @@ mod tests {
         assert_eq!(
             stripped,
             vec!["--grub2-mbr".to_string(), "payload".to_string()]
+        );
+    }
+
+    #[test]
+    fn check_expected_sha256_accepts_match() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().expect("temp file");
+        tmp.write_all(b"hello world").expect("write");
+        let path = tmp.path();
+        // Known SHA-256 of "hello world"
+        let expected = "b94d27b9934d3e08a52e52d7da7dabfac484efe04294e576d6b859e46fcdd6b0";
+        // Use sha256_file to get the actual hash of our temp content
+        let actual = sha256_file(path).expect("hash");
+        // Verify round-trip
+        assert!(check_expected_sha256(path, &actual).is_ok());
+        // Verify mismatch is rejected
+        assert!(check_expected_sha256(path, expected).is_err());
+    }
+
+    #[test]
+    fn build_archinstall_config_hashes_password() {
+        let cfg = crate::config::InjectConfig {
+            password: Some("mysecret".to_string()),
+            ..Default::default()
+        };
+        let val = build_archinstall_config(&cfg).expect("config");
+        let pw = val
+            .get("!password")
+            .and_then(|v| v.as_str())
+            .expect("!password key");
+        // Should be a SHA-512-crypt hash, not the plaintext
+        assert!(
+            pw.starts_with("$6$"),
+            "expected SHA-512 hash starting with $6$, got: {pw}"
+        );
+        assert_ne!(pw, "mysecret", "password must not be stored in plaintext");
+    }
+
+    #[test]
+    fn patch_boot_configs_casper_path() {
+        let tmp = tempfile::tempdir().expect("tmp dir");
+        let grub_dir = tmp.path().join("boot").join("grub");
+        std::fs::create_dir_all(&grub_dir).expect("create grub dir");
+        // Ubuntu 22.04+ live ISO grub.cfg uses /casper/vmlinuz
+        let grub_cfg = grub_dir.join("grub.cfg");
+        std::fs::write(
+            &grub_cfg,
+            "linux\t/casper/vmlinuz quiet splash ---\ninitrd\t/casper/initrd\n",
+        )
+        .expect("write grub.cfg");
+
+        patch_boot_configs(tmp.path(), " autoinstall ds=nocloud;s=/cdrom/nocloud/")
+            .expect("patch should succeed");
+
+        let content = std::fs::read_to_string(&grub_cfg).expect("read patched grub.cfg");
+        assert!(
+            content.contains("linux\t/casper/vmlinuz autoinstall ds=nocloud;s=/cdrom/nocloud/"),
+            "casper vmlinuz line was not patched: {content:?}"
+        );
+    }
+
+    #[test]
+    fn patch_boot_configs_legacy_boot_path() {
+        let tmp = tempfile::tempdir().expect("tmp dir");
+        let grub_dir = tmp.path().join("boot").join("grub");
+        std::fs::create_dir_all(&grub_dir).expect("create grub dir");
+        // Older ISO grub.cfg uses /boot/vmlinuz
+        let grub_cfg = grub_dir.join("grub.cfg");
+        std::fs::write(
+            &grub_cfg,
+            "linux\t/boot/vmlinuz quiet splash\ninitrd\t/boot/initrd\n",
+        )
+        .expect("write grub.cfg");
+
+        patch_boot_configs(tmp.path(), " autoinstall ds=nocloud;s=/cdrom/nocloud/")
+            .expect("patch should succeed");
+
+        let content = std::fs::read_to_string(&grub_cfg).expect("read patched grub.cfg");
+        assert!(
+            content.contains("linux\t/boot/vmlinuz autoinstall ds=nocloud;s=/cdrom/nocloud/"),
+            "legacy vmlinuz line was not patched: {content:?}"
         );
     }
 }
