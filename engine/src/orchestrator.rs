@@ -882,6 +882,43 @@ impl ForgeIsoEngine {
             }
             Some(Distro::Arch) => {
                 // ── Arch Linux: archinstall JSON config ───────────────────────
+                // Warn about features that cannot be expressed in an archinstall
+                // JSON config.  These are silently dropped; the user should be
+                // informed so they are not surprised by missing post-install state.
+                let arch_unsupported: &[(&str, bool)] = &[
+                    ("swap", cfg.swap.is_some()),
+                    ("mounts", !cfg.mounts.is_empty()),
+                    ("sysctl", !cfg.sysctl.is_empty()),
+                    (
+                        "proxy",
+                        cfg.proxy.http_proxy.is_some() || cfg.proxy.https_proxy.is_some(),
+                    ),
+                    ("firewall", cfg.firewall.enabled),
+                    (
+                        "grub settings",
+                        cfg.grub.timeout.is_some()
+                            || !cfg.grub.cmdline_extra.is_empty()
+                            || cfg.grub.default_entry.is_some(),
+                    ),
+                    ("pacman_mirror", cfg.pacman_mirror.is_some()),
+                    ("pacman_repos", !cfg.pacman_repos.is_empty()),
+                    ("disable_services", !cfg.disable_services.is_empty()),
+                    ("run_commands", !cfg.run_commands.is_empty()),
+                    ("extra_late_commands", !cfg.extra_late_commands.is_empty()),
+                    ("apt_repos", !cfg.apt_repos.is_empty()),
+                ];
+                for (feature, active) in arch_unsupported {
+                    if *active {
+                        self.emit(EngineEvent::warn(
+                            EventPhase::Inject,
+                            format!(
+                                "Arch Linux: '{feature}' is not supported by archinstall config \
+                                 and will be ignored — configure it manually post-install"
+                            ),
+                        ));
+                    }
+                }
+
                 let archinstall_cfg = build_archinstall_config(cfg)?;
                 let json_content = serde_json::to_string_pretty(&archinstall_cfg)
                     .map_err(|e| EngineError::Runtime(e.to_string()))?;
@@ -1861,7 +1898,20 @@ fn parse_lsdl_output(text: &str) -> std::collections::HashMap<String, u64> {
 fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> EngineResult<serde_json::Value> {
     use serde_json::{json, Value};
 
-    let packages: Value = cfg.extra_packages.to_vec().into();
+    // Build packages list: user-requested packages + container runtimes.
+    // archinstall handles package installation from Arch repos; Docker CE
+    // is available in the Arch community repo as "docker", and Podman as "podman".
+    let mut pkg_list = cfg.extra_packages.clone();
+    if cfg.containers.docker {
+        pkg_list.push("docker".to_string());
+        pkg_list.push("docker-compose".to_string());
+    }
+    if cfg.containers.podman {
+        pkg_list.push("podman".to_string());
+    }
+    pkg_list.sort();
+    pkg_list.dedup();
+    let packages: Value = pkg_list.into();
     let services: Value = cfg.enable_services.to_vec().into();
 
     let mut map = serde_json::Map::new();
@@ -2386,5 +2436,53 @@ mod tests {
         let out = sanitize_filename("my file (v2).iso");
         assert!(!out.contains(' '), "spaces must be replaced: {out}");
         assert!(!out.contains('('), "parens must be replaced: {out}");
+    }
+
+    // ── build_archinstall_config Docker/Podman packages ──────────────────────
+
+    #[test]
+    fn build_archinstall_config_includes_docker_package() {
+        use crate::config::{ContainerConfig, Distro};
+        let cfg = crate::config::InjectConfig {
+            distro: Some(Distro::Arch),
+            containers: ContainerConfig {
+                docker: true,
+                docker_users: vec![],
+                podman: false,
+            },
+            ..Default::default()
+        };
+        let val = build_archinstall_config(&cfg).expect("config");
+        let pkgs = val["packages"].as_array().expect("packages must be array");
+        let pkg_names: Vec<&str> = pkgs.iter().filter_map(|v| v.as_str()).collect();
+        assert!(
+            pkg_names.contains(&"docker"),
+            "docker must be in archinstall packages: {pkg_names:?}"
+        );
+        assert!(
+            pkg_names.contains(&"docker-compose"),
+            "docker-compose must be in archinstall packages: {pkg_names:?}"
+        );
+    }
+
+    #[test]
+    fn build_archinstall_config_includes_podman_package() {
+        use crate::config::{ContainerConfig, Distro};
+        let cfg = crate::config::InjectConfig {
+            distro: Some(Distro::Arch),
+            containers: ContainerConfig {
+                docker: false,
+                docker_users: vec![],
+                podman: true,
+            },
+            ..Default::default()
+        };
+        let val = build_archinstall_config(&cfg).expect("config");
+        let pkgs = val["packages"].as_array().expect("packages must be array");
+        let pkg_names: Vec<&str> = pkgs.iter().filter_map(|v| v.as_str()).collect();
+        assert!(
+            pkg_names.contains(&"podman"),
+            "podman must be in archinstall packages: {pkg_names:?}"
+        );
     }
 }

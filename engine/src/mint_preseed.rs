@@ -152,9 +152,18 @@ pub fn generate_mint_preseed(cfg: &InjectConfig) -> EngineResult<String> {
             .or_else(|| mirror.strip_prefix("http://"));
         if let Some(stripped) = stripped {
             let parts: Vec<&str> = stripped.splitn(2, '/').collect();
-            if parts.len() == 2 {
+            if parts.len() == 2 && !parts[1].is_empty() {
                 lines.push(format!("d-i mirror/http/hostname string {}", parts[0]));
                 lines.push(format!("d-i mirror/http/directory string /{}", parts[1]));
+            } else {
+                // URL has no path component (e.g. "https://mirror.example.com" with no
+                // trailing slash).  The d-i mirror directives require both a hostname and
+                // a directory — omitting either silently falls back to the default mirror.
+                // Push a comment so preseed readers know the value was intentionally skipped.
+                lines.push(format!(
+                    "# WARNING: apt_mirror '{mirror}' has no path component; \
+                     mirror directives omitted — installer will use defaults"
+                ));
             }
         }
         // If URL format is unrecognized (no http/https scheme), mirror directives
@@ -420,6 +429,45 @@ mod tests {
         assert!(
             preseed.contains("$6$"),
             "password must be SHA-512-crypt hashed"
+        );
+    }
+
+    // ── apt_mirror URL without path component ─────────────────────────────────
+
+    #[test]
+    fn apt_mirror_with_path_emits_directives() {
+        let cfg = InjectConfig {
+            apt_mirror: Some("https://mirror.example.com/linuxmint".into()),
+            ..Default::default()
+        };
+        let preseed = generate_mint_preseed(&cfg).unwrap();
+        assert!(
+            preseed.contains("mirror/http/hostname string mirror.example.com"),
+            "hostname directive must be present: {preseed}"
+        );
+        assert!(
+            preseed.contains("mirror/http/directory string /linuxmint"),
+            "directory directive must be present: {preseed}"
+        );
+    }
+
+    #[test]
+    fn apt_mirror_without_path_emits_warning_comment() {
+        // A mirror URL with no path (e.g. "https://mirror.example.com") must
+        // not silently emit empty/wrong directives — it must emit a comment warning.
+        let cfg = InjectConfig {
+            apt_mirror: Some("https://mirror.example.com".into()),
+            ..Default::default()
+        };
+        let preseed = generate_mint_preseed(&cfg).unwrap();
+        assert!(
+            preseed.contains("# WARNING:"),
+            "mirror URL without path must emit WARNING comment: {preseed}"
+        );
+        // Must not emit broken directives
+        assert!(
+            !preseed.contains("mirror/http/hostname string mirror.example.com"),
+            "mirror URL without path must not emit hostname directive: {preseed}"
         );
     }
 }

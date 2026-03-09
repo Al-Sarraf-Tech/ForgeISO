@@ -312,11 +312,19 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
     }
 
     // 12. Custom mounts (fstab entries)
+    // Each entry is an fstab line: "<device> <mountpoint> <type> <options> <dump> <pass>"
+    // We mkdir the mountpoint so the system doesn't fail to mount on first boot.
+    // If the entry has no whitespace-separated second field we skip the mkdir but still
+    // write the fstab line — the admin may be using a bind-mount or special syntax.
     for entry in &cfg.mounts {
         let parts: Vec<&str> = entry.splitn(2, ' ').collect();
         if parts.len() >= 2 {
-            let mountpoint = parts[1].split_whitespace().next().unwrap_or("/mnt");
-            cmds.push(format!("mkdir -p /target{mountpoint}"));
+            let mountpoint = parts[1].split_whitespace().next();
+            if let Some(mp) = mountpoint {
+                cmds.push(format!("mkdir -p /target{mp}"));
+            }
+            // If no mountpoint is present, skip mkdir (malformed fstab line);
+            // still write the line so the user sees it at runtime and can diagnose.
         }
         cmds.push(format!("echo '{entry}' >> /target/etc/fstab"));
     }
@@ -2593,6 +2601,47 @@ autoinstall:
         assert!(
             !yaml.contains("amd64"),
             "merged apt primary arches must not be hardcoded to 'amd64': {yaml}"
+        );
+    }
+
+    // ── mount entry without mountpoint ────────────────────────────────────────
+
+    #[test]
+    fn mount_entry_with_mountpoint_generates_mkdir() {
+        // A well-formed fstab entry should generate a `mkdir -p /target<mountpoint>` command.
+        let cfg = crate::config::InjectConfig {
+            mounts: vec!["/dev/sdb1 /data ext4 defaults 0 2".to_string()],
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        assert!(
+            cmds.iter().any(|c| c.contains("mkdir -p /target/data")),
+            "mount with valid mountpoint must generate mkdir: {cmds:?}"
+        );
+        assert!(
+            cmds.iter()
+                .any(|c| c.contains("/data ext4") && c.contains("fstab")),
+            "fstab entry must still be written: {cmds:?}"
+        );
+    }
+
+    #[test]
+    fn mount_entry_without_mountpoint_skips_mkdir_but_writes_fstab() {
+        // An fstab entry with no second whitespace field must NOT silently mkdir /mnt.
+        // It must still write the line to fstab.
+        let cfg = crate::config::InjectConfig {
+            mounts: vec!["/dev/sdb1".to_string()],
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        assert!(
+            !cmds.iter().any(|c| c.contains("mkdir -p /target/mnt")),
+            "malformed mount entry must not mkdir /mnt silently: {cmds:?}"
+        );
+        assert!(
+            cmds.iter()
+                .any(|c| c.contains("/dev/sdb1") && c.contains("fstab")),
+            "fstab entry must still be written for malformed mount: {cmds:?}"
         );
     }
 }

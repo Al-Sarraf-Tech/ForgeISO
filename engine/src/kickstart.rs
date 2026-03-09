@@ -359,22 +359,36 @@ mod tests {
         cfg.enable_services = vec!["sshd".to_string(), "docker".to_string()];
         cfg.disable_services = vec!["firewalld".to_string()];
         let ks = generate_kickstart_cfg(&cfg).unwrap();
+        // Services are emitted via systemctl in %post (not the Kickstart `services`
+        // directive); each service generates its own line.
         assert!(
-            ks.contains("services --enabled=sshd,docker")
-                || ks.contains("sshd") && ks.contains("docker"),
-            "enabled services not found in kickstart: {ks}"
+            ks.contains("systemctl enable sshd"),
+            "enable sshd not found in kickstart %post: {ks}"
+        );
+        assert!(
+            ks.contains("systemctl enable docker"),
+            "enable docker not found in kickstart %post: {ks}"
+        );
+        assert!(
+            ks.contains("systemctl disable firewalld"),
+            "disable firewalld not found in kickstart %post: {ks}"
         );
     }
 
     #[test]
     fn test_kickstart_rpm_url_uppercase_extension() {
-        // Regression: .RPM (uppercase) must install the same as .rpm
+        // Regression: .RPM (uppercase) must be installed with `dnf install`,
+        // NOT added as a repo with `dnf config-manager --add-repo`.
         let mut cfg = base_cfg();
         cfg.dnf_repos = vec!["https://example.com/package.RPM".to_string()];
         let ks = generate_kickstart_cfg(&cfg).unwrap();
         assert!(
-            ks.contains("dnf install") || ks.contains("package.RPM"),
-            "uppercase .RPM URL not handled: {ks}"
+            ks.contains("dnf install -y 'https://example.com/package.RPM'"),
+            "uppercase .RPM URL must use 'dnf install', not 'dnf config-manager': {ks}"
+        );
+        assert!(
+            !ks.contains("config-manager"),
+            "uppercase .RPM URL must not use dnf config-manager: {ks}"
         );
     }
 
