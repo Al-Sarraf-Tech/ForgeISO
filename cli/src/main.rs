@@ -785,7 +785,7 @@ async fn main() -> anyhow::Result<()> {
                             p.id.as_str(),
                             p.distro,
                             p.strategy.as_str(),
-                            &p.note[..p.note.len().min(50)]
+                            &p.note.chars().take(50).collect::<String>()
                         );
                     }
                     println!(
@@ -851,7 +851,12 @@ async fn main() -> anyhow::Result<()> {
                                     println!("Note:          {}", p.note);
                                     println!("\nProvide your own ISO path: forgeiso inject --source /path/to/rhel.iso ...");
                                 }
-                                AcquisitionStrategy::DirectUrl => unreachable!(),
+                                AcquisitionStrategy::DirectUrl => {
+                                    eprintln!(
+                                        "error: preset '{}' is DirectUrl but has no URL configured",
+                                        p.id.as_str()
+                                    );
+                                }
                             }
                         }
                     }
@@ -1012,7 +1017,12 @@ fn resolve_source_from_preset_or_str(
         })?;
         match found.strategy {
             AcquisitionStrategy::DirectUrl => {
-                let url = resolve_url(found)?.expect("DirectUrl preset must have direct_url set");
+                let url = resolve_url(found)?.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "preset '{}' is DirectUrl but has no direct_url configured",
+                        found.id.as_str()
+                    )
+                })?;
                 Ok(url)
             }
             AcquisitionStrategy::DiscoveryPage => {

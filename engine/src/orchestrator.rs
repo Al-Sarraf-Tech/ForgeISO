@@ -1779,12 +1779,34 @@ fn build_archinstall_config(cfg: &crate::config::InjectConfig) -> EngineResult<s
     if let Some(h) = &cfg.hostname {
         map.insert("hostname".to_string(), json!(h));
     }
+    // ── User account ─────────────────────────────────────────────────────────
+    // archinstall ≥ 2.7 prefers the "!users" list format which supports SSH keys,
+    // sudo, shell, and other per-user options.  We also keep the legacy top-level
+    // "username" / "!password" keys so older archinstall versions still work.
     if let Some(u) = &cfg.username {
         map.insert("username".to_string(), json!(u));
-    }
-    if let Some(p) = &cfg.password {
-        // Hash the password before embedding — storing plaintext in the ISO
-        // would allow anyone who mounts or extracts it to recover credentials.
+
+        let hashed = if let Some(p) = &cfg.password {
+            hash_password(p)?
+        } else {
+            "!".to_string() // locked account placeholder
+        };
+
+        // Emit the !users list (archinstall ≥ 2.7 format).
+        let mut user_obj = serde_json::Map::new();
+        user_obj.insert("username".to_string(), json!(u));
+        user_obj.insert("!password".to_string(), json!(hashed));
+        user_obj.insert("sudo".to_string(), json!(true));
+        if !cfg.ssh.authorized_keys.is_empty() {
+            let keys: Vec<serde_json::Value> =
+                cfg.ssh.authorized_keys.iter().map(|k| json!(k)).collect();
+            user_obj.insert("ssh_authorized_keys".to_string(), json!(keys));
+        }
+        map.insert("!users".to_string(), json!([user_obj]));
+
+        // Legacy top-level password field for archinstall < 2.7 compatibility.
+        map.insert("!password".to_string(), json!(hashed));
+    } else if let Some(p) = &cfg.password {
         let hashed = hash_password(p)?;
         map.insert("!password".to_string(), json!(hashed));
     }
@@ -1921,6 +1943,56 @@ mod tests {
             "expected SHA-512 hash starting with $6$, got: {pw}"
         );
         assert_ne!(pw, "mysecret", "password must not be stored in plaintext");
+    }
+
+    #[test]
+    fn build_archinstall_config_injects_ssh_keys() {
+        use crate::config::{Distro, SshConfig};
+        let key = "ssh-ed25519 AAAAC3Nz…arch-unit-key";
+        let cfg = crate::config::InjectConfig {
+            distro: Some(Distro::Arch),
+            username: Some("archuser".to_string()),
+            password: Some("APass1!".to_string()),
+            ssh: SshConfig {
+                authorized_keys: vec![key.to_string()],
+                install_server: Some(true),
+                allow_password_auth: Some(false),
+            },
+            ..Default::default()
+        };
+        let val = build_archinstall_config(&cfg).expect("config");
+
+        // !users list must exist
+        let users = val
+            .get("!users")
+            .and_then(|v| v.as_array())
+            .expect("!users");
+        assert_eq!(users.len(), 1, "exactly one user entry");
+
+        let user = &users[0];
+        assert_eq!(
+            user.get("username").and_then(|v| v.as_str()),
+            Some("archuser"),
+            "username must match"
+        );
+
+        let keys = user
+            .get("ssh_authorized_keys")
+            .and_then(|v| v.as_array())
+            .expect("ssh_authorized_keys must be present");
+        assert_eq!(keys.len(), 1);
+        assert_eq!(
+            keys[0].as_str(),
+            Some(key),
+            "SSH key must appear verbatim in archinstall config"
+        );
+
+        // Password in !users must also be hashed
+        let pw = user
+            .get("!password")
+            .and_then(|v| v.as_str())
+            .expect("!password in user object");
+        assert!(pw.starts_with("$6$"), "user password must be hashed");
     }
 
     #[test]

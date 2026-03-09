@@ -103,6 +103,15 @@ pub fn generate_kickstart_cfg(cfg: &InjectConfig) -> EngineResult<String> {
     // ── Reboot ───────────────────────────────────────────────────────────────
     lines.push("reboot".to_string());
 
+    // ── Firewall (native Kickstart directive) ─────────────────────────────────
+    // The `firewall` directive controls the initial firewalld state at install
+    // time.  Fine-grained port rules are applied in %post via firewall-cmd.
+    if cfg.firewall.enabled {
+        lines.push("firewall --enabled".to_string());
+    } else {
+        lines.push("firewall --disabled".to_string());
+    }
+
     // ── repo directives (DNF extra repos) ────────────────────────────────────
     // Each entry is either a plain https:// URL (we emit a dnf install command
     // in %post) or a [id]\nbaseurl=... stanza pasted verbatim.  URL-only entries
@@ -137,6 +146,21 @@ pub fn generate_kickstart_cfg(cfg: &InjectConfig) -> EngineResult<String> {
         ));
     }
 
+    // Docker CE — uses the upstream Docker Inc. Fedora repository.
+    if cfg.containers.docker {
+        dnf_post.push("dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo 2>/dev/null || true".to_string());
+        dnf_post.push("dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>/dev/null || true".to_string());
+        dnf_post.push("systemctl enable docker".to_string());
+        for user in &cfg.containers.docker_users {
+            dnf_post.push(format!("usermod -aG docker {user}"));
+        }
+    }
+
+    // Podman — available from Fedora's standard repos (no extra repo needed).
+    if cfg.containers.podman {
+        dnf_post.push("dnf install -y podman 2>/dev/null || true".to_string());
+    }
+
     // Install extra repos: URL entries → dnf install; stanza entries → write .repo file
     for (idx, repo) in cfg.dnf_repos.iter().enumerate() {
         let trimmed = repo.trim();
@@ -167,8 +191,15 @@ pub fn generate_kickstart_cfg(cfg: &InjectConfig) -> EngineResult<String> {
     let all_post: Vec<String> = dnf_post
         .into_iter()
         .chain(late_cmds.iter().map(|cmd| {
-            let base = cmd.strip_prefix("chroot /target ").unwrap_or(cmd);
-            base.replace("/target/", "/").replace("/target ", "/ ")
+            // Only transform commands that explicitly address the chroot target.
+            // Bare commands (mkdir, echo, printf stanzas) must pass through
+            // unchanged to avoid corrupting path literals that happen to contain
+            // the substring "/target".
+            if let Some(inner) = cmd.strip_prefix("chroot /target ") {
+                inner.replace("/target/", "/").replace("/target ", "/ ")
+            } else {
+                cmd.clone()
+            }
         }))
         .collect();
 
@@ -186,7 +217,7 @@ pub fn generate_kickstart_cfg(cfg: &InjectConfig) -> EngineResult<String> {
 
 /// Parse a CIDR address string (e.g. "10.0.0.5/24") into (ip, netmask).
 /// Falls back to (addr, "255.255.255.0") if the prefix is missing or invalid.
-fn parse_cidr(cidr: &str) -> (String, String) {
+pub(crate) fn parse_cidr(cidr: &str) -> (String, String) {
     if let Some((ip, prefix)) = cidr.split_once('/') {
         let mask = prefix_to_mask(prefix.parse::<u8>().unwrap_or(24));
         (ip.to_string(), mask)
@@ -350,6 +381,41 @@ mod tests {
         assert!(
             ks.contains("forgeiso-extra-0.repo") || ks.contains("myrepo"),
             "repo stanza should be written to a file: {ks}"
+        );
+    }
+
+    #[test]
+    fn test_post_transformer_does_not_corrupt_bare_commands() {
+        // A bare echo/printf command that happens to contain the substring
+        // "/target" in a path literal must NOT be altered by the chroot
+        // transformer (regression for the unwrap_or bug).
+        let mut cfg = base_cfg();
+        cfg.run_commands = vec!["echo /data/target/file".to_string()];
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        // The path must survive unchanged — only "chroot /target " prefix
+        // commands are rewritten.
+        assert!(
+            ks.contains("/data/target/file"),
+            "bare command with /target literal was incorrectly transformed: {ks}"
+        );
+        // And it must NOT appear without the /data prefix
+        assert!(
+            !ks.contains("echo /data//file"),
+            "path was double-collapsed: {ks}"
+        );
+    }
+
+    #[test]
+    fn test_post_transformer_rewrites_chroot_commands() {
+        // A "chroot /target ..." command must be stripped of its prefix and
+        // any remaining /target/ references resolved to /.
+        let mut cfg = base_cfg();
+        cfg.run_commands = vec!["chroot /target touch /target/etc/resolv.conf".to_string()];
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        // chroot prefix removed; /target/ collapsed to /
+        assert!(
+            ks.contains("touch /etc/resolv.conf"),
+            "chroot command was not correctly stripped: {ks}"
         );
     }
 }
