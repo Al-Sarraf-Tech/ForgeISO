@@ -1,0 +1,37 @@
+# ForgeISO inject example — Linux Mint (preseed.cfg via Calamares)
+# Usage: forgeiso inject --source linuxmint-21.3-xfce-64bit.iso --out /tmp/out --distro mint
+# Or load via GUI/TUI
+#
+# NOTE: Mint uses Calamares (not cloud-init). The generated preseed.cfg requires
+# booting with: auto=true priority=critical preseed/file=/cdrom/preseed.cfg
+# ForgeISO patches the boot entries automatically. Test in a VM before deploying.
+
+source: /srv/isos/linuxmint-21.3-xfce-64bit.iso
+out_name: mint-custom
+distro: mint
+
+hostname: mint-workstation
+username: user
+realname: "Desktop User"
+# password: changeme
+
+timezone: America/Chicago
+locale: en_US.UTF-8
+keyboard_layout: us
+
+network:
+  dns_servers:
+    - "1.1.1.1"
+  ntp_servers:
+    - "pool.ntp.org"
+
+user:
+  groups:
+    - sudo
+    - audio
+    - video
+
+extra_packages:
+  - curl
+  - git
+  - vim

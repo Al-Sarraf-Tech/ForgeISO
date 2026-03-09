@@ -1,0 +1,33 @@
+# Rust
+target/
+**/*.rs.bk
+*.rlib
+Cargo.lock
+.cargo-tmp/
+
+# Node/Tauri
+gui/node_modules/
+gui/dist/
+gui/src-tauri/target/
+gui/src-tauri/gen/
+
+# Go
+agent/bin/
+agent/.cache/
+
+# Python
+__pycache__/
+*.pyc
+
+# Claude Code session state
+.claude/
+
+# Generic
+.DS_Store
+*.log
+*.tmp
+.env
+coverage/
+artifacts/
+workdir/
+dist/

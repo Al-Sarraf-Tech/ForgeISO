@@ -1,0 +1,51 @@
+# ForgeISO inject example — Fedora (Kickstart)
+# Usage: forgeiso inject --source Fedora-Server-dvd-x86_64-40-1.14.iso --out /tmp/out --distro fedora
+# Or load via GUI/TUI
+
+source: /srv/isos/Fedora-Server-dvd-x86_64-40-1.14.iso
+out_name: fedora-custom
+distro: fedora
+
+hostname: fedora-server
+username: admin
+realname: "Admin User"
+# password: changeme
+
+timezone: America/New_York
+locale: en_US.UTF-8
+keyboard_layout: us
+
+ssh:
+  authorized_keys:
+    - "ssh-ed25519 AAAA... user@host"
+  allow_password_auth: false
+
+network:
+  dns_servers:
+    - "1.1.1.1"
+    - "8.8.8.8"
+  ntp_servers:
+    - "pool.ntp.org"
+
+user:
+  groups:
+    - wheel
+  sudo_nopasswd: false
+
+firewall:
+  enabled: true
+  allow_ports:
+    - "22/tcp"
+
+extra_packages:
+  - curl
+  - git
+  - vim-enhanced
+
+enable_services:
+  - sshd
+
+disable_services:
+  - bluetooth
+
+no_user_interaction: true
