@@ -7,6 +7,14 @@ members = [
 ]
 resolver = "2"
 
+# Patch egui 0.33.3 to fix hit_test panic when NaN leaks into WidgetRect::rect.
+# The unwrap() at hit_test.rs:364 calls position() which returns None when
+# NaN != NaN causes PartialEq to fail.  Our patch replaces the two unwrap()
+# calls with a checked match that defaults to "click on top" when ordering
+# cannot be determined.
+[patch.crates-io]
+egui = { path = "egui-patched" }
+
 [workspace.package]
 version = "0.2.0"
 edition = "2021"
