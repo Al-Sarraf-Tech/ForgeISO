@@ -664,7 +664,19 @@ async fn main() -> anyhow::Result<()> {
                     Some("fedora") | Some("rhel-family") => Some(Distro::Fedora),
                     Some("arch") => Some(Distro::Arch),
                     Some("mint") => Some(Distro::Mint),
-                    // ubuntu, debian, opensuse → ubuntu cloud-init path (None)
+                    // Unsupported preset distros: warn and fall through to Ubuntu
+                    // cloud-init (the user can override with --distro).
+                    Some(tag @ ("debian" | "opensuse")) => {
+                        eprintln!(
+                            "WARNING: ForgeISO does not yet have a dedicated installer \
+                             format for '{tag}'. Using Ubuntu cloud-init autoinstall as a \
+                             best-effort fallback. The generated config may not work for \
+                             this distro. Use --distro ubuntu to silence this warning, or \
+                             see the ForgeISO docs for supported distros."
+                        );
+                        None
+                    }
+                    // ubuntu → cloud-init (no warning needed)
                     _ => None,
                 },
             };
