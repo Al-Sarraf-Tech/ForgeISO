@@ -433,7 +433,7 @@ static ALL_PRESETS: &[IsoPreset] = &[
             "https://dl.fedoraproject.org/pub/fedora/linux/releases/42/KDE/x86_64/iso/Fedora-KDE-Desktop-Live-42-1.1.x86_64.iso",
         ),
         checksum_url: Some(
-            "https://dl.fedoraproject.org/pub/fedora/linux/releases/42/KDE/x86_64/iso/Fedora-KDE-Desktop-42-1.1-x86_64-CHECKSUM",
+            "https://dl.fedoraproject.org/pub/fedora/linux/releases/42/KDE/x86_64/iso/Fedora-KDE-42-1.1-x86_64-CHECKSUM",
         ),
         filename_suffix: Some("-KDE-Desktop-Live-"),
         note: "Fedora 42 KDE — Plasma desktop live spin",
@@ -695,7 +695,7 @@ static ALL_PRESETS: &[IsoPreset] = &[
             "https://iso.pop-os.org/22.04/amd64/intel/46/pop-os_22.04_amd64_intel_46.iso",
         ),
         checksum_url: Some(
-            "https://iso.pop-os.org/22.04/amd64/intel/46/pop-os_22.04_amd64_intel_46.iso.sha256",
+            "https://iso.pop-os.org/22.04/amd64/intel/46/SHA256SUMS",
         ),
         filename_suffix: Some("_amd64_intel_"),
         note: "Pop!_OS 22.04 — Intel/AMD GPU build; Ubuntu 22.04 base",
@@ -712,7 +712,7 @@ static ALL_PRESETS: &[IsoPreset] = &[
             "https://iso.pop-os.org/22.04/amd64/nvidia/46/pop-os_22.04_amd64_nvidia_46.iso",
         ),
         checksum_url: Some(
-            "https://iso.pop-os.org/22.04/amd64/nvidia/46/pop-os_22.04_amd64_nvidia_46.iso.sha256",
+            "https://iso.pop-os.org/22.04/amd64/nvidia/46/SHA256SUMS",
         ),
         filename_suffix: Some("_amd64_nvidia_"),
         note: "Pop!_OS 22.04 — NVIDIA GPU build with proprietary drivers bundled",
@@ -729,7 +729,7 @@ static ALL_PRESETS: &[IsoPreset] = &[
             "https://iso.pop-os.org/24.04/amd64/intel/9/pop-os_24.04_amd64_intel_9.iso",
         ),
         checksum_url: Some(
-            "https://iso.pop-os.org/24.04/amd64/intel/9/pop-os_24.04_amd64_intel_9.iso.sha256",
+            "https://iso.pop-os.org/24.04/amd64/intel/9/SHA256SUMS",
         ),
         filename_suffix: Some("_amd64_intel_"),
         note: "Pop!_OS 24.04 — Intel/AMD GPU build; Ubuntu 24.04 base",
