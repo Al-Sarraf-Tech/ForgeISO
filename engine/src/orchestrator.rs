@@ -561,6 +561,42 @@ impl ForgeIsoEngine {
             IsoSource::Url(url) => {
                 std::fs::create_dir_all(cache_root)?;
                 let target = cache_root.join(download_filename(url));
+
+                // Cache-hit: skip re-downloading if the file already exists.
+                // Warn when the cached file is older than 7 days — the distro
+                // may have released a security update since it was cached.
+                if target.exists() {
+                    const CACHE_TTL_DAYS: u64 = 7;
+                    let age_days = std::fs::metadata(&target)
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|t| t.elapsed().ok())
+                        .map(|d| d.as_secs() / 86_400)
+                        .unwrap_or(0);
+                    if age_days >= CACHE_TTL_DAYS {
+                        self.emit(EngineEvent::warn(
+                            EventPhase::Download,
+                            format!(
+                                "cached ISO is {age_days} days old (>{CACHE_TTL_DAYS}d); \
+                                 the distro may have released security updates. \
+                                 Delete {} to force a fresh download.",
+                                target.display()
+                            ),
+                        ));
+                    } else {
+                        self.emit(EngineEvent::info(
+                            EventPhase::Download,
+                            format!("using cached ISO ({age_days}d old): {}", target.display()),
+                        ));
+                    }
+                    return Ok(ResolvedIso {
+                        source_path: target.clone(),
+                        source_kind: SourceKind::DownloadedUrl,
+                        source_value: url.clone(),
+                        _download_dir: Some(target),
+                    });
+                }
+
                 self.emit(EngineEvent::info(
                     EventPhase::Download,
                     format!("downloading source ISO from {url}"),
