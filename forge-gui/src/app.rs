@@ -343,11 +343,22 @@ enum Tab {
 impl Tab {
     fn label(&self) -> &'static str {
         match self {
-            Tab::Inject => "Inject",
+            Tab::Inject => "Create ISO",
             Tab::Verify => "Verify",
-            Tab::Diff => "Diff",
+            Tab::Diff => "Compare",
             Tab::Build => "Build",
-            Tab::Doctor => "Doctor",
+            Tab::Doctor => "Health Check",
+        }
+    }
+
+    #[allow(dead_code)]
+    fn icon(&self) -> &'static str {
+        match self {
+            Tab::Inject => "💿",
+            Tab::Verify => "🔒",
+            Tab::Diff => "🔍",
+            Tab::Build => "🔨",
+            Tab::Doctor => "🩺",
         }
     }
 }
@@ -1047,7 +1058,7 @@ impl ForgeApp {
                     );
                     ui.add_space(6.0);
                     ui.label(
-                        RichText::new("ISO Customization Platform")
+                        RichText::new("Linux ISO Customizer")
                             .size(13.0)
                             .color(MUTED),
                     );
@@ -1115,11 +1126,17 @@ impl ForgeApp {
                             Tab::Doctor => self.doctor_result.is_some(),
                         };
                         let label = if done {
-                            format!("✓  {}", tab.label())
+                            format!("{} ✓  {}", tab.icon(), tab.label())
                         } else {
-                            tab.label().to_string()
+                            format!("{}  {}", tab.icon(), tab.label())
                         };
-                        let text_col = if active { Color32::WHITE } else { MUTED };
+                        let text_col = if active {
+                            Color32::WHITE
+                        } else if done {
+                            GREEN
+                        } else {
+                            MUTED
+                        };
                         let fill = if active {
                             TAB_ACTIVE
                         } else {
@@ -1131,7 +1148,7 @@ impl ForgeApp {
                                 .fill(fill)
                                 .stroke(Stroke::new(stroke_w, BORDER))
                                 .corner_radius(6.0f32)
-                                .min_size(Vec2::new(88.0, 42.0));
+                                .min_size(Vec2::new(108.0, 42.0));
                         if ui.add(btn).clicked() {
                             self.active_tab = *tab;
                         }
@@ -1256,9 +1273,9 @@ impl ForgeApp {
     /// Draw the numbered step indicator bar at the top of the Inject wizard.
     fn render_inject_step_bar(&self, ui: &mut Ui) {
         let steps = [
-            (InjectStep::Source, "1", "Get ISO"),
-            (InjectStep::Configure, "2", "Configure"),
-            (InjectStep::Run, "3", "Inject"),
+            (InjectStep::Source, "1", "Pick Linux"),
+            (InjectStep::Configure, "2", "Your Setup"),
+            (InjectStep::Run, "3", "Create!"),
         ];
         ui.horizontal(|ui| {
             ui.add_space(4.0);
@@ -1373,25 +1390,88 @@ impl ForgeApp {
             .id_salt("inject_src_scroll")
             .show(ui, |ui| {
                 ui.label(
-                    RichText::new("Choose Your Source ISO")
-                        .size(17.0)
+                    RichText::new("Which Linux are you customizing?")
+                        .size(20.0)
                         .strong()
                         .color(TEXT),
                 );
-                ui.add_space(4.0);
+                ui.add_space(6.0);
                 ui.label(
                     RichText::new(
-                        "Pick a preset to auto-fill a direct download URL, or paste your own \
-                         path/URL. The ISO will be downloaded once — your injected copy is \
-                         saved locally and automatically linked to Verify and Diff.",
+                        "ForgeISO embeds your settings (username, password, timezone, SSH keys, \
+                         packages …) directly into a Linux installer so it runs completely \
+                         unattended — no typing required during setup.",
                     )
                     .size(14.0)
                     .color(MUTED),
                 );
-                ui.add_space(18.0);
+                ui.add_space(20.0);
 
-                // ── Preset picker ───────────────────────────────────────────
-                section(ui, "Quick Preset");
+                // ── Popular distro quick-pick cards ─────────────────────────
+                section(ui, "Popular Choices");
+
+                // Top-row distro cards — clicking one selects the preset,
+                // auto-fills the source URL, and infers the distro type.
+                let top_picks: &[(&str, &str, &str, &str)] = &[
+                    // (preset_id, emoji, friendly_name, one-line description)
+                    ("ubuntu-server-lts",  "🟠", "Ubuntu Server",  "LTS · cloud-init"),
+                    ("ubuntu-desktop-lts", "🟠", "Ubuntu Desktop", "LTS · full GUI"),
+                    ("linux-mint-cinnamon","🟢", "Linux Mint",     "Beginner-friendly"),
+                    ("fedora-workstation", "🔵", "Fedora",         "Cutting-edge GNOME"),
+                    ("rocky-linux",        "🪨", "Rocky Linux",    "RHEL-compatible"),
+                    ("arch-linux",         "🏹", "Arch Linux",     "Rolling release"),
+                    ("debian-netinst",     "🌀", "Debian",         "Rock-solid stable"),
+                    ("pop-os-24-intel",    "🚀", "Pop!_OS",        "Gaming & science"),
+                ];
+
+                let card_width = (ui.available_width() - 16.0 * 7.0) / 8.0;
+                ui.horizontal_wrapped(|ui| {
+                    for (preset_id, emoji, name, desc) in top_picks {
+                        let selected = self.inject.source_preset == *preset_id;
+                        let (fill, border_col) = if selected {
+                            (Color32::from_rgb(20, 52, 100), ACCENT)
+                        } else {
+                            (SURFACE, BORDER)
+                        };
+                        let resp = Frame::new()
+                            .fill(fill)
+                            .stroke(Stroke::new(if selected { 2.0 } else { 1.0 }, border_col))
+                            .corner_radius(8.0f32)
+                            .inner_margin(10.0f32)
+                            .show(ui, |ui| {
+                                ui.set_width(card_width.max(80.0));
+                                ui.vertical_centered(|ui| {
+                                    ui.label(RichText::new(*emoji).size(24.0));
+                                    ui.add_space(4.0);
+                                    ui.label(
+                                        RichText::new(*name)
+                                            .size(12.0)
+                                            .strong()
+                                            .color(if selected { ACCENT } else { TEXT }),
+                                    );
+                                    ui.label(
+                                        RichText::new(*desc).size(10.0).color(MUTED),
+                                    );
+                                });
+                            });
+                        if !running && resp.response.interact(egui::Sense::click()).clicked() {
+                            if let Some(p) = find_preset_by_str(preset_id) {
+                                self.inject.source_preset = p.id.as_str().to_string();
+                                self.inject.distro = preset_distro_to_form_distro(p.distro);
+                                if p.strategy == AcquisitionStrategy::DirectUrl {
+                                    if let Ok(Some(url)) = resolve_url(p) {
+                                        self.inject.source = url;
+                                    }
+                                }
+                            }
+                        }
+                        ui.add_space(6.0);
+                    }
+                });
+
+                ui.add_space(14.0);
+                // ── Full preset picker ───────────────────────────────────────
+                section(ui, "All Presets (or choose your own)");
 
                 // Group presets by distro family for a cleaner dropdown.
                 let families: &[(&str, &[&str])] = &[
@@ -1542,7 +1622,7 @@ impl ForgeApp {
                 ui.add_space(18.0);
 
                 // ── Custom URL / path ────────────────────────────────────────
-                section(ui, "Or Enter URL / Local Path");
+                section(ui, "Or Paste a URL / Browse for a File");
                 ui.horizontal(|ui| {
                     ui.add_enabled(
                         !running,
@@ -1570,7 +1650,7 @@ impl ForgeApp {
                 ui.add_space(24.0);
 
                 let can_next = !self.inject.source.trim().is_empty() && !running;
-                if action_btn(ui, "Next: Configure  →", can_next) {
+                if action_btn(ui, "Next: Customize Your Settings  →", can_next) {
                     *go_next = true;
                 }
 
@@ -1586,15 +1666,16 @@ impl ForgeApp {
             .id_salt("inject_cfg_scroll")
             .show(ui, |ui| {
                 ui.label(
-                    RichText::new("Configure Your ISO")
-                        .size(17.0)
+                    RichText::new("Set Up Your Installation")
+                        .size(20.0)
                         .strong()
                         .color(TEXT),
                 );
-                ui.add_space(4.0);
+                ui.add_space(6.0);
                 ui.label(
                     RichText::new(
-                        "These settings are embedded into the autoinstall config inside your ISO.",
+                        "These settings are baked into your ISO so the OS installs \
+                         automatically — no keyboard required during setup.",
                     )
                     .size(14.0)
                     .color(MUTED),
@@ -1623,7 +1704,7 @@ impl ForgeApp {
                 ui.add_space(16.0);
 
                 // ── Identity ──────────────────────────────────────────────
-                section(ui, "Identity");
+                section(ui, "Your Account");
                 ui.columns(2, |cols| {
                     cols[0].vertical(|ui| {
                         lbl(ui, "Hostname");
@@ -1683,7 +1764,7 @@ impl ForgeApp {
                 ui.add_space(10.0);
 
                 // ── Distro & System ───────────────────────────────────────
-                section(ui, "System");
+                section(ui, "Region & Language");
                 ui.columns(2, |cols| {
                     cols[0].vertical(|ui| {
                         lbl(ui, "Target Distro");
@@ -1830,7 +1911,7 @@ impl ForgeApp {
                 ui.add_space(16.0);
 
                 // ── SSH ───────────────────────────────────────────────────
-                section(ui, "SSH");
+                section(ui, "Remote Access (SSH)");
                 ui.horizontal(|ui| {
                     ui.add_enabled(
                         !running,
@@ -1862,7 +1943,9 @@ impl ForgeApp {
 
                 // ── Advanced (collapsed) ───────────────────────────────────
                 egui::CollapsingHeader::new(
-                    RichText::new("Advanced Options").size(14.0).color(MUTED),
+                    RichText::new("⚙  Advanced Options  (most users can skip this)")
+                        .size(14.0)
+                        .color(MUTED),
                 )
                 .default_open(false)
                 .show(ui, |ui| {
@@ -1879,7 +1962,7 @@ impl ForgeApp {
                     }
                     ui.add_space(12.0);
                     let can_next = !pw_mismatch && !running;
-                    if action_btn(ui, "Next: Output & Inject  →", can_next) {
+                    if action_btn(ui, "Next: Create My ISO  →", can_next) {
                         *go_next = true;
                     }
                 });
@@ -1896,16 +1979,17 @@ impl ForgeApp {
             .id_salt("inject_run_scroll")
             .show(ui, |ui| {
                 ui.label(
-                    RichText::new("Build Your Injected ISO")
-                        .size(17.0)
+                    RichText::new("Create Your Custom Installer")
+                        .size(20.0)
                         .strong()
                         .color(TEXT),
                 );
-                ui.add_space(4.0);
+                ui.add_space(6.0);
                 ui.label(
                     RichText::new(
-                        "The source ISO will be downloaded once. Your injected copy is saved \
-                         locally and automatically linked to Verify and Diff.",
+                        "The Linux ISO will be downloaded once and your settings embedded. \
+                         Copy the finished file to a USB stick and boot from it — \
+                         everything installs automatically.",
                     )
                     .size(14.0)
                     .color(MUTED),
@@ -2039,9 +2123,9 @@ impl ForgeApp {
 
                 let can = !out_empty && !sha_invalid && !running;
                 let btn_label = if running {
-                    "⏳  Injecting…"
+                    "⏳  Building your ISO…"
                 } else {
-                    "Run Inject"
+                    "🚀  Create My Custom ISO"
                 };
                 if action_btn(ui, btn_label, can) {
                     *do_inject = true;
@@ -2052,10 +2136,19 @@ impl ForgeApp {
                     ui.add_space(16.0);
                     card_green(ui, |ui| {
                             ui.label(
-                                RichText::new("Inject Complete")
-                                    .size(15.0)
+                                RichText::new("✅  Your custom ISO is ready!")
+                                    .size(17.0)
                                     .strong()
                                     .color(GREEN),
+                            );
+                            ui.add_space(4.0);
+                            ui.label(
+                                RichText::new(
+                                    "Flash it to a USB stick with Balena Etcher or Rufus, \
+                                     then boot the target machine — setup runs automatically.",
+                                )
+                                .size(13.0)
+                                .color(MUTED),
                             );
                             ui.add_space(8.0);
                             for a in &r.artifacts {
@@ -2105,22 +2198,22 @@ impl ForgeApp {
                             ui.add_space(10.0);
                             ui.label(
                                 RichText::new(
-                                    "Your injected ISO is automatically linked to Verify and Diff below.",
+                                    "Next steps: verify the file is intact, or compare it to the original.",
                                 )
                                 .size(13.0)
                                 .color(MUTED),
                             );
                             ui.add_space(6.0);
                             ui.horizontal(|ui| {
-                                if continue_btn(ui, "→  Verify") {
+                                if continue_btn(ui, "🔒  Verify Integrity") {
                                     self.active_tab = Tab::Verify;
                                 }
                                 ui.add_space(8.0);
-                                if continue_btn(ui, "→  Diff") {
+                                if continue_btn(ui, "🔍  Compare Changes") {
                                     self.active_tab = Tab::Diff;
                                 }
                                 ui.add_space(8.0);
-                                if continue_btn(ui, "→  Build") {
+                                if continue_btn(ui, "🔨  Build") {
                                     self.active_tab = Tab::Build;
                                 }
                             });
@@ -2854,17 +2947,16 @@ impl ForgeApp {
 
                 // ── SHA-256 Checksum ────────────────────────────────────
                 ui.label(
-                    RichText::new("SHA-256 Checksum Verification")
-                        .size(17.0)
+                    RichText::new("🔒  Verify Your ISO File")
+                        .size(20.0)
                         .strong()
                         .color(TEXT),
                 );
-                ui.add_space(4.0);
+                ui.add_space(6.0);
                 ui.label(
                     RichText::new(
-                        "Verifies an ISO against its official SHA256SUMS file. \
-                         Auto-detected for Ubuntu. For injected or renamed ISOs, \
-                         the computed hash is displayed for your records.",
+                        "Checks that your ISO file hasn't been corrupted or tampered with. \
+                         After creating your custom ISO, run this to confirm the file is intact.",
                     )
                     .size(14.0)
                     .color(MUTED),
@@ -2897,9 +2989,9 @@ impl ForgeApp {
                 ui.add_space(12.0);
                 let can_verify = !self.verify.source.trim().is_empty() && !running;
                 let verify_lbl = if running && self.job_phase.to_lowercase().contains("verify") {
-                    "⏳  Verifying…"
+                    "⏳  Checking…"
                 } else {
-                    "Verify Checksum"
+                    "🔒  Check File Integrity"
                 };
                 if action_btn(ui, verify_lbl, can_verify) {
                     do_verify = true;
@@ -3072,16 +3164,16 @@ impl ForgeApp {
                 ui.add_space(12.0);
 
                 ui.label(
-                    RichText::new("Compare Two ISO Images")
-                        .size(17.0)
+                    RichText::new("🔍  Compare Two ISO Files")
+                        .size(20.0)
                         .strong()
                         .color(TEXT),
                 );
-                ui.add_space(4.0);
+                ui.add_space(6.0);
                 ui.label(
                     RichText::new(
-                        "Select the original (base) and modified (target) ISOs \
-                         to see what files were added, removed, or changed.",
+                        "Compares your custom ISO against the original to see exactly what changed. \
+                         Great for confirming your settings were embedded correctly.",
                     )
                     .size(14.0)
                     .color(MUTED),
@@ -3097,7 +3189,7 @@ impl ForgeApp {
                     .spacing([20.0, 12.0])
                     .show(ui, |ui| {
                         ui.vertical(|ui| {
-                            lbl(ui, "Base ISO  (original)");
+                            lbl(ui, "Original ISO  (before your changes)");
                             ui.horizontal(|ui| {
                                 ui.add_enabled(
                                     !running,
@@ -3122,7 +3214,7 @@ impl ForgeApp {
                             });
                         });
                         ui.vertical(|ui| {
-                            lbl(ui, "Target ISO  (modified)");
+                            lbl(ui, "Your Custom ISO  (after creating)");
                             ui.horizontal(|ui| {
                                 ui.add_enabled(
                                     !running,
@@ -3156,7 +3248,7 @@ impl ForgeApp {
                 let diff_lbl = if running {
                     "⏳  Comparing…"
                 } else {
-                    "Compare ISOs"
+                    "🔍  Show What Changed"
                 };
                 if action_btn(ui, diff_lbl, can) {
                     do_diff = true;
@@ -3333,16 +3425,16 @@ impl ForgeApp {
                 ui.add_space(12.0);
 
                 ui.label(
-                    RichText::new("Fetch & Build ISO")
-                        .size(17.0)
+                    RichText::new("🔨  Build a Custom ISO")
+                        .size(20.0)
                         .strong()
                         .color(TEXT),
                 );
-                ui.add_space(4.0);
+                ui.add_space(6.0);
                 ui.label(
                     RichText::new(
-                        "Download, verify, and repack an ISO with optional overlay files \
-                         and configuration.",
+                        "Advanced: download a Linux ISO and repack it with extra overlay files, \
+                         security scans, and boot tests. Most users should use Create ISO instead.",
                     )
                     .size(14.0)
                     .color(MUTED),
@@ -3518,11 +3610,11 @@ impl ForgeApp {
                                 });
                         });
                         ui.vertical(|ui| {
-                            lbl(ui, "Expected SHA-256  (optional)");
+                            lbl(ui, "Source ISO SHA-256  (optional — verifies download)");
                             ui.add_enabled(
                                 !running,
                                 egui::TextEdit::singleline(&mut self.build.expected_sha256)
-                                    .hint_text("64-char hex")
+                                    .hint_text("64-char hex  (leave blank to skip)")
                                     .desired_width(f32::INFINITY),
                             );
                         });
@@ -3699,16 +3791,16 @@ impl ForgeApp {
                 ui.add_space(12.0);
 
                 ui.label(
-                    RichText::new("System Dependencies")
-                        .size(17.0)
+                    RichText::new("🩺  System Health Check")
+                        .size(20.0)
                         .strong()
                         .color(TEXT),
                 );
-                ui.add_space(4.0);
+                ui.add_space(6.0);
                 ui.label(
                     RichText::new(
-                        "Checks that all required tools (xorriso, grub, squashfs-tools, etc.) \
-                         are installed and accessible.",
+                        "Checks that everything ForgeISO needs is installed on this machine. \
+                         Run this first if you get errors.",
                     )
                     .size(14.0)
                     .color(MUTED),
@@ -3718,9 +3810,9 @@ impl ForgeApp {
                 let lbl = if running {
                     "⏳  Checking…"
                 } else {
-                    "Run Dependency Check"
+                    "🩺  Run Health Check"
                 };
-                if small_btn(ui, lbl, !running) {
+                if action_btn(ui, lbl, !running) {
                     self.spawn_doctor();
                 }
 
