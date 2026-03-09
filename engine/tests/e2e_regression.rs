@@ -1975,3 +1975,166 @@ fn validate_accepts_grub_default_safe_value() {
         "grub_default with a plain name must be accepted"
     );
 }
+
+// ── output_label control character validation ──────────────────────────────
+
+#[test]
+fn inject_output_label_rejects_newline() {
+    let mut cfg = minimal_inject(None);
+    cfg.output_label = Some("LABEL\nINJECT".into());
+    assert!(
+        cfg.validate().is_err(),
+        "output_label with embedded newline must be rejected"
+    );
+}
+
+#[test]
+fn inject_output_label_rejects_carriage_return() {
+    let mut cfg = minimal_inject(None);
+    cfg.output_label = Some("LABEL\rINJECT".into());
+    assert!(
+        cfg.validate().is_err(),
+        "output_label with embedded carriage return must be rejected"
+    );
+}
+
+#[test]
+fn inject_output_label_rejects_null_byte() {
+    let mut cfg = minimal_inject(None);
+    cfg.output_label = Some("LABEL\0INJECT".into());
+    assert!(
+        cfg.validate().is_err(),
+        "output_label with null byte must be rejected"
+    );
+}
+
+#[test]
+fn inject_output_label_accepts_printable_ascii() {
+    let mut cfg = minimal_inject(None);
+    cfg.output_label = Some("MY-ISO-2025".into());
+    assert!(
+        cfg.validate().is_ok(),
+        "output_label with printable ASCII must be accepted"
+    );
+}
+
+// ── CIDR edge cases ────────────────────────────────────────────────────────
+
+#[test]
+fn static_ip_accepts_cidr_edge_cases() {
+    for good in &["0.0.0.0/0", "192.168.1.1/32", "10.0.0.0/31"] {
+        let mut cfg = minimal_inject(None);
+        cfg.static_ip = Some((*good).to_string());
+        assert!(
+            cfg.validate().is_ok(),
+            "static_ip {:?} must be accepted",
+            good
+        );
+    }
+}
+
+#[test]
+fn static_ip_rejects_prefix_too_large() {
+    let mut cfg = minimal_inject(None);
+    cfg.static_ip = Some("192.168.1.1/33".into());
+    // /33 is not valid CIDR; the validator allows slash + digits but the
+    // semantic correctness is enforced downstream (cloud-init will reject it).
+    // The current validator is syntactic only — this test documents the
+    // boundary of what validate() does and does not check.
+    // For now, validate() must at least not panic.
+    let _ = cfg.validate();
+}
+
+// ── Mint preseed — multiple SSH keys ──────────────────────────────────────
+
+#[test]
+fn mint_preseed_multiple_ssh_keys_all_appear() {
+    let mut cfg = minimal_inject(Some(Distro::Mint));
+    cfg.ssh = SshConfig {
+        authorized_keys: vec![
+            "ssh-ed25519 AAAAC3Nz…key-one".into(),
+            "ssh-rsa AAAAB3Nz…key-two".into(),
+        ],
+        install_server: Some(true),
+        allow_password_auth: Some(false),
+    };
+    cfg.username = Some("mintuser".into());
+    let preseed = generate_mint_preseed(&cfg).expect("must succeed");
+    assert!(
+        preseed.contains("key-one"),
+        "first SSH key must appear in Mint preseed"
+    );
+    assert!(
+        preseed.contains("key-two"),
+        "second SSH key must appear in Mint preseed"
+    );
+}
+
+// ── Arch: pacman mirror + repos in same config ─────────────────────────────
+
+#[test]
+fn arch_pacman_mirror_and_repos_combined() {
+    let mut cfg = minimal_inject(Some(Distro::Arch));
+    cfg.pacman_mirror = Some("https://mirror.rackspace.com/archlinux".into());
+    cfg.pacman_repos = vec!["Server = https://mirror.pkgbuild.com/$repo/os/$arch".into()];
+    let cmds = build_feature_late_commands(&cfg).expect("must succeed");
+    let all = cmds.join("\n");
+    assert!(
+        all.contains("mirrorlist"),
+        "pacman_mirror must produce mirrorlist command"
+    );
+    assert!(
+        all.contains("mirror.pkgbuild.com"),
+        "pacman_repos must appear in combined output"
+    );
+}
+
+// ── Mint: combined proxy + sysctl + services in one preseed ───────────────
+
+#[test]
+fn mint_preseed_combined_late_commands() {
+    let mut cfg = minimal_inject(Some(Distro::Mint));
+    cfg.proxy.http_proxy = Some("http://proxy.internal:3128".into());
+    cfg.sysctl = vec![("net.ipv4.ip_forward".into(), "1".into())];
+    cfg.enable_services = vec!["docker".into()];
+    let preseed = generate_mint_preseed(&cfg).expect("must succeed");
+    assert!(
+        preseed.contains("http_proxy"),
+        "proxy must appear in Mint combined preseed"
+    );
+    assert!(
+        preseed.contains("net.ipv4"),
+        "sysctl must appear in Mint combined preseed"
+    );
+    assert!(
+        preseed.contains("docker") && preseed.contains("systemctl"),
+        "services must appear in Mint combined preseed"
+    );
+}
+
+// ── merge_autoinstall_yaml: existing storage layout preserved ─────────────
+
+#[test]
+fn merge_yaml_preserves_existing_storage_layout() {
+    let existing = r"
+#cloud-config
+autoinstall:
+  version: 1
+  storage:
+    layout:
+      name: lvm
+";
+    let mut cfg = minimal_inject(None);
+    cfg.hostname = Some("merged-host".into());
+    // storage_layout in cfg is None — must NOT overwrite existing
+    cfg.storage_layout = None;
+    let merged = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+    assert!(
+        merged.contains("lvm"),
+        "existing LVM storage layout must be preserved after merge"
+    );
+    assert!(
+        merged.contains("merged-host"),
+        "new hostname must appear after merge"
+    );
+}

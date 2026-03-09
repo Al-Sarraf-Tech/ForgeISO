@@ -210,6 +210,16 @@ impl BuildConfig {
                     "output_label must be 32 characters or fewer".to_string(),
                 ));
             }
+            if !label.is_ascii() {
+                return Err(EngineError::InvalidConfig(
+                    "output_label must contain only ASCII characters".to_string(),
+                ));
+            }
+            if label.chars().any(|c| c.is_ascii_control()) {
+                return Err(EngineError::InvalidConfig(
+                    "output_label must not contain control characters".to_string(),
+                ));
+            }
         }
 
         if self.auto_test && !self.testing.smoke {
@@ -900,6 +910,11 @@ impl InjectConfig {
             if !label.is_ascii() {
                 return Err(EngineError::InvalidConfig(
                     "output_label must contain only ASCII characters".to_string(),
+                ));
+            }
+            if label.chars().any(|c| c.is_ascii_control()) {
+                return Err(EngineError::InvalidConfig(
+                    "output_label must not contain control characters".to_string(),
                 ));
             }
         }
@@ -1605,6 +1620,35 @@ mod tests {
             cfg.validate().is_ok(),
             "32-char output_label must be accepted"
         );
+    }
+
+    #[test]
+    fn build_config_rejects_output_label_with_control_char() {
+        for bad in &[
+            "LABEL\nINJECT",
+            "LABEL\rINJECT",
+            "LABEL\0INJECT",
+            "LABEL\tINJECT",
+        ] {
+            let cfg = BuildConfig {
+                name: "build".to_string(),
+                source: IsoSource::from_raw("/tmp/test.iso"),
+                overlay_dir: None,
+                output_label: Some((*bad).to_string()),
+                profile: ProfileKind::Minimal,
+                auto_scan: false,
+                auto_test: false,
+                scanning: ScanPolicy::default(),
+                testing: TestingPolicy::default(),
+                keep_workdir: false,
+                expected_sha256: None,
+            };
+            assert!(
+                cfg.validate().is_err(),
+                "output_label {:?} with control char must be rejected",
+                bad
+            );
+        }
     }
 
     #[test]
