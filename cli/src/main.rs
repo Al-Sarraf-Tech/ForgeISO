@@ -19,16 +19,19 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 #[allow(clippy::large_enum_variant)]
 enum Commands {
+    /// Check host tooling prerequisites (xorriso, qemu, trivy, etc.)
     Doctor {
         #[arg(long)]
         json: bool,
     },
+    /// Read ISO metadata (distro, release, arch, SHA-256) from a local file or URL
     Inspect {
         #[arg(long)]
         source: String,
         #[arg(long)]
         json: bool,
     },
+    /// Build a customised ISO from a source image and optional project overlay
     Build {
         #[arg(long, conflicts_with = "preset")]
         source: Option<String>,
@@ -54,6 +57,7 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Run security scans on a built ISO artifact (trivy, syft, grype, oscap)
     Scan {
         #[arg(long)]
         artifact: PathBuf,
@@ -62,6 +66,7 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Boot-test an ISO in QEMU (BIOS and/or UEFI) as a smoke test
     Test {
         #[arg(long)]
         iso: PathBuf,
@@ -72,12 +77,14 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Generate an HTML or JSON report from a build artifact directory
     Report {
         #[arg(long)]
         build: PathBuf,
         #[arg(long)]
         format: String,
     },
+    /// Verify ISO integrity against upstream SHA-256 checksums
     Verify {
         #[arg(long)]
         source: String,
@@ -86,6 +93,7 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Inject an autoinstall/preseed/kickstart configuration into an ISO
     Inject {
         #[arg(long, conflicts_with = "preset")]
         source: Option<String>,
@@ -274,6 +282,7 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Show which files differ between two ISO images
     Diff {
         #[arg(long)]
         base: PathBuf,

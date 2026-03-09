@@ -113,18 +113,22 @@ pub fn generate_mint_preseed(cfg: &InjectConfig) -> EngineResult<String> {
     lines.push(format!(
         "d-i passwd/user-password-crypted password {password_hash}"
     ));
-    lines.push(
-        "d-i passwd/user-default-groups string audio cdrom dip floppy plugdev sudo users video"
-            .to_string(),
-    );
-
-    // Add extra groups if specified
-    if !cfg.user.groups.is_empty() {
-        let groups = cfg.user.groups.join(" ");
-        lines.push(format!(
-            "d-i passwd/user-default-groups string {groups} audio cdrom sudo users"
-        ));
+    // User groups — merge caller-specified groups with the defaults.
+    // Debian preseed uses last-write-wins for duplicate keys, so we must
+    // emit exactly ONE passwd/user-default-groups directive.
+    let base_groups: &[&str] = &[
+        "audio", "cdrom", "dip", "floppy", "plugdev", "sudo", "users", "video",
+    ];
+    let mut all_groups: Vec<&str> = base_groups.to_vec();
+    for g in &cfg.user.groups {
+        if !all_groups.contains(&g.as_str()) {
+            all_groups.push(g.as_str());
+        }
     }
+    lines.push(format!(
+        "d-i passwd/user-default-groups string {}",
+        all_groups.join(" ")
+    ));
 
     // Root account disabled — use sudo instead
     lines.push("d-i passwd/root-login boolean false".to_string());
@@ -141,14 +145,20 @@ pub fn generate_mint_preseed(cfg: &InjectConfig) -> EngineResult<String> {
     // ── APT mirror ────────────────────────────────────────────────────────────
     if let Some(mirror) = &cfg.apt_mirror {
         // Extract host and directory from the mirror URL.
-        // Expected format: http://mirror.example.com/path
-        if let Some(stripped) = mirror.strip_prefix("http://") {
+        // Support both http:// and https:// — only the hostname and path are
+        // needed by the preseed; the preseed protocol directive is always http.
+        let stripped = mirror
+            .strip_prefix("https://")
+            .or_else(|| mirror.strip_prefix("http://"));
+        if let Some(stripped) = stripped {
             let parts: Vec<&str> = stripped.splitn(2, '/').collect();
             if parts.len() == 2 {
                 lines.push(format!("d-i mirror/http/hostname string {}", parts[0]));
                 lines.push(format!("d-i mirror/http/directory string /{}", parts[1]));
             }
         }
+        // If URL format is unrecognized (no http/https scheme), mirror directives
+        // are omitted and the installer falls back to its own defaults.
     } else {
         // Default to Mint's own package mirror.
         lines.push("d-i mirror/country string manual".to_string());
@@ -227,6 +237,23 @@ mod tests {
         let preseed = generate_mint_preseed(&cfg).unwrap();
         assert!(preseed.contains("docker"));
         assert!(preseed.contains("libvirt"));
+        // Regression: extra groups must not drop the standard set (dip, floppy, plugdev, video).
+        // Previously a second passwd/user-default-groups line was emitted and the first
+        // (with the full default set) was silently discarded by debconf's last-write-wins rule.
+        assert!(
+            preseed.contains("dip"),
+            "default group 'dip' must be preserved when extra groups are added"
+        );
+        assert!(
+            preseed.contains("plugdev"),
+            "default group 'plugdev' must be preserved when extra groups are added"
+        );
+        // Exactly one passwd/user-default-groups directive must appear.
+        let count = preseed.matches("passwd/user-default-groups").count();
+        assert_eq!(
+            count, 1,
+            "exactly one passwd/user-default-groups directive expected, got {count}"
+        );
     }
 
     #[test]
@@ -254,6 +281,30 @@ mod tests {
     }
 
     #[test]
+    fn https_apt_mirror_is_not_silently_dropped() {
+        // Regression: only "http://" was stripped; an "https://" mirror URL
+        // produced NO mirror directives at all — the installer would silently
+        // fall back to its own default instead of using the requested mirror.
+        let cfg = InjectConfig {
+            apt_mirror: Some("https://mirror.example.com/ubuntu".into()),
+            ..Default::default()
+        };
+        let preseed = generate_mint_preseed(&cfg).unwrap();
+        assert!(
+            preseed.contains("mirror.example.com"),
+            "https apt_mirror hostname must appear in preseed mirror directives"
+        );
+        assert!(
+            preseed.contains("d-i mirror/http/hostname"),
+            "mirror/http/hostname directive missing for https mirror"
+        );
+        assert!(
+            !preseed.contains("packages.linuxmint.com"),
+            "default Mint mirror must not appear when a custom mirror is set"
+        );
+    }
+
+    #[test]
     fn proxy_settings_appear_in_late_command() {
         let cfg = InjectConfig {
             proxy: ProxyConfig {
@@ -271,6 +322,37 @@ mod tests {
         assert!(
             preseed.contains("http_proxy"),
             "http_proxy must appear in late_command"
+        );
+    }
+
+    #[test]
+    fn apt_proxy_late_command_contains_no_literal_newline() {
+        // Regression: the APT proxy printf command used "\n" (Rust escape = actual
+        // newline) instead of "\\n" (shell escape = backslash-n that printf processes).
+        // A literal newline in a preseed/late_command directive splits the line and
+        // breaks the preseed format — the rest of the directive is silently discarded.
+        let cfg = InjectConfig {
+            distro: Some(crate::config::Distro::Mint),
+            proxy: ProxyConfig {
+                http_proxy: Some("http://proxy.corp:3128".into()),
+                https_proxy: Some("https://proxy.corp:3128".into()),
+                no_proxy: vec![],
+            },
+            ..Default::default()
+        };
+        let preseed = generate_mint_preseed(&cfg).unwrap();
+        let late_line = preseed
+            .lines()
+            .find(|l| l.contains("late_command"))
+            .expect("late_command line must exist");
+        assert!(
+            !late_line.contains('\n'),
+            "late_command directive must not contain a literal newline: {late_line:?}"
+        );
+        // The printf \\n shell escape must be present (not a raw newline character).
+        assert!(
+            preseed.contains(r"\n"),
+            "APT proxy printf command must use shell \\n escape, not a literal newline"
         );
     }
 

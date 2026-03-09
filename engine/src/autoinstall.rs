@@ -31,8 +31,13 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
                     "cp /cdrom/wallpaper/{filename_str} /target/usr/share/backgrounds/forgeiso-wallpaper.{ext}"
                 ));
                 cmds.push("mkdir -p /target/etc/dconf/db/local.d".to_string());
+                // Use printf '%s\n' with two separate arguments so the dconf
+                // value double-quotes are literal characters inside single-quoted
+                // shell arguments — avoids the \" backslash-quote artifact that
+                // appears when double-quotes are escaped inside a single-quoted
+                // printf format string.
                 cmds.push(format!(
-                    "printf '[org/gnome/desktop/background]\\npicture-uri=\"file:///usr/share/backgrounds/forgeiso-wallpaper.{ext}\\\"\\n' > /target/etc/dconf/db/local.d/00-forgeiso-background"
+                    "printf '%s\\n' '[org/gnome/desktop/background]' 'picture-uri=\"file:///usr/share/backgrounds/forgeiso-wallpaper.{ext}\"' > /target/etc/dconf/db/local.d/00-forgeiso-background"
                 ));
                 cmds.push("chroot /target dconf update".to_string());
             }
@@ -49,10 +54,18 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
         let ssh_dir = format!("/target/home/{uname}/.ssh");
         cmds.push(format!("mkdir -p {ssh_dir}"));
         for key in &cfg.ssh.authorized_keys {
-            // printf '%s\n' {:?} uses Rust Debug quoting which safely escapes the
-            // key content — avoids single-quote injection that a bare echo would allow.
+            // Use printf '%s\n' with the key in SINGLE quotes so the content is
+            // literal — no variable expansion ($), command substitution (`), or
+            // backslash processing.  This MUST be a single-line command because
+            // for Mint the late-commands are joined into a preseed/late_command
+            // directive, which must be a single line.  Multi-line heredocs (the
+            // alternative approach) embed literal newlines in that directive and
+            // break the preseed file format.
+            // The InjectConfig::validate() check ensures the key contains no
+            // single quotes (which would break out of single-quoting) and no
+            // FORGEISO_KEY_EOF sentinel (defense in depth from the heredoc era).
             cmds.push(format!(
-                "printf '%s\\n' {key:?} >> {ssh_dir}/authorized_keys"
+                "printf '%s\\n' '{key}' >> {ssh_dir}/authorized_keys"
             ));
         }
         cmds.push(format!("chmod 700 {ssh_dir}"));
@@ -94,8 +107,12 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
                 "echo 'http_proxy=\"{hp}\"' >> /target/etc/environment"
             ));
             if is_ubuntu {
+                // Use \\n (Rust: backslash-n) so the shell command contains the
+                // two-character sequence \n, which printf interprets as a newline.
+                // Using \n (Rust: actual newline) would embed a literal newline
+                // in the command string, breaking Mint preseed late_command lines.
                 cmds.push(format!(
-                    "printf 'Acquire::http::Proxy \"{hp}\";\n' > /target/etc/apt/apt.conf.d/99proxy"
+                    "printf 'Acquire::http::Proxy \"{hp}\";\\n' > /target/etc/apt/apt.conf.d/99proxy"
                 ));
             }
         }
@@ -105,7 +122,7 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
             ));
             if is_ubuntu {
                 cmds.push(format!(
-                    "printf 'Acquire::https::Proxy \"{sp}\";\n' >> /target/etc/apt/apt.conf.d/99proxy"
+                    "printf 'Acquire::https::Proxy \"{sp}\";\\n' >> /target/etc/apt/apt.conf.d/99proxy"
                 ));
             }
         }
@@ -246,8 +263,14 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
             "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /target/etc/apt/keyrings/docker.gpg".to_string()
         );
         cmds.push("chmod a+r /target/etc/apt/keyrings/docker.gpg".to_string());
+        // Run the repo-entry command inside the chroot so both dpkg --print-architecture
+        // and /etc/os-release resolve against the TARGET system, not the installer.
+        // Hardcoding arch=amd64 would break Docker installation on arm64 hosts
+        // (AWS Graviton, Apple Silicon, Raspberry Pi).  Using $() inside single-quoted
+        // bash -c '...' is intentional: the outer shell treats the argument as a
+        // literal; bash -c evaluates the $() substitutions inside the chroot.
         cmds.push(
-            r#"echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | chroot /target tee /etc/apt/sources.list.d/docker.list"#.to_string()
+            r#"chroot /target bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list'"#.to_string()
         );
         cmds.push("chroot /target apt-get update".to_string());
         cmds.push(
@@ -280,7 +303,12 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
                 r#"sed -i 's|\(GRUB_CMDLINE_LINUX_DEFAULT=".*\)"|\1 {param}"|' /target/etc/default/grub"#
             ));
         }
-        cmds.push("chroot /target update-grub".to_string());
+        // Fedora uses grub2-mkconfig; Ubuntu/Mint use the update-grub wrapper.
+        if is_fedora {
+            cmds.push("chroot /target grub2-mkconfig -o /boot/grub2/grub.cfg".to_string());
+        } else {
+            cmds.push("chroot /target update-grub".to_string());
+        }
     }
 
     // 12. Custom mounts (fstab entries)
@@ -318,7 +346,6 @@ pub fn hash_password(plaintext: &str) -> EngineResult<String> {
 #[allow(clippy::missing_errors_doc)]
 pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
     let mut root = serde_yaml::Mapping::new();
-    root.insert("cloud-config".into(), serde_yaml::Value::Null);
 
     let mut autoinstall = serde_yaml::Mapping::new();
 
@@ -381,11 +408,12 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
     // SSH
     let mut ssh = serde_yaml::Mapping::new();
 
-    // install-server defaults to true unless keys are present
-    let install_server = cfg
-        .ssh
-        .install_server
-        .unwrap_or(cfg.ssh.authorized_keys.is_empty());
+    // install-server defaults to true.  The server must be installed
+    // regardless of whether the user provides authorized_keys — if keys are
+    // configured the server is needed to accept them; if only password auth is
+    // used the server is needed for that too.  The caller can opt out by
+    // explicitly setting `install_server = Some(false)`.
+    let install_server = cfg.ssh.install_server.unwrap_or(true);
     ssh.insert(
         "install-server".into(),
         serde_yaml::Value::Bool(install_server),
@@ -491,7 +519,10 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
         let mut primary_seq = serde_yaml::Sequence::new();
         let mut primary_entry = serde_yaml::Mapping::new();
 
-        let arches: serde_yaml::Sequence = vec![serde_yaml::Value::String("amd64".to_string())];
+        // Use ["default"] so the entry applies to all architectures (amd64, arm64, etc.).
+        // Hardcoding ["amd64"] would cause cloud-init to silently skip this entry on
+        // non-amd64 systems, leaving the apt_mirror setting with no effect.
+        let arches: serde_yaml::Sequence = vec![serde_yaml::Value::String("default".to_string())];
         primary_entry.insert("arches".into(), serde_yaml::Value::Sequence(arches));
 
         primary_entry.insert("uri".into(), serde_yaml::Value::String(mirror.clone()));
@@ -551,19 +582,15 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
         serde_yaml::Value::Mapping(autoinstall),
     );
 
-    // Serialize and prepend cloud-config header
+    // Serialize and prepend cloud-config header.
+    // We build only the `autoinstall:` root key; the `#cloud-config` line is a
+    // cloud-init directive prepended directly rather than inserted as a YAML key
+    // (inserting it as YAML then filtering by substring was fragile — any string
+    // value containing "cloud-config:" would have been incorrectly removed).
     let yaml_str = serde_yaml::to_string(&root)
         .map_err(|e| EngineError::Runtime(format!("Failed to serialize YAML: {e}")))?;
 
-    // Remove the "cloud-config: null" line that serde_yaml adds
-    let lines: Vec<&str> = yaml_str.lines().collect();
-    let filtered: Vec<&str> = lines
-        .iter()
-        .filter(|line| !line.contains("cloud-config:"))
-        .copied()
-        .collect();
-
-    Ok(format!("#cloud-config\n{}", filtered.join("\n")))
+    Ok(format!("#cloud-config\n{yaml_str}"))
 }
 
 /// Merge `InjectConfig` into an existing autoinstall YAML string.
@@ -691,63 +718,62 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
     }
 
     // network (static IP or DNS)
-    if cfg.static_ip.is_some()
-        || !cfg.network.dns_servers.is_empty()
-        || !cfg.network.ntp_servers.is_empty()
-    {
+    // NTP servers are NOT written to the netplan block; they go to
+    // systemd-timesyncd.conf via build_feature_late_commands().
+    // Omitting the ntp_servers check here prevents an empty `network: {}`
+    // block from being injected into the YAML when only NTP is configured.
+    if cfg.static_ip.is_some() || !cfg.network.dns_servers.is_empty() {
         let mut network = autoinstall_map
             .remove("network")
             .and_then(|v| v.as_mapping().cloned())
             .unwrap_or_default();
 
-        if cfg.static_ip.is_some() || !cfg.network.dns_servers.is_empty() {
-            network.insert("version".into(), serde_yaml::Value::Number(2.into()));
-            let mut ethernets = serde_yaml::Mapping::new();
-            let mut any = serde_yaml::Mapping::new();
+        network.insert("version".into(), serde_yaml::Value::Number(2.into()));
+        let mut ethernets = serde_yaml::Mapping::new();
+        let mut any = serde_yaml::Mapping::new();
 
-            let mut match_obj = serde_yaml::Mapping::new();
-            match_obj.insert("name".into(), serde_yaml::Value::String("en*".to_string()));
-            any.insert("match".into(), serde_yaml::Value::Mapping(match_obj));
+        let mut match_obj = serde_yaml::Mapping::new();
+        match_obj.insert("name".into(), serde_yaml::Value::String("en*".to_string()));
+        any.insert("match".into(), serde_yaml::Value::Mapping(match_obj));
 
-            if let Some(static_ip) = &cfg.static_ip {
-                any.insert("dhcp4".into(), serde_yaml::Value::Bool(false));
-                let addresses = vec![serde_yaml::Value::String(static_ip.clone())];
-                any.insert("addresses".into(), serde_yaml::Value::Sequence(addresses));
+        if let Some(static_ip) = &cfg.static_ip {
+            any.insert("dhcp4".into(), serde_yaml::Value::Bool(false));
+            let addresses = vec![serde_yaml::Value::String(static_ip.clone())];
+            any.insert("addresses".into(), serde_yaml::Value::Sequence(addresses));
 
-                if let Some(gateway) = &cfg.gateway {
-                    let mut routes = serde_yaml::Sequence::new();
-                    let mut route = serde_yaml::Mapping::new();
-                    route.insert(
-                        "to".into(),
-                        serde_yaml::Value::String("default".to_string()),
-                    );
-                    route.insert("via".into(), serde_yaml::Value::String(gateway.clone()));
-                    routes.push(serde_yaml::Value::Mapping(route));
-                    any.insert("routes".into(), serde_yaml::Value::Sequence(routes));
-                }
-            } else {
-                any.insert("dhcp4".into(), serde_yaml::Value::Bool(true));
-            }
-
-            if !cfg.network.dns_servers.is_empty() {
-                let mut nameservers = serde_yaml::Mapping::new();
-                let addrs: Vec<serde_yaml::Value> = cfg
-                    .network
-                    .dns_servers
-                    .iter()
-                    .map(|d| serde_yaml::Value::String(d.clone()))
-                    .collect();
-                nameservers.insert("addresses".into(), serde_yaml::Value::Sequence(addrs));
-
-                any.insert(
-                    "nameservers".into(),
-                    serde_yaml::Value::Mapping(nameservers),
+            if let Some(gateway) = &cfg.gateway {
+                let mut routes = serde_yaml::Sequence::new();
+                let mut route = serde_yaml::Mapping::new();
+                route.insert(
+                    "to".into(),
+                    serde_yaml::Value::String("default".to_string()),
                 );
+                route.insert("via".into(), serde_yaml::Value::String(gateway.clone()));
+                routes.push(serde_yaml::Value::Mapping(route));
+                any.insert("routes".into(), serde_yaml::Value::Sequence(routes));
             }
-
-            ethernets.insert("any".into(), serde_yaml::Value::Mapping(any));
-            network.insert("ethernets".into(), serde_yaml::Value::Mapping(ethernets));
+        } else {
+            any.insert("dhcp4".into(), serde_yaml::Value::Bool(true));
         }
+
+        if !cfg.network.dns_servers.is_empty() {
+            let mut nameservers = serde_yaml::Mapping::new();
+            let addrs: Vec<serde_yaml::Value> = cfg
+                .network
+                .dns_servers
+                .iter()
+                .map(|d| serde_yaml::Value::String(d.clone()))
+                .collect();
+            nameservers.insert("addresses".into(), serde_yaml::Value::Sequence(addrs));
+
+            any.insert(
+                "nameservers".into(),
+                serde_yaml::Value::Mapping(nameservers),
+            );
+        }
+
+        ethernets.insert("any".into(), serde_yaml::Value::Mapping(any));
+        network.insert("ethernets".into(), serde_yaml::Value::Mapping(ethernets));
 
         autoinstall_map.insert("network".into(), serde_yaml::Value::Mapping(network));
     }
@@ -785,7 +811,8 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
         let mut primary_seq = serde_yaml::Sequence::new();
         let mut primary_entry = serde_yaml::Mapping::new();
 
-        let arches: serde_yaml::Sequence = vec![serde_yaml::Value::String("amd64".to_string())];
+        // Use ["default"] so the entry applies to all architectures (amd64, arm64, etc.).
+        let arches: serde_yaml::Sequence = vec![serde_yaml::Value::String("default".to_string())];
         primary_entry.insert("arches".into(), serde_yaml::Value::Sequence(arches));
 
         primary_entry.insert("uri".into(), serde_yaml::Value::String(mirror.clone()));
@@ -955,6 +982,29 @@ mod tests {
     }
 
     #[test]
+    fn run_command_containing_cloud_config_substring_is_not_filtered() {
+        // Regression: the old implementation filtered lines by substring match
+        // `!line.contains("cloud-config:")`. Any late-command string value whose
+        // YAML serialisation contained that substring would be silently dropped,
+        // producing a YAML with a missing late-command.
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            run_commands: vec!["echo 'cloud-config: done'".to_string()],
+            ..Default::default()
+        };
+        let yaml = generate_autoinstall_yaml(&cfg).unwrap();
+        assert!(
+            yaml.contains("cloud-config: done"),
+            "run_command containing 'cloud-config:' must not be filtered from YAML: {yaml}"
+        );
+        assert!(
+            yaml.starts_with("#cloud-config"),
+            "YAML must still start with #cloud-config header"
+        );
+    }
+
+    #[test]
     fn test_generate_with_identity() {
         let cfg = InjectConfig {
             source: crate::config::IsoSource::from_raw("/tmp/test.iso"),
@@ -1071,6 +1121,13 @@ mod tests {
         assert!(
             yaml.contains("allow-pw: false"),
             "allow-pw should be false when keys present"
+        );
+        // Regression: the old default was `authorized_keys.is_empty()` which
+        // evaluated to `false` when keys were provided, setting install-server
+        // to false and making the authorized keys unusable (no SSH daemon).
+        assert!(
+            yaml.contains("install-server: true"),
+            "install-server must default to true even when authorized_keys are provided: {yaml}"
         );
     }
 
@@ -1194,6 +1251,75 @@ mod tests {
         assert!(
             yaml.contains("dconf-cli"),
             "dconf-cli should be in packages"
+        );
+    }
+
+    #[test]
+    fn test_wallpaper_dconf_has_no_spurious_backslash_before_quote() {
+        // Regression: the dconf printf command used the format
+        //   printf '...picture-uri="...jpg\"...' > file
+        // where \" inside single-quoted shell argument is a literal backslash
+        // followed by a double-quote. The dconf file therefore contained
+        // `picture-uri="...jpg\"` — a malformed GVariant string value.
+        // Fix: use printf '%s\n' with two separate arguments; double quotes
+        // inside single-quoted shell args are literal and produce no backslash.
+        let cmds = build_feature_late_commands(&InjectConfig {
+            source: crate::config::IsoSource::from_raw("/tmp/test.iso"),
+            autoinstall_yaml: None,
+            out_name: "out.iso".into(),
+            output_label: None,
+            expected_sha256: None,
+            hostname: None,
+            username: None,
+            password: None,
+            realname: None,
+            ssh: Default::default(),
+            network: Default::default(),
+            static_ip: None,
+            gateway: None,
+            distro: None,
+            timezone: None,
+            locale: None,
+            keyboard_layout: None,
+            storage_layout: None,
+            apt_mirror: None,
+            extra_packages: vec![],
+            wallpaper: Some(std::path::PathBuf::from("/tmp/bg.png")),
+            extra_late_commands: vec![],
+            no_user_interaction: false,
+            user: UserConfig::default(),
+            proxy: Default::default(),
+            firewall: Default::default(),
+            swap: None,
+            encrypt: false,
+            encrypt_passphrase: None,
+            grub: Default::default(),
+            mounts: vec![],
+            run_commands: vec![],
+            sysctl: vec![],
+            apt_repos: vec![],
+            dnf_repos: vec![],
+            dnf_mirror: None,
+            pacman_repos: vec![],
+            pacman_mirror: None,
+            enable_services: vec![],
+            disable_services: vec![],
+            containers: Default::default(),
+        })
+        .unwrap();
+        let dconf_cmd = cmds
+            .iter()
+            .find(|c| c.contains("00-forgeiso-background"))
+            .expect("dconf write command not found");
+        // The command must not contain \" (backslash before closing quote)
+        assert!(
+            !dconf_cmd.contains(r#"\""#),
+            "dconf command contains spurious backslash before quote: {dconf_cmd}"
+        );
+        // The command must contain picture-uri with a proper closing double-quote
+        assert!(
+            dconf_cmd.contains(r#"picture-uri=""#),
+            "dconf command missing picture-uri key: {dconf_cmd}"
         );
     }
 
@@ -1888,6 +2014,39 @@ autoinstall:
     }
 
     #[test]
+    fn docker_repo_entry_does_not_hardcode_amd64() {
+        // Regression: arch=amd64 was hardcoded in the Docker apt repo entry.
+        // On arm64 (AWS Graviton, Apple Silicon, RPi) Docker would fail to install.
+        // The entry must use `$(dpkg --print-architecture)` and run inside the
+        // chroot so it resolves against the TARGET system's architecture.
+        let cfg = InjectConfig {
+            containers: crate::config::ContainerConfig {
+                docker: true,
+                podman: false,
+                docker_users: vec![],
+            },
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let docker_list_cmd = cmds
+            .iter()
+            .find(|c| c.contains("docker.list"))
+            .expect("docker.list entry must be generated");
+        assert!(
+            !docker_list_cmd.contains("arch=amd64"),
+            "Docker repo entry must not hardcode arch=amd64 (breaks arm64): {docker_list_cmd}"
+        );
+        assert!(
+            docker_list_cmd.contains("dpkg --print-architecture"),
+            "Docker repo entry must use dpkg --print-architecture: {docker_list_cmd}"
+        );
+        assert!(
+            docker_list_cmd.starts_with("chroot /target bash -c"),
+            "Docker repo entry must run inside chroot: {docker_list_cmd}"
+        );
+    }
+
+    #[test]
     fn test_generate_with_grub() {
         let cfg = InjectConfig {
             source: crate::config::IsoSource::from_raw("/tmp/test.iso"),
@@ -2184,6 +2343,60 @@ autoinstall:
         );
     }
 
+    #[test]
+    fn mint_ssh_keys_use_single_quoted_printf() {
+        // Regression history:
+        //  v1: printf '%s\n' {key:?}  — Rust Debug quoting wraps key in double
+        //      quotes; $() and ` are expanded in shell.
+        //  v2: single-quoted heredoc  — no shell expansion, but produces multi-
+        //      line commands.  Multi-line commands in preseed/late_command break
+        //      the preseed file format (late_command is a single-line directive).
+        //  v3 (current): printf '%s\n' 'key' — single-quoted arg prevents all
+        //      shell expansion; produces a single-line command compatible with
+        //      the preseed format.  Single quotes in the key are blocked by
+        //      InjectConfig::validate().
+        use crate::config::{Distro, SshConfig};
+        // $(id) inside single quotes is literal — no expansion occurs.
+        let key_with_dollar = "ssh-ed25519 AAAAC3Nz... $(id)@host";
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "test.iso".to_string(),
+            distro: Some(Distro::Mint),
+            username: Some("tester".to_string()),
+            ssh: SshConfig {
+                authorized_keys: vec![key_with_dollar.to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let cmds = build_feature_late_commands(&cfg).unwrap();
+        let all = cmds.join("\n");
+        // Must use printf with single-quoted key content
+        assert!(
+            all.contains("printf '%s\\n' '"),
+            "Mint SSH key must use printf with single-quoted content to prevent expansion: {all}"
+        );
+        // Key content must appear verbatim (inside single quotes)
+        assert!(
+            all.contains(key_with_dollar),
+            "SSH key content must appear verbatim inside single quotes: {all}"
+        );
+        // Must NOT embed a heredoc (multi-line commands break preseed/late_command)
+        assert!(
+            !all.contains("FORGEISO_KEY_EOF"),
+            "heredoc sentinel must not appear — multi-line commands break preseed format: {all}"
+        );
+        // Verify the command is single-line (no embedded newlines in the key command)
+        let key_cmd = cmds
+            .iter()
+            .find(|c| c.contains("authorized_keys"))
+            .expect("authorized_keys command not found");
+        assert!(
+            !key_cmd.contains('\n'),
+            "authorized_keys command must be single-line for preseed compatibility: {key_cmd:?}"
+        );
+    }
+
     // ── hash_password edge cases ──────────────────────────────────────────────
 
     #[test]
@@ -2310,5 +2523,76 @@ autoinstall:
         let curl_count = yaml.matches("curl").count();
         assert_eq!(curl_count, 1, "curl must appear exactly once after dedup");
         assert!(yaml.contains("git"), "git must appear in merged packages");
+    }
+
+    #[test]
+    fn merge_autoinstall_ntp_only_does_not_inject_empty_network_block() {
+        // Regression: merge_autoinstall_yaml previously entered the network block
+        // when only NTP servers were configured, inserting an empty `network: {}`
+        // into the YAML.  NTP goes to systemd-timesyncd via late-commands only;
+        // it must not touch the netplan network block.
+        let existing = "autoinstall:\n  version: 1\n";
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            network: NetworkConfig {
+                ntp_servers: vec!["time.cloudflare.com".to_string()],
+                dns_servers: vec![],
+            },
+            static_ip: None,
+            ..Default::default()
+        };
+        let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+        assert!(
+            !yaml.contains("network:"),
+            "no netplan network block should appear when only NTP is configured: {yaml}"
+        );
+        // NTP must still appear in the late-commands section.
+        assert!(
+            yaml.contains("timesyncd"),
+            "NTP config must still be written to late-commands: {yaml}"
+        );
+    }
+
+    #[test]
+    fn apt_mirror_uses_default_arches_not_amd64() {
+        // Regression: arches was hardcoded to ["amd64"], causing cloud-init to silently
+        // skip the apt primary entry on arm64 and other architectures.  Must be ["default"].
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            apt_mirror: Some("http://mirror.example.com/ubuntu".to_string()),
+            ..Default::default()
+        };
+        let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+        assert!(
+            yaml.contains("default"),
+            "apt primary arches must be 'default', not 'amd64': {yaml}"
+        );
+        assert!(
+            !yaml.contains("amd64"),
+            "apt primary arches must not be hardcoded to 'amd64': {yaml}"
+        );
+    }
+
+    #[test]
+    fn merge_apt_mirror_uses_default_arches_not_amd64() {
+        // Same regression as above but exercised via merge_autoinstall_yaml.
+        let existing = "autoinstall:\n  version: 1\n";
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            apt_mirror: Some("http://mirror.example.com/ubuntu".to_string()),
+            ..Default::default()
+        };
+        let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+        assert!(
+            yaml.contains("default"),
+            "merged apt primary arches must be 'default', not 'amd64': {yaml}"
+        );
+        assert!(
+            !yaml.contains("amd64"),
+            "merged apt primary arches must not be hardcoded to 'amd64': {yaml}"
+        );
     }
 }

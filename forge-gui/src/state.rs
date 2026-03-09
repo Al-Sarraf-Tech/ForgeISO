@@ -318,8 +318,19 @@ impl StatusMsg {
         }
     }
     pub fn err(text: impl Into<String>) -> Self {
+        // Truncate long error messages so they don't overflow the status bar.
+        // Keep the first line (most errors are one line); if that exceeds 200
+        // chars, truncate with an ellipsis so the UI remains readable.
+        const MAX_CHARS: usize = 200;
+        let raw: String = text.into();
+        let first_line = raw.lines().next().unwrap_or(&raw);
+        let text = if first_line.len() > MAX_CHARS {
+            format!("{}…", &first_line[..MAX_CHARS])
+        } else {
+            first_line.to_string()
+        };
         Self {
-            text: text.into(),
+            text,
             is_error: true,
         }
     }

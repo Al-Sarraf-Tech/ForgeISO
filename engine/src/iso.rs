@@ -98,7 +98,10 @@ pub fn inspect_iso(
 }
 
 fn enrich_with_xorriso(path: &Path, info: &mut IsoMetadata) -> EngineResult<()> {
-    let el_torito = crate::orchestrator::run_command_capture(
+    // xorriso -report_el_torito exits non-zero on ISOs that have no El Torito
+    // boot records — this is expected, not an error.  Use run_command_lossy so
+    // we capture whatever output is available regardless of exit status.
+    let boot_report = match crate::orchestrator::run_command_lossy(
         "xorriso",
         &[
             "-indev".to_string(),
@@ -107,12 +110,14 @@ fn enrich_with_xorriso(path: &Path, info: &mut IsoMetadata) -> EngineResult<()> 
             "plain".to_string(),
         ],
         None,
-    )?;
-    let boot_report = format!(
-        "{}\n{}",
-        el_torito.stdout.to_lowercase(),
-        el_torito.stderr.to_lowercase()
-    );
+    ) {
+        Ok(out) => format!(
+            "{}\n{}",
+            out.stdout.to_lowercase(),
+            out.stderr.to_lowercase()
+        ),
+        Err(_) => String::new(),
+    };
     info.boot.bios = boot_report.contains("pltf  bios")
         || boot_report.contains("boot img :   1  bios")
         || boot_report.contains("platform id: 0x00")
@@ -171,9 +176,11 @@ fn extract_optional_file(path: &Path, iso_path: &str) -> EngineResult<Option<Str
 
     match result {
         Ok(_) if out.exists() => {
-            let body = std::fs::read_to_string(&out)?;
+            // Read before removing so the temp dir is always cleaned up,
+            // even when read_to_string returns an error (e.g. invalid UTF-8).
+            let read_result = std::fs::read_to_string(&out);
             let _ = std::fs::remove_dir_all(&tmp);
-            Ok(Some(body))
+            Ok(Some(read_result?))
         }
         Ok(_) => {
             let _ = std::fs::remove_dir_all(&tmp);
@@ -347,5 +354,60 @@ mod tests {
             infer_architecture("Fedora aarch64"),
             Some("aarch64".to_string())
         );
+    }
+
+    #[test]
+    fn infer_from_disk_info_non_empty_sets_edition() {
+        let mut info = IsoMetadata {
+            source_path: PathBuf::from("/tmp/test.iso"),
+            source_kind: SourceKind::LocalPath,
+            source_value: "/tmp/test.iso".to_string(),
+            size_bytes: 0,
+            sha256: String::new(),
+            volume_id: None,
+            distro: None,
+            release: None,
+            edition: None,
+            architecture: None,
+            rootfs_path: None,
+            boot: BootSupport::default(),
+            inspected_at: String::new(),
+            warnings: Vec::new(),
+        };
+        infer_from_disk_info(
+            "Ubuntu 24.04 LTS \"Noble Numbat\" - Release amd64 (20240425)",
+            &mut info,
+        );
+        assert_eq!(info.distro, Some(Distro::Ubuntu));
+        assert!(
+            info.edition.is_some(),
+            "edition must be set from .disk/info"
+        );
+    }
+
+    #[test]
+    fn infer_from_treeinfo_fedora_sets_distro_and_release() {
+        let body = "[general]\nfamily = Fedora\nversion = 40\narch = x86_64\nvariant = Server\n";
+        let mut info = IsoMetadata {
+            source_path: PathBuf::from("/tmp/test.iso"),
+            source_kind: SourceKind::LocalPath,
+            source_value: "/tmp/test.iso".to_string(),
+            size_bytes: 0,
+            sha256: String::new(),
+            volume_id: None,
+            distro: None,
+            release: None,
+            edition: None,
+            architecture: None,
+            rootfs_path: None,
+            boot: BootSupport::default(),
+            inspected_at: String::new(),
+            warnings: Vec::new(),
+        };
+        infer_from_treeinfo(body, &mut info);
+        assert_eq!(info.distro, Some(Distro::Fedora));
+        assert_eq!(info.release.as_deref(), Some("40"));
+        assert_eq!(info.architecture.as_deref(), Some("x86_64"));
+        assert_eq!(info.edition.as_deref(), Some("Server"));
     }
 }

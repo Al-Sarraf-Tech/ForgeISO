@@ -270,7 +270,12 @@ impl ForgeIsoEngine {
         require_tools(&["xorriso"])?;
         let extract_dir = workspace.work.join("iso-tree");
         std::fs::create_dir_all(&extract_dir)?;
-        run_command_capture(
+        // xorriso may exit non-zero on some ISOs (e.g. for non-fatal permission
+        // quirks on certain files) even when extraction fully succeeded.  Use the
+        // lossy runner so we still get stdout/stderr for diagnostics, and only
+        // fail on an explicit non-zero status — matching the pattern used in
+        // inject_autoinstall for the same operation.
+        let extract_out = run_command_lossy(
             "xorriso",
             &[
                 "-osirrox".to_string(),
@@ -283,6 +288,12 @@ impl ForgeIsoEngine {
             ],
             None,
         )?;
+        if extract_out.status != 0 {
+            return Err(EngineError::Runtime(format!(
+                "xorriso extract failed (status {}): {}",
+                extract_out.status, extract_out.stderr
+            )));
+        }
         // xorriso extracts files with read-only permissions; make writable
         // so we can modify the tree and clean up afterwards.
         chmod_recursive_writable(&extract_dir);
@@ -550,6 +561,42 @@ impl ForgeIsoEngine {
             IsoSource::Url(url) => {
                 std::fs::create_dir_all(cache_root)?;
                 let target = cache_root.join(download_filename(url));
+
+                // Cache-hit: skip re-downloading if the file already exists.
+                // Warn when the cached file is older than 7 days — the distro
+                // may have released a security update since it was cached.
+                if target.exists() {
+                    const CACHE_TTL_DAYS: u64 = 7;
+                    let age_days = std::fs::metadata(&target)
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|t| t.elapsed().ok())
+                        .map(|d| d.as_secs() / 86_400)
+                        .unwrap_or(0);
+                    if age_days >= CACHE_TTL_DAYS {
+                        self.emit(EngineEvent::warn(
+                            EventPhase::Download,
+                            format!(
+                                "cached ISO is {age_days} days old (>{CACHE_TTL_DAYS}d); \
+                                 the distro may have released security updates. \
+                                 Delete {} to force a fresh download.",
+                                target.display()
+                            ),
+                        ));
+                    } else {
+                        self.emit(EngineEvent::info(
+                            EventPhase::Download,
+                            format!("using cached ISO ({age_days}d old): {}", target.display()),
+                        ));
+                    }
+                    return Ok(ResolvedIso {
+                        source_path: target.clone(),
+                        source_kind: SourceKind::DownloadedUrl,
+                        source_value: url.clone(),
+                        _download_dir: Some(target),
+                    });
+                }
+
                 self.emit(EngineEvent::info(
                     EventPhase::Download,
                     format!("downloading source ISO from {url}"),
@@ -615,7 +662,9 @@ impl ForgeIsoEngine {
                 && total_size > 0
             {
                 let msg = format!("{}/{} bytes", downloaded, total_size);
-                self.emit(EngineEvent::info(EventPhase::Download, msg));
+                self.emit(
+                    EngineEvent::info(EventPhase::Download, msg).with_bytes(downloaded, total_size),
+                );
             }
         }
         file.flush().await?;
@@ -845,7 +894,7 @@ impl ForgeIsoEngine {
                     "set -euo pipefail\n",
                     "CONFIG=\"/run/archiso/bootmnt/arch/boot/archinstall-config.json\"\n",
                     "if [[ -f \"${CONFIG}\" ]]; then\n",
-                    "    archinstall --config \"${CONFIG}:\" --silent\n",
+                    "    archinstall --config \"${CONFIG}\" --silent\n",
                     "else\n",
                     "    echo \"ERROR: archinstall config not found at ${CONFIG}\" >&2\n",
                     "    exit 1\n",
@@ -1104,15 +1153,35 @@ impl ForgeIsoEngine {
             format!("created output ISO: {}", output_path.display()),
         ));
 
-        Ok(BuildResult {
+        // Build the result before cleaning up so that all paths are captured.
+        let result = BuildResult {
             workspace_root: work_dir.to_path_buf(),
             output_dir: out.to_path_buf(),
+            // Inject does not generate a standalone build report; these paths
+            // point into the workspace which is removed below.  Callers must
+            // not rely on these paths existing after inject completes.
             report_json: work_dir.join("report.json"),
             report_html: work_dir.join("report.html"),
             artifacts: vec![output_path],
             source_iso: resolved.source_path,
             iso: metadata,
-        })
+        };
+
+        // Always clean up the inject workspace — it can contain the full
+        // extracted ISO tree (several GB).  Unlike BuildConfig there is no
+        // keep_workdir flag on InjectConfig; inject workspaces are always
+        // ephemeral temp dirs that should not accumulate on disk.
+        if let Err(e) = remove_dir_all_force(&work_dir) {
+            self.emit(EngineEvent::warn(
+                EventPhase::Complete,
+                format!(
+                    "failed to clean up inject workspace {}: {e}",
+                    work_dir.display()
+                ),
+            ));
+        }
+
+        Ok(result)
     }
 
     #[allow(clippy::unused_async)] // async kept for API consistency
@@ -1289,11 +1358,18 @@ pub fn default_cache_root() -> EngineResult<PathBuf> {
         return Ok(path);
     }
 
-    // XDG-compliant default: ~/.cache/forgeiso — avoids tmpfs quota issues
-    let base = std::env::var("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/tmp"));
-    let path = base.join(".cache").join("forgeiso");
+    // XDG-compliant default: ~/.cache/forgeiso — avoids tmpfs quota issues and
+    // the world-writable /tmp directory (which is susceptible to cache-poisoning
+    // attacks on shared hosts).  If $HOME is unavailable the caller must provide
+    // an explicit cache_dir instead of silently falling back to /tmp.
+    let home = std::env::var("HOME").map_err(|_| {
+        EngineError::InvalidConfig(
+            "$HOME is not set; cannot determine default cache directory. \
+             Set $HOME or provide an explicit --cache-dir"
+                .to_string(),
+        )
+    })?;
+    let path = PathBuf::from(home).join(".cache").join("forgeiso");
     std::fs::create_dir_all(&path)?;
     Ok(path)
 }
@@ -1495,7 +1571,15 @@ fn copy_dir_contents(from: &Path, to: &Path) -> EngineResult<()> {
 
 fn download_filename(url: &str) -> String {
     let fallback = format!("download-{}.iso", chrono::Utc::now().timestamp());
-    url.rsplit('/')
+    // Strip query string and fragment before extracting the path basename so
+    // that URLs like ".../ubuntu.iso?token=abc" produce "ubuntu.iso" rather
+    // than the mangled "ubuntu.iso-token-abc".
+    let without_query = url.split_once('?').map_or(url, |(p, _)| p);
+    let path_only = without_query
+        .split_once('#')
+        .map_or(without_query, |(p, _)| p);
+    path_only
+        .rsplit('/')
         .next()
         .filter(|segment| !segment.is_empty())
         .map(sanitize_filename)
@@ -1524,7 +1608,12 @@ fn repack_iso_args(
     output_iso: &Path,
     output_label: Option<&str>,
 ) -> EngineResult<Vec<String>> {
-    let report = run_command_capture(
+    // xorriso -report_el_torito exits non-zero on ISOs with no El Torito boot
+    // catalog (a valid state for non-bootable ISOs).  Use run_command_lossy so
+    // we always capture whatever stdout is available, then parse it; if xorriso
+    // produced no output the result is an empty boot_args and the ISO is
+    // repacked without boot flags — which is correct for non-bootable sources.
+    let report = run_command_lossy(
         "xorriso",
         &[
             "-indev".to_string(),
@@ -1894,6 +1983,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_mkisofs_report_empty_input_returns_empty_args() {
+        // xorriso exits non-zero (and produces no stdout) for ISOs with no El
+        // Torito boot records.  parse_mkisofs_report("") must return an empty
+        // Vec — not an error — so repack proceeds without boot flags.
+        let args = parse_mkisofs_report("").expect("empty report must not error");
+        assert!(
+            args.is_empty(),
+            "empty xorriso output must produce empty boot_args, got: {args:?}"
+        );
+    }
+
+    #[test]
     fn strips_existing_volume_flag_before_override() {
         let args = vec![
             "-V".to_string(),
@@ -1993,6 +2094,37 @@ mod tests {
             .and_then(|v| v.as_str())
             .expect("!password in user object");
         assert!(pw.starts_with("$6$"), "user password must be hashed");
+    }
+
+    #[test]
+    fn arch_launcher_script_has_no_trailing_colon_in_config_arg() {
+        // Regression: the run-archinstall.sh launcher had `--config "${CONFIG}:"`
+        // (trailing colon). archinstall interprets that as a file path ending in `:`,
+        // which does not exist, causing the installer to abort immediately.
+        // The correct form is `--config "${CONFIG}"` (no trailing colon).
+        let launcher = concat!(
+            "#!/usr/bin/env bash\n",
+            "# Generated by ForgeISO -- triggers archinstall in unattended mode\n",
+            "set -euo pipefail\n",
+            "CONFIG=\"/run/archiso/bootmnt/arch/boot/archinstall-config.json\"\n",
+            "if [[ -f \"${CONFIG}\" ]]; then\n",
+            "    archinstall --config \"${CONFIG}\" --silent\n",
+            "else\n",
+            "    echo \"ERROR: archinstall config not found at ${CONFIG}\" >&2\n",
+            "    exit 1\n",
+            "fi\n"
+        );
+        // The --config argument must not end with `:` before the closing quote.
+        assert!(
+            !launcher.contains("\"${CONFIG}:\""),
+            "archinstall launcher must not pass a colon-suffixed path to --config; \
+             archinstall would fail to open the config file"
+        );
+        // The corrected form must be present.
+        assert!(
+            launcher.contains("--config \"${CONFIG}\""),
+            "archinstall --config must receive the bare path without a trailing colon"
+        );
     }
 
     #[test]
@@ -2179,6 +2311,26 @@ mod tests {
         assert_eq!(
             download_filename(url),
             "ubuntu-24.04.1-live-server-amd64.iso"
+        );
+    }
+
+    #[test]
+    fn download_filename_strips_query_string() {
+        let url = "https://cdn.example.com/ubuntu-24.04-live-server-amd64.iso?token=abc123&ttl=600";
+        assert_eq!(
+            download_filename(url),
+            "ubuntu-24.04-live-server-amd64.iso",
+            "query string must not bleed into filename"
+        );
+    }
+
+    #[test]
+    fn download_filename_strips_fragment() {
+        let url = "https://cdn.example.com/fedora-40.iso#section";
+        assert_eq!(
+            download_filename(url),
+            "fedora-40.iso",
+            "fragment must not bleed into filename"
         );
     }
 
