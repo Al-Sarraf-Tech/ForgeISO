@@ -460,12 +460,18 @@ fn ui(frame: &mut ratatui::Frame<'_>, app: &App) {
         .iter()
         .enumerate()
         .map(|(idx, (label, value))| {
+            // Mask password field so it is never shown in plain text on screen.
+            let display_value = if *label == "Password" {
+                "*".repeat(value.len())
+            } else {
+                (*value).to_string()
+            };
             let style = if idx == app.selected_field {
                 Style::default().fg(Color::Cyan)
             } else {
                 Style::default()
             };
-            Row::new(vec![(*label).to_string(), (*value).to_string()]).style(style)
+            Row::new(vec![(*label).to_string(), display_value]).style(style)
         })
         .collect::<Vec<_>>();
 

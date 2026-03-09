@@ -178,26 +178,44 @@ pub fn generate_kickstart_cfg(cfg: &InjectConfig) -> EngineResult<String> {
                 ));
             }
         } else {
-            // Treat as a verbatim .repo stanza
+            // Treat as a verbatim .repo stanza. Use a heredoc so multi-line
+            // stanza content is written with real newlines — {stanza:?} would
+            // use Debug formatting which escapes '\n' as two-char sequences,
+            // producing a single-line .repo file that dnf cannot parse.
             let repo_name = format!("forgeiso-extra-{idx}");
             dnf_post.push(format!(
-                "printf '%s\\n' {stanza:?} > /etc/yum.repos.d/{repo_name}.repo",
-                stanza = trimmed,
+                "cat > /etc/yum.repos.d/{repo_name}.repo << 'FORGEISO_REPO_EOF'\n{stanza}\nFORGEISO_REPO_EOF",
                 repo_name = repo_name,
+                stanza = trimmed,
             ));
         }
     }
 
+    // The last N commands from build_feature_late_commands are user-provided
+    // (run_commands, extra_late_commands) and must pass through unchanged so
+    // users can control their own paths (e.g. echo /data/target/file).
+    // All preceding commands are engine-generated and MUST have /target/ paths
+    // rewritten because %post runs inside the installed-system chroot where
+    // there is no /target directory.
+    let user_cmd_count = cfg.run_commands.len() + cfg.extra_late_commands.len();
+    let generated_count = late_cmds.len().saturating_sub(user_cmd_count);
+
     let all_post: Vec<String> = dnf_post
         .into_iter()
-        .chain(late_cmds.iter().map(|cmd| {
-            // Only transform commands that explicitly address the chroot target.
-            // Bare commands (mkdir, echo, printf stanzas) must pass through
-            // unchanged to avoid corrupting path literals that happen to contain
-            // the substring "/target".
-            if let Some(inner) = cmd.strip_prefix("chroot /target ") {
-                inner.replace("/target/", "/").replace("/target ", "/ ")
+        .chain(late_cmds.iter().enumerate().map(|(idx, cmd)| {
+            if idx < generated_count {
+                // Engine-generated command: rewrite all /target/ references.
+                // chroot-prefixed form: strip the wrapper, then fix inner paths.
+                // Direct /target/ form (NTP printf, echo, sed, fallocate, etc.):
+                // replace the prefix component so the path is valid inside chroot.
+                if let Some(inner) = cmd.strip_prefix("chroot /target ") {
+                    inner.replace("/target/", "/").replace("/target ", "/ ")
+                } else {
+                    cmd.replace("/target/", "/")
+                }
             } else {
+                // User-provided (run_commands / extra_late_commands):
+                // pass through unchanged.
                 cmd.clone()
             }
         }))
@@ -385,6 +403,36 @@ mod tests {
     }
 
     #[test]
+    fn test_repo_stanza_written_with_real_newlines() {
+        // Regression: {stanza:?} (Debug formatting) was used, which escapes \n
+        // as two-char sequences. The .repo file would then contain literal \n
+        // characters instead of newlines, making the file unparseable by dnf.
+        // Fix: use a heredoc so newlines are preserved verbatim.
+        let mut cfg = base_cfg();
+        cfg.dnf_repos = vec!["[myrepo]\nbaseurl=https://example.com/repo\nenabled=1".to_string()];
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        // The heredoc sentinel must appear as a line in %post
+        assert!(
+            ks.contains("FORGEISO_REPO_EOF"),
+            "heredoc sentinel not found — stanza not written via heredoc: {ks}"
+        );
+        // The stanza body must appear verbatim (not as an escaped string)
+        assert!(
+            ks.contains("[myrepo]"),
+            "repo stanza section header missing from kickstart: {ks}"
+        );
+        assert!(
+            ks.contains("baseurl=https://example.com/repo"),
+            "repo baseurl missing from kickstart: {ks}"
+        );
+        // Must NOT contain the debug-formatted backslash-n literal
+        assert!(
+            !ks.contains(r"[myrepo]\nbaseurl"),
+            "stanza written with Debug-escaped \\n instead of real newlines: {ks}"
+        );
+    }
+
+    #[test]
     fn test_post_transformer_does_not_corrupt_bare_commands() {
         // A bare echo/printf command that happens to contain the substring
         // "/target" in a path literal must NOT be altered by the chroot
@@ -407,15 +455,148 @@ mod tests {
 
     #[test]
     fn test_post_transformer_rewrites_chroot_commands() {
-        // A "chroot /target ..." command must be stripped of its prefix and
-        // any remaining /target/ references resolved to /.
+        // Engine-generated "chroot /target ..." commands must be stripped of
+        // their prefix with /target/ references resolved to /.
+        // We trigger the transformer via enable_services which generates
+        // "chroot /target systemctl enable sshd".
         let mut cfg = base_cfg();
-        cfg.run_commands = vec!["chroot /target touch /target/etc/resolv.conf".to_string()];
+        cfg.enable_services = vec!["sshd".to_string()];
         let ks = generate_kickstart_cfg(&cfg).unwrap();
-        // chroot prefix removed; /target/ collapsed to /
+        // chroot prefix removed; command appears directly in %post
         assert!(
-            ks.contains("touch /etc/resolv.conf"),
+            ks.contains("systemctl enable sshd"),
             "chroot command was not correctly stripped: {ks}"
+        );
+        // The "chroot /target " prefix must be absent
+        assert!(
+            !ks.contains("chroot /target systemctl enable sshd"),
+            "chroot prefix not removed from generated service command: {ks}"
+        );
+    }
+
+    #[test]
+    fn test_post_transformer_user_run_commands_untouched() {
+        // User-provided run_commands must pass through unchanged even when they
+        // contain /target path literals — the user controls their own paths and
+        // may have intentional /target/ references in their scripts.
+        let mut cfg = base_cfg();
+        cfg.run_commands = vec!["echo /data/target/archive.tar.gz".to_string()];
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        assert!(
+            ks.contains("echo /data/target/archive.tar.gz"),
+            "user run_command path was incorrectly rewritten: {ks}"
+        );
+    }
+
+    #[test]
+    fn test_post_transformer_ntp_no_target_prefix_in_kickstart() {
+        // Regression: NTP late-command writes to /target/etc/systemd/timesyncd.conf
+        // in the cloud-init form.  In Kickstart %post (which runs inside the chroot),
+        // that path must be rewritten to /etc/systemd/timesyncd.conf.
+        let mut cfg = base_cfg();
+        cfg.network = crate::config::NetworkConfig {
+            ntp_servers: vec!["time.cloudflare.com".to_string()],
+            dns_servers: vec![],
+        };
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        assert!(
+            !ks.contains("/target/etc/systemd/timesyncd.conf"),
+            "NTP command still contains /target/ prefix in Kickstart output: {ks}"
+        );
+        assert!(
+            ks.contains("/etc/systemd/timesyncd.conf"),
+            "NTP config path missing from Kickstart %post: {ks}"
+        );
+        assert!(
+            ks.contains("time.cloudflare.com"),
+            "NTP server missing from Kickstart %post: {ks}"
+        );
+    }
+
+    #[test]
+    fn test_post_transformer_proxy_no_target_prefix_in_kickstart() {
+        // Regression: proxy late-commands write to /target/etc/environment.
+        // In Kickstart %post, that path must be /etc/environment.
+        let mut cfg = base_cfg();
+        cfg.proxy = crate::config::ProxyConfig {
+            http_proxy: Some("http://proxy.corp:3128".to_string()),
+            https_proxy: None,
+            no_proxy: vec![],
+        };
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        assert!(
+            !ks.contains("/target/etc/environment"),
+            "proxy command still contains /target/ in Kickstart output: {ks}"
+        );
+        assert!(
+            ks.contains("/etc/environment"),
+            "proxy config path missing from Kickstart %post: {ks}"
+        );
+        assert!(
+            ks.contains("http_proxy"),
+            "http_proxy missing from Kickstart %post: {ks}"
+        );
+    }
+
+    #[test]
+    fn test_post_transformer_sysctl_no_target_prefix_in_kickstart() {
+        // Regression: sysctl late-commands write to /target/etc/sysctl.d/...
+        // In Kickstart %post that path must be /etc/sysctl.d/...
+        let mut cfg = base_cfg();
+        cfg.sysctl = vec![("net.ipv4.ip_forward".to_string(), "1".to_string())];
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        assert!(
+            !ks.contains("/target/etc/sysctl.d"),
+            "sysctl command still contains /target/ prefix in Kickstart output: {ks}"
+        );
+        assert!(
+            ks.contains("/etc/sysctl.d/99-forgeiso.conf"),
+            "sysctl config path missing from Kickstart %post: {ks}"
+        );
+    }
+
+    #[test]
+    fn test_kickstart_grub_uses_grub2_mkconfig_not_update_grub() {
+        // Regression: build_feature_late_commands emitted "chroot /target update-grub"
+        // unconditionally.  update-grub is a Debian/Ubuntu wrapper that does not exist
+        // on Fedora.  For Fedora Kickstart %post, the correct command is
+        // grub2-mkconfig -o /boot/grub2/grub.cfg.
+        let mut cfg = base_cfg();
+        cfg.distro = Some(crate::config::Distro::Fedora);
+        cfg.grub = crate::config::GrubConfig {
+            timeout: Some(5),
+            cmdline_extra: vec![],
+            default_entry: None,
+        };
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        assert!(
+            ks.contains("grub2-mkconfig"),
+            "Fedora kickstart must use grub2-mkconfig, not update-grub: {ks}"
+        );
+        assert!(
+            !ks.contains("update-grub"),
+            "update-grub must not appear in Fedora kickstart (Debian-only): {ks}"
+        );
+    }
+
+    #[test]
+    fn test_post_transformer_grub_sed_no_target_prefix_in_kickstart() {
+        // Regression: GRUB late-commands use `sed -i '...' /target/etc/default/grub`.
+        // In Kickstart %post the path must be /etc/default/grub.
+        let mut cfg = base_cfg();
+        cfg.grub = crate::config::GrubConfig {
+            timeout: Some(5),
+            cmdline_extra: vec![],
+            default_entry: None,
+        };
+        let ks = generate_kickstart_cfg(&cfg).unwrap();
+        assert!(
+            !ks.contains("/target/etc/default/grub"),
+            "GRUB sed command still contains /target/ prefix in Kickstart output: {ks}"
+        );
+        assert!(
+            ks.contains("/etc/default/grub"),
+            "GRUB config path missing from Kickstart %post: {ks}"
         );
     }
 }

@@ -307,8 +307,19 @@ fn yaml_ubuntu_encrypt_passphrase_warning_safe() {
     let mut cfg = full_inject(None);
     cfg.encrypt = true;
     cfg.encrypt_passphrase = Some("luks-secret-123".into());
+    // storage_layout is required when encrypt=true so cloud-init has a
+    // storage.layout block to attach the LUKS passphrase to.
+    cfg.storage_layout = Some("lvm".into());
     // Should generate without panicking; plaintext warning is expected
-    generate_autoinstall_yaml(&cfg).expect("encrypted config must not panic");
+    let yaml = generate_autoinstall_yaml(&cfg).expect("encrypted config must not panic");
+    assert!(
+        yaml.contains("luks-secret-123"),
+        "LUKS passphrase must appear in the generated YAML"
+    );
+    assert!(
+        yaml.contains("lvm"),
+        "storage layout must be present in the generated YAML"
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

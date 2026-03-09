@@ -411,9 +411,12 @@ pub fn proxmox_cmds(spec: &VmLaunchSpec) -> Vec<String> {
     let mut cmds = vec![
         format!("# Proxmox VE — run on PVE node shell"),
         format!("# Copy ISO first: scp {iso} pve-host:/var/lib/vz/template/iso/"),
+        // Note: do NOT use --cdrom here; it is shorthand for --ide2 ...,media=cdrom.
+        // Specifying both --cdrom and --ide2 would attempt to assign two disks to
+        // the same IDE port, causing qm create to fail.
         format!(
             "qm create {vmid} --name '{name}' --memory {ram} --cores {cpus} \
-             --bios {bios} --cdrom local:iso/{isoname} --boot order=ide2 \
+             --bios {bios} --boot order=ide2 \
              --ide2 local:iso/{isoname},media=cdrom \
              --scsihw virtio-scsi-pci --virtio0 local-lvm:{disk},size={disk}G",
             ram = spec.ram_mb,
@@ -797,6 +800,25 @@ mod tests {
             !has_efi,
             "BIOS Proxmox should not include efidisk0: {cmds:?}"
         );
+    }
+
+    #[test]
+    fn proxmox_cmds_no_duplicate_cdrom_and_ide2() {
+        // Regression: qm create previously had both --cdrom and --ide2 which is
+        // a duplicate ide2 assignment and causes qm create to fail.
+        for fw in [FirmwareMode::Bios, FirmwareMode::Uefi] {
+            let spec = test_spec(Hypervisor::Proxmox, fw);
+            let cmds = proxmox_cmds(&spec);
+            let qm_create_line = cmds.iter().find(|c| c.starts_with("qm create")).unwrap();
+            assert!(
+                !qm_create_line.contains("--cdrom"),
+                "qm create must not use --cdrom (conflicts with --ide2): {qm_create_line}"
+            );
+            assert!(
+                qm_create_line.contains("--ide2"),
+                "qm create must use --ide2 for the ISO: {qm_create_line}"
+            );
+        }
     }
 
     // ── emit_launch ───────────────────────────────────────────────────────────

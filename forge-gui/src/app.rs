@@ -5,7 +5,7 @@ use egui::{Color32, Frame, RichText, Stroke, Ui, Vec2};
 use forgeiso_engine::{
     all_presets, find_preset_by_str, resolve_url, AcquisitionStrategy, BuildConfig,
     ContainerConfig, Distro, FirewallConfig, ForgeIsoEngine, GrubConfig, InjectConfig, IsoSource,
-    NetworkConfig, ProfileKind, ProxyConfig, SshConfig, SwapConfig, UserConfig,
+    NetworkConfig, ProfileKind, ProxyConfig, SourceKind, SshConfig, SwapConfig, UserConfig,
 };
 use serde::{Deserialize, Serialize};
 
@@ -271,6 +271,10 @@ fn preset_distro_to_form_distro(preset_distro: &str) -> String {
     }
 }
 
+// Maximum number of log entries retained in memory.  Once this limit is
+// reached, the oldest 20 % of entries are evicted to keep memory bounded.
+const MAX_LOG_ENTRIES: usize = 10_000;
+
 // ── App state ─────────────────────────────────────────────────────────────────
 
 /// Which step of the 3-step Inject wizard the user is on.
@@ -447,7 +451,7 @@ impl ForgeApp {
         // event bursts (e.g. rapid download progress ticks).
         for _ in 0..2000 {
             match self.rx.try_recv() {
-                Ok(msg) => self.handle_msg(msg),
+                Ok(msg) => self.handle_msg(msg, ctx),
                 Err(_) => break,
             }
         }
@@ -462,7 +466,7 @@ impl ForgeApp {
         }
     }
 
-    fn handle_msg(&mut self, msg: WorkerMsg) {
+    fn handle_msg(&mut self, msg: WorkerMsg, ctx: &egui::Context) {
         match msg {
             WorkerMsg::EngineEvent {
                 phase,
@@ -491,6 +495,7 @@ impl ForgeApp {
                             entry.percent = Some(pct_u8);
                         }
                     } else {
+                        self.evict_log_if_full();
                         let idx = self.log_entries.len();
                         self.download_idx.insert(phase.clone(), idx);
                         self.log_entries.push(LogEntry {
@@ -504,6 +509,7 @@ impl ForgeApp {
                 } else {
                     // Regular message — clear any in-progress bar for this phase.
                     self.download_idx.remove(&phase);
+                    self.evict_log_if_full();
                     self.log_entries.push(LogEntry {
                         phase,
                         message,
@@ -515,8 +521,21 @@ impl ForgeApp {
             }
             WorkerMsg::InjectOk(r) => {
                 self.inject_done = true;
+                // Close any open popups (e.g. a ComboBox left open during the
+                // Configure step) before advancing to Run.  Without this the egui
+                // hit_test layer-ordering invariant breaks and panics on the next
+                // frame (hit_test.rs:364 unwrap on None).
+                egui::Popup::close_all(ctx);
                 self.inject_step = InjectStep::Run; // show results on the Run step
-                let src = r.source_iso.to_string_lossy().into_owned();
+                                                    // For URL-sourced ISOs the workspace is cleaned up after injection,
+                                                    // so source_iso points to a deleted file.  Use source_value (the
+                                                    // original URL) for the verify/diff source instead — both fields
+                                                    // accept URLs and will re-resolve them when needed.
+                let src = if r.iso.source_kind == SourceKind::DownloadedUrl {
+                    r.iso.source_value.clone()
+                } else {
+                    r.source_iso.to_string_lossy().into_owned()
+                };
                 if let Some(path) = r.artifacts.first() {
                     let out = path.to_string_lossy().into_owned();
                     // Auto-forward the injected ISO to subsequent tabs so users
@@ -524,7 +543,9 @@ impl ForgeApp {
                     if self.verify.source.is_empty() {
                         self.verify.source = src.clone();
                     }
-                    if self.diff.base.is_empty() {
+                    // Only forward the source ISO as diff base if it still exists
+                    // on disk (local-path sources are not deleted; URL sources are).
+                    if self.diff.base.is_empty() && r.iso.source_kind == SourceKind::LocalPath {
                         self.diff.base = src;
                     }
                     if self.diff.target.is_empty() {
@@ -679,6 +700,17 @@ impl ForgeApp {
         self.status = Some(msg);
     }
 
+    /// Evict the oldest 20 % of log entries when the cap is reached.
+    /// Also clears `download_idx` since stored indices become invalid after eviction.
+    fn evict_log_if_full(&mut self) {
+        if self.log_entries.len() >= MAX_LOG_ENTRIES {
+            let evict = MAX_LOG_ENTRIES / 5;
+            self.log_entries.drain(0..evict);
+            // Indices stored in download_idx now point to wrong entries.
+            self.download_idx.clear();
+        }
+    }
+
     fn cancel_job(&mut self) {
         if let Some(handle) = self.current_task.take() {
             handle.abort();
@@ -746,6 +778,12 @@ impl ForgeApp {
     }
 
     fn spawn_verify(&mut self) {
+        if self.verify.source.trim().is_empty() {
+            self.set_status(StatusMsg::err(
+                "Source ISO is required — pick a file or paste a URL",
+            ));
+            return;
+        }
         self.verify_done = false;
         self.verify_result = None;
         self.iso9660_result = None;
@@ -785,6 +823,12 @@ impl ForgeApp {
     }
 
     fn spawn_diff(&mut self) {
+        if self.diff.base.trim().is_empty() || self.diff.target.trim().is_empty() {
+            self.set_status(StatusMsg::err(
+                "Both base and target ISO paths are required",
+            ));
+            return;
+        }
         self.diff_done = false;
         self.diff_result = None;
         self.start_job("Comparing ISOs…");
@@ -805,6 +849,38 @@ impl ForgeApp {
     }
 
     fn spawn_build(&mut self) {
+        if self.build.source.trim().is_empty() {
+            self.set_status(StatusMsg::err(
+                "Source ISO is required — pick a file or paste a URL",
+            ));
+            return;
+        }
+        if self.build.output_dir.trim().is_empty() {
+            self.set_status(StatusMsg::err("Output directory is required"));
+            return;
+        }
+        // Pre-flight BuildConfig validation to surface errors immediately.
+        let cfg = BuildConfig {
+            name: self.build.build_name.clone(),
+            source: IsoSource::from_raw(&self.build.source),
+            overlay_dir: opt(&self.build.overlay_dir).map(PathBuf::from),
+            output_label: opt(&self.build.output_label),
+            profile: if self.build.profile == "desktop" {
+                ProfileKind::Desktop
+            } else {
+                ProfileKind::Minimal
+            },
+            auto_scan: false,
+            auto_test: false,
+            scanning: Default::default(),
+            testing: Default::default(),
+            keep_workdir: false,
+            expected_sha256: opt(&self.build.expected_sha256),
+        };
+        if let Err(e) = cfg.validate() {
+            self.set_status(StatusMsg::err(format!("Config error: {e}")));
+            return;
+        }
         self.build_done = false;
         self.build_result = None;
         self.start_job("Building ISO…");
