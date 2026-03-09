@@ -562,6 +562,67 @@ impl InjectConfig {
         if let Some(u) = &self.username {
             is_safe_identifier(u, "username")?;
         }
+
+        // Timezone — written as a bare string into cloud-init YAML, Kickstart
+        // `timezone` directive, and preseed `time/zone`.  Only IANA-style chars
+        // are valid (e.g. "America/New_York", "UTC", "Etc/GMT+5").  Block
+        // everything that is not alphanumeric, slash, underscore, dash, or plus.
+        if let Some(tz) = &self.timezone {
+            if tz.is_empty() {
+                return Err(EngineError::InvalidConfig(
+                    "timezone must not be blank".to_string(),
+                ));
+            }
+            if !tz
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '/' | '_' | '-' | '+'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "timezone contains unsafe characters: {tz:?} \
+                     (only alphanumeric, slash, underscore, dash, plus allowed)"
+                )));
+            }
+        }
+
+        // Locale — written as a bare string into cloud-init YAML and installer
+        // directives.  Standard glibc locale names use alphanumeric, dash,
+        // underscore, and dot (e.g. "en_US.UTF-8", "de_DE.ISO-8859-1").
+        if let Some(loc) = &self.locale {
+            if loc.is_empty() {
+                return Err(EngineError::InvalidConfig(
+                    "locale must not be blank".to_string(),
+                ));
+            }
+            if !loc
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "locale contains unsafe characters: {loc:?} \
+                     (only alphanumeric, underscore, dash, dot allowed)"
+                )));
+            }
+        }
+
+        // Keyboard layout — written into cloud-init YAML keyboard.layout.
+        // XKB layout identifiers are alphanumeric plus dash and underscore
+        // (e.g. "us", "de", "gb", "us-intl").
+        if let Some(kb) = &self.keyboard_layout {
+            if kb.is_empty() {
+                return Err(EngineError::InvalidConfig(
+                    "keyboard_layout must not be blank".to_string(),
+                ));
+            }
+            if !kb
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '-' | '_'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "keyboard_layout contains unsafe characters: {kb:?} \
+                     (only alphanumeric, dash, underscore allowed)"
+                )));
+            }
+        }
         if let Some(r) = &self.realname {
             // Realname can contain spaces
             if r.chars()
@@ -2388,6 +2449,77 @@ mod tests {
                 ..Default::default()
             };
             assert!(cfg.validate().is_ok(), "grub_timeout {t} must be accepted");
+        }
+    }
+
+    // ── timezone / locale / keyboard_layout validation ────────────────────────
+
+    #[test]
+    fn inject_rejects_timezone_with_semicolon() {
+        let cfg = InjectConfig {
+            timezone: Some("UTC; rm -rf /".into()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "timezone with ';' must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_timezone() {
+        for tz in ["UTC", "America/New_York", "Europe/London", "Etc/GMT+5"] {
+            let cfg = InjectConfig {
+                timezone: Some(tz.into()),
+                ..Default::default()
+            };
+            assert!(cfg.validate().is_ok(), "timezone {tz:?} must be accepted");
+        }
+    }
+
+    #[test]
+    fn inject_rejects_locale_with_metachar() {
+        let cfg = InjectConfig {
+            locale: Some("en_US.UTF-8; evil".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err(), "locale with ';' must be rejected");
+    }
+
+    #[test]
+    fn inject_accepts_valid_locale() {
+        for loc in ["en_US.UTF-8", "de_DE", "zh_CN.UTF-8"] {
+            let cfg = InjectConfig {
+                locale: Some(loc.into()),
+                ..Default::default()
+            };
+            assert!(cfg.validate().is_ok(), "locale {loc:?} must be accepted");
+        }
+    }
+
+    #[test]
+    fn inject_rejects_keyboard_layout_with_metachar() {
+        let cfg = InjectConfig {
+            keyboard_layout: Some("us$(id)".into()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "keyboard_layout with '$' must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_keyboard_layout() {
+        for kb in ["us", "de", "gb", "us-intl"] {
+            let cfg = InjectConfig {
+                keyboard_layout: Some(kb.into()),
+                ..Default::default()
+            };
+            assert!(
+                cfg.validate().is_ok(),
+                "keyboard_layout {kb:?} must be accepted"
+            );
         }
     }
 
