@@ -747,6 +747,15 @@ impl ForgeApp {
             self.set_status(StatusMsg::err("Output directory is required"));
             return;
         }
+        if !self.inject.password.is_empty()
+            && !self.inject.password_confirm.is_empty()
+            && self.inject.password != self.inject.password_confirm
+        {
+            self.set_status(StatusMsg::err(
+                "Passwords do not match — please confirm your password",
+            ));
+            return;
+        }
         // Pre-flight: validate config synchronously before starting the async
         // task so validation errors surface immediately without a spinner flash.
         let preflight = build_inject_config(&self.inject);

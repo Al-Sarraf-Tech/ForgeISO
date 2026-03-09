@@ -1043,12 +1043,15 @@ impl ForgeIsoEngine {
                 let kernel_append = " auto=true priority=critical preseed/file=/cdrom/preseed.cfg";
                 patch_boot_configs(&extract_dir, kernel_append)?;
 
-                // Also patch EFI/BOOT/grub.cfg if present (UEFI Mint media)
+                // Also patch EFI/BOOT/grub.cfg if present (UEFI Mint media).
+                // Use line-by-line patching so only kernel command lines
+                // (`linuxefi` / `linux`) are modified — a global string replace
+                // on "quiet splash" would also corrupt comments or menu labels
+                // that happen to contain those words.
                 let efi_grub = extract_dir.join("EFI").join("BOOT").join("grub.cfg");
                 if efi_grub.exists() {
                     let content = std::fs::read_to_string(&efi_grub)?;
-                    let patched =
-                        content.replace("quiet splash", &format!("quiet splash{kernel_append}"));
+                    let patched = patch_efi_grub_cfg(&content, kernel_append);
                     std::fs::write(&efi_grub, patched)?;
                 }
             }
@@ -1064,11 +1067,15 @@ impl ForgeIsoEngine {
                 let kernel_append = " inst.ks=cdrom:/ks.cfg";
                 patch_boot_configs(&extract_dir, kernel_append)?;
 
-                // Also patch EFI/BOOT/grub.cfg if present (UEFI Fedora media)
+                // Also patch EFI/BOOT/grub.cfg if present (UEFI Fedora media).
+                // Use line-by-line patching — `.replace("quiet", ...)` would corrupt
+                // any comment or menu label containing the word "quiet", and would
+                // silently miss the injection if the Fedora ISO does not include the
+                // "quiet" parameter.
                 let efi_grub = extract_dir.join("EFI").join("BOOT").join("grub.cfg");
                 if efi_grub.exists() {
                     let content = std::fs::read_to_string(&efi_grub)?;
-                    let patched = content.replace("quiet", &format!("quiet{kernel_append}"));
+                    let patched = patch_efi_grub_cfg(&content, kernel_append);
                     std::fs::write(&efi_grub, patched)?;
                 }
             }
@@ -2005,6 +2012,30 @@ fn patch_boot_configs(extract_dir: &Path, kernel_append: &str) -> EngineResult<(
     Ok(())
 }
 
+/// Patch an EFI `grub.cfg` by appending `kernel_append` to every kernel
+/// command line (`linuxefi` / `linux` lines).
+///
+/// A global `.replace("quiet", ...)` was used previously but is incorrect:
+/// - It corrupts comments and menu labels containing the search word.
+/// - It silently skips the injection when the word is absent (e.g. Fedora
+///   ISOs that don't include `quiet` in their EFI config).
+///
+/// This function appends unconditionally to every `linuxefi` / `linux` line,
+/// which is safe: duplicate or additional kernel parameters are ignored by the
+/// bootloader.
+fn patch_efi_grub_cfg(content: &str, kernel_append: &str) -> String {
+    let mut patched_lines: Vec<String> = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("linuxefi ") || trimmed.starts_with("linux ") {
+            patched_lines.push(format!("{}{}", line.trim_end(), kernel_append));
+        } else {
+            patched_lines.push(line.to_string());
+        }
+    }
+    patched_lines.join("\n") + "\n"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2220,6 +2251,88 @@ mod tests {
         assert!(
             content.contains("linux\t/boot/vmlinuz autoinstall ds=nocloud;s=/cdrom/nocloud/"),
             "legacy vmlinuz line was not patched: {content:?}"
+        );
+    }
+
+    // ── patch_efi_grub_cfg tests ─────────────────────────────────────────────
+
+    #[test]
+    fn patch_efi_grub_cfg_appends_to_linuxefi_line() {
+        let input = "\
+menuentry 'Fedora Linux' {\n\
+  linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=Fedora quiet rhgb\n\
+  initrdefi /images/pxeboot/initrd.img\n\
+}\n";
+        let patched = patch_efi_grub_cfg(input, " inst.ks=cdrom:/ks.cfg");
+        assert!(
+            patched.contains("linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=Fedora quiet rhgb inst.ks=cdrom:/ks.cfg"),
+            "linuxefi line must have inst.ks appended: {patched:?}"
+        );
+        // menuentry and initrdefi lines must be unmodified
+        assert!(
+            patched.contains("menuentry 'Fedora Linux'"),
+            "menuentry line must not be changed"
+        );
+        assert!(
+            patched.contains("initrdefi /images/pxeboot/initrd.img"),
+            "initrdefi line must not be changed"
+        );
+    }
+
+    #[test]
+    fn patch_efi_grub_cfg_works_without_quiet_keyword() {
+        // Regression: the old .replace("quiet", ...) would silently skip injection
+        // if a Fedora ISO doesn't contain "quiet" in its EFI grub.cfg.
+        let input = "\
+menuentry 'Fedora' {\n\
+  linuxefi /vmlinuz inst.stage2=hd:LABEL=Fedora rhgb\n\
+  initrdefi /initrd.img\n\
+}\n";
+        let patched = patch_efi_grub_cfg(input, " inst.ks=cdrom:/ks.cfg");
+        assert!(
+            patched.contains(
+                "linuxefi /vmlinuz inst.stage2=hd:LABEL=Fedora rhgb inst.ks=cdrom:/ks.cfg"
+            ),
+            "inst.ks must be injected even without 'quiet': {patched:?}"
+        );
+    }
+
+    #[test]
+    fn patch_efi_grub_cfg_does_not_corrupt_comments() {
+        // Regression: .replace("quiet splash", ...) would corrupt comments.
+        let input = "\
+# This entry boots quietly with a splash screen\n\
+menuentry 'Mint' {\n\
+  linuxefi /casper/vmlinuz boot=casper quiet splash\n\
+}\n";
+        let patched = patch_efi_grub_cfg(
+            input,
+            " auto=true priority=critical preseed/file=/cdrom/preseed.cfg",
+        );
+        // Comment must be unchanged
+        assert!(
+            patched.contains("# This entry boots quietly with a splash screen"),
+            "comment line must not be modified: {patched:?}"
+        );
+        // Only the linuxefi line should have the preseed arg appended
+        assert!(
+            patched.contains("linuxefi /casper/vmlinuz boot=casper quiet splash auto=true"),
+            "linuxefi line must have preseed args appended: {patched:?}"
+        );
+    }
+
+    #[test]
+    fn patch_efi_grub_cfg_handles_linux_lines_too() {
+        // Some EFI configs use 'linux' instead of 'linuxefi' (systemd-boot style)
+        let input = "  linux /vmlinuz root=/dev/sda1 quiet\n  initrd /initrd\n";
+        let patched = patch_efi_grub_cfg(input, " inst.ks=cdrom:/ks.cfg");
+        assert!(
+            patched.contains("linux /vmlinuz root=/dev/sda1 quiet inst.ks=cdrom:/ks.cfg"),
+            "linux (non-efi) line must also be patched: {patched:?}"
+        );
+        assert!(
+            patched.contains("initrd /initrd"),
+            "initrd line must not be changed"
         );
     }
 

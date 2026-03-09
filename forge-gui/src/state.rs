@@ -325,7 +325,15 @@ impl StatusMsg {
         let raw: String = text.into();
         let first_line = raw.lines().next().unwrap_or(&raw);
         let text = if first_line.len() > MAX_CHARS {
-            format!("{}…", &first_line[..MAX_CHARS])
+            // Find the last char boundary at or before MAX_CHARS bytes so we
+            // don't panic when slicing mid-way through a multi-byte character.
+            let boundary = first_line
+                .char_indices()
+                .map(|(i, _)| i)
+                .take_while(|&i| i <= MAX_CHARS)
+                .last()
+                .unwrap_or(0);
+            format!("{}…", &first_line[..boundary])
         } else {
             first_line.to_string()
         };
