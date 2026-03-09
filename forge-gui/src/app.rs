@@ -219,7 +219,7 @@ fn combo_and_text(
 }
 
 fn now_ts() -> String {
-    chrono::Local::now().format("%H:%M:%S").to_string()
+    chrono::Utc::now().format("%H:%M:%S UTC").to_string()
 }
 
 fn fmt_bytes(n: u64) -> String {

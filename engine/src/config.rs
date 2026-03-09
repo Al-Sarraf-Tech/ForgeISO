@@ -921,13 +921,18 @@ impl InjectConfig {
 
         // DNF mirror — interpolated into: sed -i 's|^baseurl=.*|baseurl={mirror}/…|'
         // The `|` character is the sed delimiter so it must be blocked to prevent
-        // the substitution from being split or manipulated.  Newlines would also
-        // break the sed one-liner.
+        // the substitution from being split or manipulated.  Newlines and null bytes
+        // would also break the sed one-liner or produce invalid output.
         if let Some(mirror) = &self.dnf_mirror {
             if mirror.contains('|') || mirror.contains('\n') || mirror.contains('\r') {
                 return Err(EngineError::InvalidConfig(format!(
                     "dnf_mirror must not contain `|` (sed delimiter) or newlines: {mirror:?}"
                 )));
+            }
+            if mirror.contains('\0') {
+                return Err(EngineError::InvalidConfig(
+                    "dnf_mirror must not contain a null byte".to_string(),
+                ));
             }
         }
 
@@ -985,6 +990,33 @@ impl InjectConfig {
             if repo.contains('\'') || repo.contains('\n') || repo.contains('\r') {
                 return Err(EngineError::InvalidConfig(format!(
                     "pacman_repo must not contain single quotes or newlines: {repo:?}"
+                )));
+            }
+        }
+
+        // expected_sha256 — must be exactly 64 lowercase hex characters if provided.
+        // A non-hex value would cause a confusing "SHA-256 mismatch" error at
+        // download time rather than a clear "invalid format" error at config time.
+        if let Some(sha) = &self.expected_sha256 {
+            let sha = sha.trim().to_ascii_lowercase();
+            if sha.len() != 64 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(EngineError::InvalidConfig(format!(
+                    "expected_sha256 must be a 64-character hex string, got {:?} ({} chars)",
+                    sha,
+                    sha.len()
+                )));
+            }
+        }
+
+        // Swap size upper bound — accepting arbitrarily large values (e.g. 999 GB)
+        // would not fail validation but would produce a swap file that can never be
+        // allocated, causing the installer to hang or error at runtime.
+        // Cap at 128 GB (131072 MB), which is larger than any reasonable swap need.
+        if let Some(swap) = &self.swap {
+            if swap.size_mb > 131_072 {
+                return Err(EngineError::InvalidConfig(format!(
+                    "swap.size_mb {} exceeds maximum of 131072 (128 GiB)",
+                    swap.size_mb
                 )));
             }
         }
@@ -2357,5 +2389,106 @@ mod tests {
             };
             assert!(cfg.validate().is_ok(), "grub_timeout {t} must be accepted");
         }
+    }
+
+    // ── expected_sha256 validation ─────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_sha256_wrong_length() {
+        let cfg = InjectConfig {
+            expected_sha256: Some("abc123".into()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "expected_sha256 with wrong length must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_rejects_sha256_non_hex() {
+        let cfg = InjectConfig {
+            expected_sha256: Some("z".repeat(64)),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "expected_sha256 with non-hex chars must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_sha256() {
+        let cfg = InjectConfig {
+            expected_sha256: Some(
+                "a948904f2f0f479b8f936b0e0b4a12d4b9d1f2e3c4d5e6f7a8b9c0d1e2f3a4b5".into(),
+            ),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "valid 64-char hex SHA-256 must pass"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_sha256_uppercase() {
+        // uppercase hex is normalised to lowercase before checking
+        let cfg = InjectConfig {
+            expected_sha256: Some(
+                "A948904F2F0F479B8F936B0E0B4A12D4B9D1F2E3C4D5E6F7A8B9C0D1E2F3A4B5".into(),
+            ),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "uppercase 64-char hex SHA-256 must pass"
+        );
+    }
+
+    // ── dnf_mirror null byte ───────────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_dnf_mirror_with_null_byte() {
+        let cfg = InjectConfig {
+            dnf_mirror: Some("https://mirror.example.com/\0evil".into()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "dnf_mirror with null byte must be rejected"
+        );
+    }
+
+    // ── swap upper bound ───────────────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_swap_size_exceeding_max() {
+        let cfg = InjectConfig {
+            swap: Some(SwapConfig {
+                size_mb: 200_000,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "swap size > 131072 MB must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_swap_size_at_max_boundary() {
+        let cfg = InjectConfig {
+            swap: Some(SwapConfig {
+                size_mb: 131_072,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "swap size exactly 131072 MB must be accepted"
+        );
     }
 }
