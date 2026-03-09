@@ -39,7 +39,28 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
         }
     }
 
-    // 3. User groups, shell, sudo
+    // 3a. SSH authorized_keys — injected via late_command for Mint (preseed path).
+    //     Ubuntu handles this in the cloud-init YAML; Fedora uses the `sshkey`
+    //     Kickstart directive; Arch handles it via the archinstall JSON !users list.
+    //     Only emit for Mint so we avoid duplicating what the YAML already does.
+    let is_mint = matches!(cfg.distro, Some(Distro::Mint));
+    if is_mint && !cfg.ssh.authorized_keys.is_empty() {
+        let uname = cfg.username.as_deref().unwrap_or("user");
+        let ssh_dir = format!("/target/home/{uname}/.ssh");
+        cmds.push(format!("mkdir -p {ssh_dir}"));
+        for key in &cfg.ssh.authorized_keys {
+            // printf '%s\n' {:?} uses Rust Debug quoting which safely escapes the
+            // key content — avoids single-quote injection that a bare echo would allow.
+            cmds.push(format!(
+                "printf '%s\\n' {key:?} >> {ssh_dir}/authorized_keys"
+            ));
+        }
+        cmds.push(format!("chmod 700 {ssh_dir}"));
+        cmds.push(format!("chmod 600 {ssh_dir}/authorized_keys"));
+        cmds.push(format!("chown -R {uname}:{uname} {ssh_dir}"));
+    }
+
+    // 3b. User groups, shell, sudo
     if !cfg.user.groups.is_empty() {
         let groups = cfg.user.groups.join(",");
         let uname = cfg.username.as_deref().unwrap_or("ubuntu");
@@ -88,12 +109,13 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
                 ));
             }
         }
-        if !cfg.proxy.no_proxy.is_empty() {
-            let np = cfg.proxy.no_proxy.join(",");
-            cmds.push(format!(
-                "echo 'no_proxy=\"{np}\"' >> /target/etc/environment"
-            ));
-        }
+    }
+    // no_proxy goes to /etc/environment regardless of whether http/https proxy is set.
+    if !cfg.proxy.no_proxy.is_empty() {
+        let np = cfg.proxy.no_proxy.join(",");
+        cmds.push(format!(
+            "echo 'no_proxy=\"{np}\"' >> /target/etc/environment"
+        ));
     }
 
     // 5. Enable/disable services
@@ -131,7 +153,12 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
         }
     }
 
-    // 8. Firewall — UFW is Ubuntu/Debian-specific; skip on other distros.
+    // 8. Firewall.
+    //    Ubuntu/Mint → UFW.
+    //    Fedora → firewalld (firewall-cmd).  Commands are written with the
+    //    "chroot /target" prefix so they work in the cloud-init context; the
+    //    kickstart.rs %post transformer strips that prefix for Kickstart files.
+    let is_fedora = matches!(cfg.distro, Some(Distro::Fedora));
     if cfg.firewall.enabled && is_ubuntu {
         if let Some(policy) = &cfg.firewall.default_policy {
             cmds.push(format!("chroot /target ufw default {policy} incoming"));
@@ -144,6 +171,34 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
         }
         cmds.push("chroot /target ufw --force enable".to_string());
         cmds.push("chroot /target systemctl enable ufw".to_string());
+    } else if cfg.firewall.enabled && is_fedora {
+        // firewalld is already in the package list (added by kickstart.rs).
+        // Set the default zone policy, then open/block individual ports.
+        if let Some(policy) = &cfg.firewall.default_policy {
+            // firewalld uses "ACCEPT"/"DROP"/"REJECT"; map common UFW-style words.
+            let fw_policy = match policy.to_lowercase().as_str() {
+                "deny" | "drop" => "DROP",
+                "reject" => "REJECT",
+                _ => "ACCEPT",
+            };
+            cmds.push(format!(
+                "chroot /target firewall-cmd --permanent --set-target={fw_policy} --zone=public"
+            ));
+        }
+        for port in &cfg.firewall.allow_ports {
+            cmds.push(format!(
+                "chroot /target firewall-cmd --permanent --add-port={port} --zone=public"
+            ));
+        }
+        for port in &cfg.firewall.deny_ports {
+            // firewalld has no "deny port" equivalent — remove the port from
+            // the allow list (no-op if not present) as the closest approximation.
+            cmds.push(format!(
+                "chroot /target firewall-cmd --permanent --remove-port={port} --zone=public 2>/dev/null || true"
+            ));
+        }
+        cmds.push("chroot /target firewall-cmd --reload 2>/dev/null || true".to_string());
+        cmds.push("chroot /target systemctl enable firewalld".to_string());
     }
 
     // 9. APT repos — Ubuntu/Debian only.
@@ -211,17 +266,18 @@ pub fn build_feature_late_commands(cfg: &InjectConfig) -> EngineResult<Vec<Strin
     if grub_changed {
         if let Some(t) = cfg.grub.timeout {
             cmds.push(format!(
-                r"sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT={t}/' /target/etc/default/grub"
+                r"sed -i 's|^GRUB_TIMEOUT=.*|GRUB_TIMEOUT={t}|' /target/etc/default/grub"
             ));
         }
         if let Some(entry) = &cfg.grub.default_entry {
             cmds.push(format!(
-                r"sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT={entry}/' /target/etc/default/grub"
+                r"sed -i 's|^GRUB_DEFAULT=.*|GRUB_DEFAULT={entry}|' /target/etc/default/grub"
             ));
         }
         for param in &cfg.grub.cmdline_extra {
+            // Use | as sed delimiter so params containing / (e.g. UUID paths) are safe.
             cmds.push(format!(
-                r#"sed -i 's/\(GRUB_CMDLINE_LINUX_DEFAULT=".*\)"/\1 {param}"/' /target/etc/default/grub"#
+                r#"sed -i 's|\(GRUB_CMDLINE_LINUX_DEFAULT=".*\)"|\1 {param}"|' /target/etc/default/grub"#
             ));
         }
         cmds.push("chroot /target update-grub".to_string());
@@ -2126,5 +2182,133 @@ autoinstall:
             all.contains("archive.ubuntu.com"),
             "APT repo URL expected in late commands"
         );
+    }
+
+    // ── hash_password edge cases ──────────────────────────────────────────────
+
+    #[test]
+    fn hash_password_empty_string_produces_sha512_crypt() {
+        // Empty password must hash without panicking — cloud-init may rely on it
+        // for locked accounts that use SSH keys only.
+        let h = hash_password("").expect("empty password must hash without error");
+        assert!(h.starts_with("$6$"), "must be SHA-512-crypt format");
+    }
+
+    #[test]
+    fn hash_password_unicode_input_produces_sha512_crypt() {
+        // Non-ASCII passphrases must round-trip through the sha-crypt crate.
+        let h = hash_password("pássw0rd🔑").expect("unicode password must hash");
+        assert!(h.starts_with("$6$"), "hash format must be SHA-512-crypt");
+    }
+
+    #[test]
+    fn hash_password_long_input_does_not_panic() {
+        let long = "a".repeat(1024);
+        let h = hash_password(&long).expect("long password must hash without error");
+        assert!(h.starts_with("$6$"));
+    }
+
+    // ── merge_autoinstall_yaml edge cases ─────────────────────────────────────
+
+    #[test]
+    fn merge_autoinstall_yaml_with_no_autoinstall_key_creates_it() {
+        // YAML that has a version key but NO autoinstall: key.
+        // merge_autoinstall_yaml must create the autoinstall section rather than error.
+        let bare = "version: 1\nidentity:\n  hostname: old\n";
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            hostname: Some("new-host".to_string()),
+            ..Default::default()
+        };
+        let result = merge_autoinstall_yaml(bare, &cfg);
+        assert!(result.is_ok(), "must not error on missing autoinstall key");
+        let yaml = result.unwrap();
+        assert!(
+            yaml.contains("autoinstall"),
+            "autoinstall key must be created"
+        );
+        assert!(yaml.contains("new-host"), "new hostname must appear");
+    }
+
+    #[test]
+    fn merge_autoinstall_yaml_with_empty_input_creates_valid_yaml() {
+        // Completely empty string is valid YAML (null document).
+        // The function should create a minimal autoinstall section.
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            locale: Some("en_US.UTF-8".to_string()),
+            ..Default::default()
+        };
+        let result = merge_autoinstall_yaml("", &cfg);
+        assert!(result.is_ok(), "empty YAML must not error");
+    }
+
+    #[test]
+    fn merge_autoinstall_yaml_malformed_input_returns_error() {
+        // Tabs at column 0 are illegal in YAML — must return Err, not panic.
+        let bad = "\t\tinvalid: [yaml\n";
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            ..Default::default()
+        };
+        let result = merge_autoinstall_yaml(bad, &cfg);
+        assert!(result.is_err(), "malformed YAML must return an error");
+    }
+
+    #[test]
+    fn merge_autoinstall_yaml_preserves_cloud_config_header() {
+        let existing = "#cloud-config\nautoinstall:\n  version: 1\n";
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            locale: Some("en_GB.UTF-8".to_string()),
+            ..Default::default()
+        };
+        let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+        assert!(
+            yaml.starts_with("#cloud-config"),
+            "cloud-config header must be preserved"
+        );
+        assert!(yaml.contains("en_GB.UTF-8"));
+    }
+
+    #[test]
+    fn merge_autoinstall_yaml_appends_to_existing_late_commands() {
+        let existing = "autoinstall:\n  version: 1\n  late-commands:\n    - echo first\n";
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            network: NetworkConfig {
+                ntp_servers: vec!["time.cloudflare.com".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+        assert!(
+            yaml.contains("echo first"),
+            "original late-command preserved"
+        );
+        assert!(yaml.contains("timesyncd"), "new NTP late-command appended");
+    }
+
+    #[test]
+    fn merge_autoinstall_yaml_deduplicates_packages() {
+        // The existing YAML already contains "curl"; cfg also adds "curl".
+        // After merge, "curl" must appear exactly once.
+        let existing = "autoinstall:\n  version: 1\n  packages:\n    - curl\n";
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            extra_packages: vec!["curl".to_string(), "git".to_string()],
+            ..Default::default()
+        };
+        let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+        let curl_count = yaml.matches("curl").count();
+        assert_eq!(curl_count, 1, "curl must appear exactly once after dedup");
+        assert!(yaml.contains("git"), "git must appear in merged packages");
     }
 }

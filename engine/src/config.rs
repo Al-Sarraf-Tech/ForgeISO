@@ -507,6 +507,25 @@ impl InjectConfig {
             }
         }
 
+        // Allows IPv4 (e.g. "8.8.8.8") and IPv6 (e.g. "2001:4860:4860::8888")
+        // in addition to hostnames.  Allows alphanumeric, dash, dot, colon,
+        // and bracket characters used in IPv6 literals like "[::1]".
+        fn is_safe_network_addr(s: &str, field: &str) -> EngineResult<()> {
+            if s.is_empty() {
+                return Ok(());
+            }
+            if s.chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '[' | ']'))
+            {
+                Ok(())
+            } else {
+                Err(EngineError::InvalidConfig(format!(
+                    "{field} contains unsafe characters: {s:?} (only alphanumeric, dash, \
+                     underscore, dot, colon, brackets allowed)"
+                )))
+            }
+        }
+
         if let Some(h) = &self.hostname {
             is_safe_identifier(h, "hostname")?;
         }
@@ -588,16 +607,17 @@ impl InjectConfig {
                     "apt_repo contains shell metacharacters: {repo:?}"
                 )));
             }
-            // Enforce apt sources.list line format so invalid entries are caught
-            // before they silently produce a malformed sources.list.d file.
+            // Enforce apt sources.list line format — allow deb/deb-src lines and
+            // ppa: shorthand (handled via add-apt-repository in generated late-commands).
             let trimmed = repo.trim();
             if !trimmed.is_empty()
                 && !trimmed.starts_with("deb ")
                 && !trimmed.starts_with("deb-src ")
+                && !trimmed.starts_with("ppa:")
             {
                 return Err(EngineError::InvalidConfig(format!(
-                    "apt_repo must be a valid sources.list entry starting with \
-                     'deb ' or 'deb-src ': {repo:?}"
+                    "apt_repo must be a 'deb '/'deb-src ' sources.list entry or a 'ppa:' \
+                     shorthand: {repo:?}"
                 )));
             }
         }
@@ -655,14 +675,14 @@ impl InjectConfig {
             }
         }
 
-        // DNS servers — used in cloud-init YAML and potentially resolv.conf commands
+        // DNS servers — may be IPv4, IPv6, or hostnames.
         for dns in &self.network.dns_servers {
-            is_safe_identifier(dns, "dns_server")?;
+            is_safe_network_addr(dns, "dns_server")?;
         }
 
-        // NTP servers — used in printf commands for timesyncd.conf
+        // NTP servers — may be IPv4, IPv6, or hostnames.
         for ntp in &self.network.ntp_servers {
-            is_safe_identifier(ntp, "ntp_server")?;
+            is_safe_network_addr(ntp, "ntp_server")?;
         }
 
         // Container users
@@ -677,27 +697,126 @@ impl InjectConfig {
             }
         }
 
-        // GRUB — default_entry and cmdline_extra are interpolated into sed s///
-        // patterns, so block shell metacharacters AND the sed delimiter (/).
-        if let Some(entry) = &self.grub.default_entry {
-            if entry.chars().any(|c| {
-                matches!(
-                    c,
-                    ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n' | '/'
-                )
-            }) {
+        // output_label — used as the ISO volume label (written to xorriso -V).
+        // Must follow the same rules as BuildConfig: non-empty, ≤ 32 ASCII chars.
+        if let Some(label) = &self.output_label {
+            let label = label.trim();
+            if label.is_empty() {
+                return Err(EngineError::InvalidConfig(
+                    "output_label must not be blank".to_string(),
+                ));
+            }
+            if label.len() > 32 {
                 return Err(EngineError::InvalidConfig(format!(
-                    "grub_default contains shell/sed metacharacters: {entry:?}"
+                    "output_label is too long ({} chars, max 32)",
+                    label.len()
+                )));
+            }
+            if !label.is_ascii() {
+                return Err(EngineError::InvalidConfig(
+                    "output_label must contain only ASCII characters".to_string(),
+                ));
+            }
+        }
+
+        // GRUB — default_entry and cmdline_extra are interpolated into sed s|…|…|
+        // patterns (| delimiter).  Block shell metacharacters and | itself, but
+        // allow / so users can specify UUID paths (e.g. rd.luks.uuid=/dev/sda2).
+        if let Some(entry) = &self.grub.default_entry {
+            if entry
+                .chars()
+                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "grub_default contains shell metacharacters: {entry:?}"
                 )));
             }
         }
         for param in &self.grub.cmdline_extra {
             if param
                 .chars()
-                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '\\' | '\n' | '/'))
+                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\\' | '\n'))
             {
                 return Err(EngineError::InvalidConfig(format!(
-                    "grub_cmdline contains shell/sed metacharacters: {param:?}"
+                    "grub_cmdline contains shell metacharacters: {param:?}"
+                )));
+            }
+        }
+
+        // out_name — used as a filename component joined with the output directory.
+        // Block path separators (/ and \) to prevent writing outside the workspace.
+        if !self.out_name.trim().is_empty() {
+            let name = self.out_name.trim();
+            if name.contains('/') || name.contains('\\') {
+                return Err(EngineError::InvalidConfig(format!(
+                    "out_name must be a plain filename, not a path: {name:?}"
+                )));
+            }
+            // Also block shell metacharacters in case the name is passed to xorriso.
+            if name
+                .chars()
+                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\'' | '"' | '\n'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "out_name contains shell metacharacters: {name:?}"
+                )));
+            }
+        }
+
+        // DNF mirror — interpolated into: sed -i 's|^baseurl=.*|baseurl={mirror}/…|'
+        // The `|` character is the sed delimiter so it must be blocked to prevent
+        // the substitution from being split or manipulated.  Newlines would also
+        // break the sed one-liner.
+        if let Some(mirror) = &self.dnf_mirror {
+            if mirror.contains('|') || mirror.contains('\n') || mirror.contains('\r') {
+                return Err(EngineError::InvalidConfig(format!(
+                    "dnf_mirror must not contain `|` (sed delimiter) or newlines: {mirror:?}"
+                )));
+            }
+        }
+
+        // DNF repos — two write paths exist in kickstart.rs:
+        //   URL entries  → single-quoted:  dnf config-manager --add-repo '…'
+        //   Stanza entries → printf '%s\n' {stanza:?}  (Rust Debug escaping — safe)
+        // For URL entries a literal ' would break out of the single-quoted argument,
+        // so we block it.  Stanza entries go through {:?} which handles all escaping;
+        // we only need to guard against the single-quote path for URL-shaped entries.
+        for repo in &self.dnf_repos {
+            let trimmed = repo.trim();
+            if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+                // Single-quote injection risk in the URL path.
+                if trimmed.contains('\'') {
+                    return Err(EngineError::InvalidConfig(format!(
+                        "dnf_repo URL contains a single quote: {repo:?}"
+                    )));
+                }
+            }
+            // Both paths: null bytes and raw control chars (other than \n / \t in
+            // stanzas) would produce invalid output.
+            if trimmed.contains('\0') {
+                return Err(EngineError::InvalidConfig(format!(
+                    "dnf_repo contains a null byte: {repo:?}"
+                )));
+            }
+        }
+
+        // Pacman mirror — written as: echo 'Server = {mirror}/$repo/os/$arch' >
+        // In a single-quoted shell string $ and other metacharacters are literal
+        // and safe; only a ' itself can break out of the quoting.
+        if let Some(mirror) = &self.pacman_mirror {
+            if mirror.contains('\'') || mirror.contains('\n') || mirror.contains('\r') {
+                return Err(EngineError::InvalidConfig(format!(
+                    "pacman_mirror must not contain single quotes or newlines: {mirror:?}"
+                )));
+            }
+        }
+
+        // Pacman repos — each entry written via: echo '{line}' >> mirrorlist
+        // Same single-quote injection risk; newlines would break the echo command.
+        for repo in &self.pacman_repos {
+            if repo.contains('\'') || repo.contains('\n') || repo.contains('\r') {
+                return Err(EngineError::InvalidConfig(format!(
+                    "pacman_repo must not contain single quotes or newlines: {repo:?}"
                 )));
             }
         }
@@ -802,28 +921,29 @@ mod tests {
     }
 
     #[test]
-    fn grub_default_rejects_sed_delimiter() {
-        // Forward slash breaks the sed s/// delimiter and can inject sed commands
+    fn grub_default_accepts_slash_path() {
+        // sed now uses | as delimiter so / in grub_default is safe.
         let cfg = InjectConfig {
             grub: GrubConfig {
-                default_entry: Some("foo/e cat /etc/shadow".into()),
+                default_entry: Some("Ubuntu/recovery".into()),
                 ..Default::default()
             },
             ..Default::default()
         };
-        assert!(cfg.validate().is_err());
+        assert!(cfg.validate().is_ok());
     }
 
     #[test]
-    fn grub_cmdline_rejects_sed_delimiter() {
+    fn grub_cmdline_accepts_slash_path() {
+        // sed now uses | as delimiter so / in cmdline params is safe.
         let cfg = InjectConfig {
             grub: GrubConfig {
-                cmdline_extra: vec!["quiet/e id".into()],
+                cmdline_extra: vec!["root=/dev/sda1".into()],
                 ..Default::default()
             },
             ..Default::default()
         };
-        assert!(cfg.validate().is_err());
+        assert!(cfg.validate().is_ok());
     }
 
     #[test]
@@ -962,15 +1082,15 @@ mod tests {
     }
 
     #[test]
-    fn inject_rejects_ppa_shorthand_as_apt_repo() {
-        // PPA shorthands (ppa:user/name) are not valid sources.list lines.
+    fn inject_accepts_ppa_shorthand_as_apt_repo() {
+        // PPA shorthands are handled via add-apt-repository in generated late-commands.
         let cfg = InjectConfig {
             apt_repos: vec!["ppa:deadsnakes/ppa".into()],
             ..Default::default()
         };
         assert!(
-            cfg.validate().is_err(),
-            "ppa: shorthand must be rejected (not a sources.list line)"
+            cfg.validate().is_ok(),
+            "ppa: shorthand must be accepted (handled via add-apt-repository)"
         );
     }
 
@@ -1091,5 +1211,458 @@ mod tests {
         let yaml = "name: ''\nsource: /tmp/ubuntu.iso\n";
         let result = BuildConfig::from_yaml_str(yaml);
         assert!(result.is_err());
+    }
+
+    // ── IsoSource edge cases ──────────────────────────────────────────────────
+
+    #[test]
+    fn iso_source_from_raw_uppercase_http_treated_as_path() {
+        // `from_raw` does an ASCII-case-sensitive prefix check; uppercase HTTP:// is
+        // NOT a recognised scheme and must fall through to path.
+        let src = IsoSource::from_raw("HTTP://example.com/file.iso");
+        assert!(
+            matches!(src, IsoSource::Path(_)),
+            "uppercase scheme must be treated as path, not URL"
+        );
+    }
+
+    #[test]
+    fn iso_source_from_raw_empty_string_is_path() {
+        let src = IsoSource::from_raw("");
+        assert!(matches!(src, IsoSource::Path(_)));
+    }
+
+    #[test]
+    fn iso_source_display_value_round_trips() {
+        let url = "https://example.com/ubuntu.iso";
+        let src = IsoSource::from_raw(url);
+        assert_eq!(src.display_value(), url);
+
+        let path = "/tmp/local.iso";
+        let src = IsoSource::from_raw(path);
+        assert_eq!(src.display_value(), path);
+    }
+
+    #[test]
+    fn iso_source_is_remote_only_for_url() {
+        assert!(IsoSource::from_raw("https://cdn.example.com/a.iso").is_remote());
+        assert!(!IsoSource::from_raw("/tmp/local.iso").is_remote());
+    }
+
+    // ── BuildConfig validation edge cases ─────────────────────────────────────
+
+    #[test]
+    fn build_config_rejects_whitespace_only_name() {
+        let yaml = "name: '   '\nsource: /tmp/ubuntu.iso\n";
+        let result = BuildConfig::from_yaml_str(yaml);
+        assert!(result.is_err(), "whitespace-only name must be rejected");
+    }
+
+    #[test]
+    fn build_config_rejects_blank_output_label() {
+        let cfg = BuildConfig {
+            name: "build".to_string(),
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            overlay_dir: None,
+            output_label: Some("   ".to_string()), // blank after trim
+            profile: ProfileKind::Minimal,
+            auto_scan: false,
+            auto_test: false,
+            scanning: ScanPolicy::default(),
+            testing: TestingPolicy::default(),
+            keep_workdir: false,
+            expected_sha256: None,
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "blank output_label must be rejected"
+        );
+    }
+
+    #[test]
+    fn build_config_rejects_output_label_too_long() {
+        let cfg = BuildConfig {
+            name: "build".to_string(),
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            overlay_dir: None,
+            output_label: Some("A".repeat(33)), // 33 chars > 32 max
+            profile: ProfileKind::Minimal,
+            auto_scan: false,
+            auto_test: false,
+            scanning: ScanPolicy::default(),
+            testing: TestingPolicy::default(),
+            keep_workdir: false,
+            expected_sha256: None,
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "output_label longer than 32 chars must be rejected"
+        );
+    }
+
+    #[test]
+    fn build_config_accepts_output_label_exactly_32_chars() {
+        let cfg = BuildConfig {
+            name: "build".to_string(),
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            overlay_dir: None,
+            output_label: Some("A".repeat(32)),
+            profile: ProfileKind::Minimal,
+            auto_scan: false,
+            auto_test: false,
+            scanning: ScanPolicy::default(),
+            testing: TestingPolicy::default(),
+            keep_workdir: false,
+            expected_sha256: None,
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "32-char output_label must be accepted"
+        );
+    }
+
+    #[test]
+    fn build_config_rejects_auto_test_without_smoke() {
+        let testing = TestingPolicy {
+            smoke: false,
+            ..Default::default()
+        };
+        let cfg = BuildConfig {
+            name: "build".to_string(),
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            overlay_dir: None,
+            output_label: None,
+            profile: ProfileKind::Minimal,
+            auto_scan: false,
+            auto_test: true,
+            scanning: ScanPolicy::default(),
+            testing,
+            keep_workdir: false,
+            expected_sha256: None,
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "auto_test=true with smoke=false must be rejected"
+        );
+    }
+
+    // ── InjectConfig::validate edge cases ─────────────────────────────────────
+
+    #[test]
+    fn inject_accepts_ipv6_ntp_server() {
+        // IPv6 addresses are valid NTP/DNS server addresses; the validator
+        // uses is_safe_network_addr which allows colons for IPv6.
+        let cfg = InjectConfig {
+            network: NetworkConfig {
+                ntp_servers: vec!["2001:db8::1".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "IPv6 NTP address must be accepted by the network-address validator"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_ipv6_dns_server() {
+        let cfg = InjectConfig {
+            network: NetworkConfig {
+                dns_servers: vec!["2001:4860:4860::8888".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "IPv6 DNS address must be accepted by the network-address validator"
+        );
+    }
+
+    #[test]
+    fn inject_rejects_dns_with_shell_metachar() {
+        // A DNS entry with a semicolon is still unsafe and must be rejected.
+        let cfg = InjectConfig {
+            network: NetworkConfig {
+                dns_servers: vec!["1.1.1.1; rm -rf /".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "DNS entry with shell metacharacter must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_hostname_with_dots() {
+        // RFC-1123 hostnames use dots — the validator allows them.
+        let cfg = InjectConfig {
+            hostname: Some("my.host.example.com".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn inject_rejects_hostname_with_shell_metachar() {
+        let cfg = InjectConfig {
+            hostname: Some("host$(id)".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_rejects_realname_with_single_quote() {
+        let cfg = InjectConfig {
+            realname: Some("O'Brien".into()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "single quote in realname is a shell metachar and must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_grub_default_with_slash() {
+        // sed now uses | as delimiter so / in grub_default is safe.
+        let cfg = InjectConfig {
+            grub: GrubConfig {
+                default_entry: Some("Ubuntu/recovery".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "grub_default with '/' must be accepted (sed uses | delimiter)"
+        );
+    }
+
+    #[test]
+    fn inject_rejects_sysctl_value_with_semicolon() {
+        let cfg = InjectConfig {
+            sysctl: vec![("net.ipv4.ip_forward".into(), "1; rm -rf /".into())],
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_rejects_apt_repo_without_deb_prefix() {
+        // Arbitrary text that is not a valid sources.list line must be caught.
+        let cfg = InjectConfig {
+            apt_repos: vec!["http://ppa.launchpad.net/user/ppa/ubuntu".into()],
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "apt_repo missing 'deb ' prefix must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_deb_src_apt_repo() {
+        let cfg = InjectConfig {
+            apt_repos: vec![
+                "deb http://archive.ubuntu.com/ubuntu noble main".into(),
+                "deb-src http://archive.ubuntu.com/ubuntu noble main".into(),
+            ],
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok(), "valid deb/deb-src lines must pass");
+    }
+
+    #[test]
+    fn inject_rejects_apt_mirror_with_shell_metachar() {
+        let cfg = InjectConfig {
+            apt_mirror: Some("http://mirror.example.com/ubuntu; malicious".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_rejects_proxy_with_backtick() {
+        let cfg = InjectConfig {
+            proxy: ProxyConfig {
+                http_proxy: Some("http://proxy.example.com:3128`whoami`".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_rejects_sudo_command_with_pipe() {
+        let cfg = InjectConfig {
+            user: UserConfig {
+                sudo_commands: vec!["/usr/bin/systemctl | cat /etc/shadow".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn inject_accepts_valid_sudo_command() {
+        let cfg = InjectConfig {
+            user: UserConfig {
+                sudo_commands: vec!["/usr/bin/systemctl".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn inject_accepts_empty_string_for_validated_fields() {
+        // is_safe_identifier returns Ok on empty input — validated fields may be empty.
+        let cfg = InjectConfig {
+            hostname: Some(String::new()),
+            username: Some(String::new()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok(), "empty strings must be allowed");
+    }
+
+    // ── out_name validation ────────────────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_out_name_with_path_traversal() {
+        let cfg = InjectConfig {
+            out_name: "../../etc/passwd".into(),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "out_name with path traversal must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_rejects_out_name_with_shell_metachar() {
+        let cfg = InjectConfig {
+            out_name: "output$(id).iso".into(),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "out_name with shell metacharacter must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_out_name() {
+        let cfg = InjectConfig {
+            out_name: "my-custom-ubuntu.iso".into(),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok(), "plain filename must be accepted");
+    }
+
+    // ── DNF mirror / repo validation ───────────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_dnf_mirror_with_sed_delimiter() {
+        let cfg = InjectConfig {
+            dnf_mirror: Some("https://mirror.example.com|evil".into()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "dnf_mirror with | (sed delimiter) must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_dnf_mirror() {
+        let cfg = InjectConfig {
+            dnf_mirror: Some("https://mirror.example.com/fedora".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok(), "clean dnf_mirror URL must pass");
+    }
+
+    #[test]
+    fn inject_rejects_dnf_repo_url_with_single_quote() {
+        let cfg = InjectConfig {
+            dnf_repos: vec!["https://evil.example.com/'; rm -rf /".into()],
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "dnf_repo URL with single quote must be rejected"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_dnf_repo_stanza_with_dollar_sign() {
+        // $releasever and $basearch are standard DNF stanza variables.
+        // They go through printf '%s\n' {:?} (Rust Debug), not single-quoted shell.
+        let cfg = InjectConfig {
+            dnf_repos: vec!["[rpmfusion-free]\nbaseurl=https://mirrors.rpmfusion.org/free/fedora/$releasever/$basearch\nenabled=1".into()],
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "dnf_repo stanza with $releasever must be accepted"
+        );
+    }
+
+    // ── Pacman mirror / repo validation ───────────────────────────────────────
+
+    #[test]
+    fn inject_rejects_pacman_mirror_with_single_quote() {
+        let cfg = InjectConfig {
+            pacman_mirror: Some("https://mirror.example.com/arch'; evil".into()),
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "pacman_mirror with single quote must be rejected (breaks shell quoting)"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_pacman_mirror_with_dollar_sign() {
+        // Pacman mirror URLs are single-quoted in shell; $ is literal in single-quoted strings.
+        let cfg = InjectConfig {
+            pacman_mirror: Some("https://mirror.pkgbuild.com".into()),
+            ..Default::default()
+        };
+        assert!(cfg.validate().is_ok(), "clean pacman_mirror URL must pass");
+    }
+
+    #[test]
+    fn inject_rejects_pacman_repo_with_newline() {
+        let cfg = InjectConfig {
+            pacman_repos: vec!["Server = https://good.mirror.com\nrm -rf /".into()],
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_err(),
+            "pacman_repo with newline must be rejected (would break echo command)"
+        );
+    }
+
+    #[test]
+    fn inject_accepts_valid_pacman_repo_entry() {
+        // $repo and $arch are pacman template variables — safe in single-quoted strings.
+        let cfg = InjectConfig {
+            pacman_repos: vec!["Server = https://mirror.pkgbuild.com/$repo/os/$arch".into()],
+            ..Default::default()
+        };
+        assert!(
+            cfg.validate().is_ok(),
+            "standard pacman Server= line with template vars must be accepted"
+        );
     }
 }

@@ -127,15 +127,27 @@ pub struct InjectState {
     pub allow_ports: String,
     pub deny_ports: String,
     // User / access
-    pub user_groups: String, // newline-separated
+    pub user_groups: String,   // newline-separated
+    pub user_shell: String,    // e.g. /bin/bash, /usr/bin/zsh
+    pub sudo_nopasswd: bool,   // grant NOPASSWD:ALL sudoers
+    pub sudo_commands: String, // newline-separated specific commands for sudoers
     // Services
     pub enable_services: String,  // newline-separated
     pub disable_services: String, // newline-separated
     // Containers
     pub docker: bool,
     pub podman: bool,
+    pub docker_users: String, // newline-separated users to add to docker group
     // Swap
     pub swap_size_mb: String,
+    pub swap_filename: String,   // path inside target, default /swapfile
+    pub swap_swappiness: String, // 0–100, blank = system default
+    // Encryption (LUKS)
+    pub encrypt: bool,
+    #[serde(skip)] // never persist passphrase to disk
+    pub encrypt_passphrase: String,
+    // Custom mounts (fstab entries, one per line)
+    pub mounts: String,
     // GRUB
     pub grub_timeout: String, // seconds as string, empty = engine default
     pub grub_cmdline: String, // extra kernel command-line args
@@ -192,11 +204,20 @@ impl Default for InjectState {
             allow_ports: String::new(),
             deny_ports: String::new(),
             user_groups: String::new(),
+            user_shell: String::new(),
+            sudo_nopasswd: false,
+            sudo_commands: String::new(),
             enable_services: String::new(),
             disable_services: String::new(),
             docker: false,
             podman: false,
+            docker_users: String::new(),
             swap_size_mb: String::new(),
+            swap_filename: String::new(),
+            swap_swappiness: String::new(),
+            encrypt: false,
+            encrypt_passphrase: String::new(),
+            mounts: String::new(),
             grub_timeout: String::new(),
             grub_cmdline: String::new(),
             grub_default: String::new(),

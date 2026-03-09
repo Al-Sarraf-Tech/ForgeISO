@@ -683,9 +683,8 @@ mod tests {
         let spec = test_spec(Hypervisor::VirtualBox, FirmwareMode::Bios);
         let cmds = vbox_commands(&spec);
         let has_createvm = cmds.iter().any(|c| c.contains("VBoxManage createvm"));
-        let has_iso = cmds
-            .iter()
-            .any(|c| c.contains(spec.iso_path.to_str().unwrap()));
+        let iso_str = spec.iso_path.to_string_lossy();
+        let has_iso = cmds.iter().any(|c| c.contains(iso_str.as_ref()));
         assert!(has_createvm, "missing createvm command: {cmds:?}");
         assert!(has_iso, "missing iso path in vbox commands: {cmds:?}");
     }

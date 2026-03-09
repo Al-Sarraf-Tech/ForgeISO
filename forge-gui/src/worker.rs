@@ -20,6 +20,10 @@ pub enum WorkerMsg {
     DiffOk(Box<IsoDiff>),
     BuildOk(Box<BuildResult>),
     InspectOk(Box<IsoMetadata>),
+    /// Background ISO detection triggered after a file is picked for the inject
+    /// source — used to auto-populate the distro/label fields without touching
+    /// the build-tab inspect result.
+    IsoDetected(Box<IsoMetadata>),
     DoctorOk(Box<DoctorReport>),
     ScanOk,
     TestOk,
@@ -72,15 +76,30 @@ fn handle_zenity(
     target: PickTarget,
     tx: &std::sync::mpsc::Sender<WorkerMsg>,
 ) {
-    if let Ok(out) = result {
-        if out.status.success() {
+    match result {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // zenity not installed — surface a clear error rather than silently
+            // doing nothing, so users on headless or minimal systems understand
+            // why Browse did nothing and can paste the path manually instead.
+            let _ = tx.send(WorkerMsg::OpError(
+                "File picker (zenity) not found — install zenity or paste the path manually".into(),
+            ));
+        }
+        Err(e) => {
+            let _ = tx.send(WorkerMsg::OpError(format!("File picker error: {e}")));
+        }
+        Ok(out) if out.status.success() => {
             let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !path.is_empty() {
+            if path.is_empty() {
+                // zenity returned success but empty path — treat as cancel
+                let _ = tx.send(WorkerMsg::Done);
+            } else {
                 let _ = tx.send(WorkerMsg::FilePicked { target, path });
-                return;
             }
         }
+        Ok(_) => {
+            // Non-zero exit = user cancelled the dialog; no action needed.
+            let _ = tx.send(WorkerMsg::Done);
+        }
     }
-    // Cancelled or failed — just send Done so we can unblock "picking" UI state if needed
-    let _ = tx.send(WorkerMsg::Done);
 }
