@@ -448,7 +448,8 @@ async fn main() -> anyhow::Result<()> {
                 BuildConfig::from_path(&project)?
             } else {
                 // Resolve source: --preset takes precedence over --source when both absent
-                let resolved_source = resolve_source_from_preset_or_str(source, preset)?;
+                let (resolved_source, _preset_distro_tag) =
+                    resolve_source_from_preset_or_str(source, preset)?;
                 BuildConfig {
                     name: name.unwrap_or_else(|| "forgeiso-build".to_string()),
                     source: IsoSource::from_raw(resolved_source),
@@ -643,9 +644,15 @@ async fn main() -> anyhow::Result<()> {
                 encrypt_passphrase
             };
 
-            // Parse distro
+            // Resolve source: --preset or --source
+            let (resolved_source, preset_distro_tag) =
+                resolve_source_from_preset_or_str(source, preset)?;
+
+            // Parse distro — explicit --distro takes precedence; if omitted and a
+            // preset was used, infer the distro from the preset's distro tag so that
+            // e.g. `--preset rocky-linux` automatically selects the Kickstart path.
             let resolved_distro = match distro.as_deref() {
-                None | Some("ubuntu") => None,
+                Some("ubuntu") => None,
                 Some("fedora") => Some(Distro::Fedora),
                 Some("arch") => Some(Distro::Arch),
                 Some("mint") => Some(Distro::Mint),
@@ -653,6 +660,13 @@ async fn main() -> anyhow::Result<()> {
                     eprintln!("ERROR: unknown distro '{other}'. Valid: ubuntu, fedora, arch, mint");
                     std::process::exit(1);
                 }
+                None => match preset_distro_tag {
+                    Some("fedora") | Some("rhel-family") => Some(Distro::Fedora),
+                    Some("arch") => Some(Distro::Arch),
+                    Some("mint") => Some(Distro::Mint),
+                    // ubuntu, debian, opensuse → ubuntu cloud-init path (None)
+                    _ => None,
+                },
             };
 
             // Parse sysctl "key=value" pairs — warn on malformed entries
@@ -671,9 +685,6 @@ async fn main() -> anyhow::Result<()> {
                     }
                 })
                 .collect();
-
-            // Resolve source: --preset or --source
-            let resolved_source = resolve_source_from_preset_or_str(source, preset)?;
 
             let cfg = InjectConfig {
                 source: IsoSource::from_raw(resolved_source),
@@ -1011,10 +1022,13 @@ fn parse_profile(raw: &str) -> anyhow::Result<ProfileKind> {
 
 /// Resolve a source URL/path from either --preset or --source flags.
 /// Returns an error if neither is provided or if the preset strategy requires user input.
+/// Returns (source_url_or_path, preset_distro_tag).
+/// `preset_distro_tag` is `Some("fedora")`, `Some("mint")`, etc. when a preset was
+/// matched and `None` when the source was provided directly (user controls --distro).
 fn resolve_source_from_preset_or_str(
     source: Option<String>,
     preset: Option<String>,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<(String, Option<&'static str>)> {
     if let Some(preset_name) = preset {
         let ids: Vec<&str> = all_presets().iter().map(|p| p.id.as_str()).collect();
         let found = find_preset_by_str(&preset_name).ok_or_else(|| {
@@ -1032,7 +1046,7 @@ fn resolve_source_from_preset_or_str(
                         found.id.as_str()
                     )
                 })?;
-                Ok(url)
+                Ok((url, Some(found.distro)))
             }
             AcquisitionStrategy::DiscoveryPage => {
                 anyhow::bail!(
@@ -1051,7 +1065,7 @@ fn resolve_source_from_preset_or_str(
             }
         }
     } else if let Some(s) = source {
-        Ok(s)
+        Ok((s, None))
     } else {
         anyhow::bail!("--source or --preset is required")
     }
