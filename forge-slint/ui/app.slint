@@ -138,7 +138,7 @@ export component AppWindow inherits Window {
     callback build-back();
     callback build-run();
     callback build-view-results();
-    // Check
+    // Optional checks
     callback browse-verify-source();
     callback check-back();
     callback run-verify();
@@ -151,10 +151,10 @@ export component AppWindow inherits Window {
     callback log-filter-toggle();
 
     // ── Derived helper: distro display label ─────────────────────────────
-    property <string> distro-display: distro == "fedora" ? "Fedora / RHEL (Kickstart)"
-                                    : distro == "arch"   ? "Arch Linux (archinstall)"
-                                    : distro == "mint"   ? "Linux Mint (preseed)"
-                                    : "Ubuntu / Debian (cloud-init)";
+    property <string> distro-display: distro == "fedora" ? "Fedora / RHEL — Kickstart"
+                                    : distro == "arch"   ? "Arch Linux — archinstall"
+                                    : distro == "mint"   ? "Linux Mint — preseed"
+                                    : "Ubuntu / Debian — cloud-init";
 
     // ── Layout ──────────────────────────────────────────────────────────
     VerticalLayout {
@@ -268,6 +268,13 @@ export component AppWindow inherits Window {
                 out-name: root.out-name;
                 output-label: root.output-label;
                 unattended: root.no-user-interaction;
+                ssh-server: root.ssh-install-server;
+                packages: root.packages;
+                firewall-on: root.firewall-enabled;
+                docker-on: root.docker;
+                podman-on: root.podman;
+                encrypt-on: root.encrypt;
+                storage-layout: root.storage-layout;
                 running: root.job-running;
                 artifact-path: root.artifact-path;
                 artifact-sha256: root.artifact-sha256;

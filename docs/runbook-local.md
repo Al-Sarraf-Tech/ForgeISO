@@ -1,5 +1,11 @@
 # Runbook: Local Bare-Metal Build
 
+## Interface Choice
+
+- `forgeiso-desktop`: guided desktop workflow for normal users
+- `forgeiso-tui`: guided terminal workflow with the same 4-step model
+- `forgeiso`: advanced CLI for scripting, CI, and explicit control
+
 ## Prerequisites
 
 - Linux host
@@ -8,6 +14,10 @@
 - Local tools as needed: `xorriso`, `unsquashfs`, `mksquashfs`, `qemu-system-x86_64`, `oscap`, `trivy`, `syft`, `grype`
 
 ## Workflow
+
+The CLI is the advanced surface. Guided users should prefer `forgeiso-desktop`
+or `forgeiso-tui`, then follow the same conceptual flow:
+Choose ISO → Configure → Build → Optional Checks.
 
 1. Check the host:
 

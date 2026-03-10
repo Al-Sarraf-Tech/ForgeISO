@@ -35,6 +35,14 @@ export component StepBuild inherits Rectangle {
     in property <string>  output-label;
     in property <bool>    unattended;
     in property <bool>    running;
+    // Extended summary fields
+    in property <bool>    ssh-server;
+    in property <string>  packages;
+    in property <bool>    firewall-on;
+    in property <bool>    docker-on;
+    in property <bool>    podman-on;
+    in property <bool>    encrypt-on;
+    in property <string>  storage-layout;
     // Result from previous run
     in property <string>  artifact-path;
     in property <string>  artifact-sha256;
@@ -76,11 +84,13 @@ export component StepBuild inherits Rectangle {
                 width: 120px;
                 height: 36px;
                 border-radius: Sizes.radius-sm;
-                background: transparent;
+                background: Palette.elevated;
+                border-width: 1px;
+                border-color: Palette.border;
                 Text {
                     text: "← Edit settings";
                     font-size: Sizes.font-sm;
-                    color: Palette.muted;
+                    color: Palette.text;
                     vertical-alignment: center;
                     horizontal-alignment: center;
                 }
@@ -99,11 +109,10 @@ export component StepBuild inherits Rectangle {
                 padding: 20px;
                 spacing: 6px;
                 Text {
-                    text: "READY TO BUILD";
-                    font-size: 10px;
+                    text: "Build Summary";
+                    font-size: 12px;
                     font-weight: 700;
-                    color: Palette.subtle;
-                    letter-spacing: 1.5px;
+                    color: Palette.muted;
                 }
                 Rectangle { height: 8px; }
                 SummaryRow { label: "Installer format"; value: distro-display; }
@@ -112,6 +121,18 @@ export component StepBuild inherits Rectangle {
                 SummaryRow { label: "Username"; value: username; set: username != ""; }
                 SummaryRow { label: "Password"; value: password-set ? "••••••••" : "not set"; set: password-set; }
                 SummaryRow { label: "Timezone"; value: timezone; set: timezone != ""; }
+                if ssh-server: SummaryRow { label: "SSH server"; value: "enabled"; }
+                if packages != "": SummaryRow { label: "Extra packages"; value: packages; }
+                if firewall-on: SummaryRow { label: "Firewall"; value: "enabled"; }
+                if docker-on || podman-on: SummaryRow {
+                    label: "Containers";
+                    value: docker-on && podman-on ? "Docker + Podman"
+                         : docker-on ? "Docker"
+                         : "Podman";
+                }
+                if encrypt-on: SummaryRow { label: "Disk encryption"; value: "LUKS enabled"; }
+                if storage-layout != "": SummaryRow { label: "Storage layout"; value: storage-layout; }
+                Rectangle { height: 4px; }
                 SummaryRow { label: "Output file"; value: output-dir + "/" + out-name; }
                 if output-label != "": SummaryRow { label: "Volume label"; value: output-label; }
             }
@@ -151,7 +172,7 @@ export component StepBuild inherits Rectangle {
                 width: 220px;
                 height: 50px;
                 border-radius: Sizes.radius-md;
-                background: running ? Palette.surface
+                background: running ? Palette.elevated
                           : @linear-gradient(135deg, Palette.accent 0%, #1a5cdb 100%);
                 border-width: running ? 1px : 0px;
                 border-color: Palette.border;
@@ -190,9 +211,11 @@ export component StepBuild inherits Rectangle {
                 width: 180px;
                 height: 38px;
                 border-radius: Sizes.radius-sm;
-                background: Palette.surface;
+                background: Palette.elevated;
                 border-width: 1px;
                 border-color: Palette.border;
+                opacity: running ? 0.5 : 1.0;
+                animate opacity { duration: 150ms; }
                 Text {
                     text: "Rebuild ISO";
                     font-size: Sizes.font-sm;
@@ -275,7 +298,7 @@ export component StepBuild inherits Rectangle {
                         width: 132px;
                         height: 38px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
                         Text {
@@ -292,13 +315,13 @@ export component StepBuild inherits Rectangle {
                         width: 132px;
                         height: 38px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
                         Text {
                             text: "Start New Build";
                             font-size: Sizes.font-sm;
-                            color: Palette.muted;
+                            color: Palette.text;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }

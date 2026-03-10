@@ -12,9 +12,9 @@ use std::sync::Arc;
 use slint::ComponentHandle;
 
 use app::{handle_preset_clicked, make_preset_cards, with_app, with_app_result, ForgeApp, APP};
-use forgeiso_engine::ForgeIsoEngine;
+use forgeiso_engine::{ForgeIsoEngine, GuidedWorkflowProgress, GuidedWorkflowStep};
 use persist::{load_state, save_state};
-use state::{InjectState, PersistedState, VerifyState, WizardProgress};
+use state::{InjectState, PersistedState, VerifyState};
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -95,17 +95,14 @@ fn main() -> anyhow::Result<()> {
                 if w.get_job_running() {
                     return;
                 }
-                let current = w.get_current_step();
-                let progress = WizardProgress {
-                    source_ready: w.get_step1_done(),
-                    configure_done: w.get_step2_done(),
-                    build_done: w.get_step3_done(),
-                    verify_done: w.get_verify_done(),
-                    iso9660_done: w.get_iso9660_done(),
+                let Some(current) = guided_step_from_ui(w.get_current_step()) else {
+                    return;
                 };
-                let can = progress.can_open_step(current, step);
-                if can {
-                    w.set_current_step(step);
+                let Some(target) = guided_step_from_ui(step) else {
+                    return;
+                };
+                if window_progress(&w).can_open_step(current, target) {
+                    w.set_current_step(target.one_based());
                 }
             }
         });
@@ -133,11 +130,7 @@ fn main() -> anyhow::Result<()> {
                     w.set_source_path(path.clone().into());
                     w.set_step1_done(true);
                     w.set_step2_done(false);
-                    w.set_step3_done(false);
-                    w.set_artifact_path("".into());
-                    w.set_artifact_sha256("".into());
-                    w.set_verify_done(false);
-                    w.set_iso9660_done(false);
+                    clear_build_results(&w);
                     // Access ForgeApp via thread-local — no Rc captured.
                     with_app(|a| a.spawn_detect_iso(path));
                 },
@@ -154,11 +147,7 @@ fn main() -> anyhow::Result<()> {
             if let Some(w) = weak.upgrade() {
                 w.set_step1_done(not_empty);
                 w.set_step2_done(false);
-                w.set_step3_done(false);
-                w.set_artifact_path("".into());
-                w.set_artifact_sha256("".into());
-                w.set_verify_done(false);
-                w.set_iso9660_done(false);
+                clear_build_results(&w);
             }
             if not_empty {
                 with_app(|a| a.spawn_detect_iso(t));
@@ -189,17 +178,7 @@ fn main() -> anyhow::Result<()> {
                 w.set_detected_distro("".into());
                 w.set_step1_done(false);
                 w.set_step2_done(false);
-                w.set_step3_done(false);
-                w.set_artifact_path("".into());
-                w.set_artifact_sha256("".into());
-                w.set_verify_done(false);
-                w.set_iso9660_done(false);
-                w.set_verify_matched(false);
-                w.set_verify_hash_display("".into());
-                w.set_iso9660_compliant(false);
-                w.set_iso9660_boot_bios(false);
-                w.set_iso9660_boot_uefi(false);
-                w.set_iso9660_volume_id("".into());
+                clear_build_results(&w);
                 w.set_current_step(1);
                 w.set_status_text("".into());
                 w.set_status_is_error(false);
@@ -291,11 +270,7 @@ fn main() -> anyhow::Result<()> {
         win.on_build_back(move || {
             if let Some(w) = weak.upgrade() {
                 if !w.get_job_running() {
-                    w.set_step3_done(false);
-                    w.set_artifact_path("".into());
-                    w.set_artifact_sha256("".into());
-                    w.set_verify_done(false);
-                    w.set_iso9660_done(false);
+                    clear_build_results(&w);
                     w.set_current_step(2);
                 }
             }
@@ -344,8 +319,7 @@ fn main() -> anyhow::Result<()> {
             });
             worker::pick_iso(weak.clone(), |w, path| {
                 w.set_verify_source(path.into());
-                w.set_verify_done(false);
-                w.set_iso9660_done(false);
+                clear_optional_checks(&w);
             });
         });
     }
@@ -429,11 +403,7 @@ fn main() -> anyhow::Result<()> {
                 restore_verify(&w, &VerifyState::default());
                 w.set_step1_done(false);
                 w.set_step2_done(false);
-                w.set_step3_done(false);
-                w.set_artifact_path("".into());
-                w.set_artifact_sha256("".into());
-                w.set_verify_done(false);
-                w.set_iso9660_done(false);
+                clear_build_results(&w);
                 w.set_current_step(1);
                 w.set_status_text("".into());
                 w.set_status_is_error(false);
@@ -557,6 +527,44 @@ fn restore_inject(w: &AppWindow, s: &InjectState) {
 fn restore_verify(w: &AppWindow, s: &VerifyState) {
     w.set_verify_source(s.source.clone().into());
     w.set_sums_url(s.sums_url.clone().into());
+}
+
+fn guided_step_from_ui(step: i32) -> Option<GuidedWorkflowStep> {
+    let index = usize::try_from(step).ok()?.checked_sub(1)?;
+    GuidedWorkflowStep::from_index(index)
+}
+
+fn window_progress(w: &AppWindow) -> GuidedWorkflowProgress {
+    GuidedWorkflowProgress {
+        source_ready: w.get_step1_done(),
+        configure_done: w.get_step2_done(),
+        build_done: w.get_step3_done(),
+        verify_done: w.get_verify_done(),
+        iso9660_done: w.get_iso9660_done(),
+    }
+}
+
+pub(crate) fn clear_optional_checks(w: &AppWindow) {
+    w.set_verify_done(false);
+    w.set_verify_matched(false);
+    w.set_verify_hash_display("".into());
+    w.set_iso9660_done(false);
+    w.set_iso9660_compliant(false);
+    w.set_iso9660_boot_bios(false);
+    w.set_iso9660_boot_uefi(false);
+    w.set_iso9660_volume_id("".into());
+}
+
+pub(crate) fn clear_build_results(w: &AppWindow) {
+    let artifact: String = w.get_artifact_path().into();
+    let verify_source: String = w.get_verify_source().into();
+    if !artifact.is_empty() && verify_source == artifact {
+        w.set_verify_source("".into());
+    }
+    w.set_step3_done(false);
+    w.set_artifact_path("".into());
+    w.set_artifact_sha256("".into());
+    clear_optional_checks(w);
 }
 
 // ── Clipboard helper ──────────────────────────────────────────────────────────

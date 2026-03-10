@@ -204,9 +204,11 @@ export component StepSource inherits Rectangle {
                         width: 90px;
                         height: 42px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
+                        opacity: running ? 0.5 : 1.0;
+                        animate opacity { duration: 150ms; }
                         Text {
                             text: "Browse…";
                             font-size: Sizes.font-sm;
@@ -225,13 +227,13 @@ export component StepSource inherits Rectangle {
                         width: 42px;
                         height: 42px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
                         Text {
                             text: "✕";
                             font-size: 16px;
-                            color: Palette.muted;
+                            color: Palette.text;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -272,8 +274,8 @@ export component StepSource inherits Rectangle {
                     width: 260px;
                     height: 44px;
                     border-radius: Sizes.radius-sm;
-                    background: can-continue ? Palette.accent : Palette.surface;
-                    opacity: can-continue ? 1.0 : 0.45;
+                    background: can-continue ? Palette.accent : Palette.elevated;
+                    opacity: can-continue ? 1.0 : 0.6;
                     animate background { duration: 180ms; }
                     animate opacity  { duration: 180ms; }
 
@@ -284,7 +286,7 @@ export component StepSource inherits Rectangle {
                             text: "Continue: Configure Installer  →";
                             font-size: Sizes.font-sm;
                             font-weight: 600;
-                            color: can-continue ? Palette.on-accent : Palette.muted;
+                            color: can-continue ? Palette.on-accent : Palette.subtle;
                         }
                     }
                     TouchArea {

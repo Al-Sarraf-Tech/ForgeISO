@@ -23,6 +23,10 @@ Both GUIs implement the same 4-step wizard:
 
 Step 4 is intentionally optional. A successful Build means the wizard is complete.
 
+`forgeiso-tui` mirrors the same guided flow for terminal-first operators. The
+desktop and terminal guided interfaces should describe the same steps and
+completion semantics.
+
 ---
 
 ## Prerequisites

@@ -16,13 +16,19 @@ ForgeISO injects fully automated installation configs into Linux ISOs (Ubuntu, L
 
 | Component | State |
 |---|---|
-| CLI (`forgeiso`) | Stable for Ubuntu and Fedora; Mint/Arch are best-effort |
+| CLI (`forgeiso`) | Advanced and automation-focused; stable for Ubuntu and Fedora |
 | GUI (`forge-slint`) | Primary desktop GUI — Slint 1.15 wizard interface |
 | GUI (`forge-gui`) | Alternate desktop GUI — egui/eframe 0.33 |
-| TUI (`forgeiso-tui`) | Basic progress view only |
+| TUI (`forgeiso-tui`) | Guided terminal workflow aligned with the desktop wizard |
 | CI | 7-stage Docker pipeline (Rust, SBOM, GUI, Security, Integration, E2E, Lint) |
 
 > Ubuntu and Fedora unattended installs are CI-tested and reliable. Mint and Arch are best-effort.
+
+## Product Surfaces
+
+- `forgeiso-desktop` is the guided desktop workflow for most users.
+- `forgeiso-tui` mirrors the same guided flow in a keyboard-first terminal UI.
+- `forgeiso` is the explicit interface for scripting, CI, and advanced operators.
 
 ---
 
@@ -108,6 +114,14 @@ Build completes the flow. The final check screen is optional and can be skipped 
 
 > On Intel integrated GPUs, set `MESA_GL_VERSION_OVERRIDE=3.3` if you see rendering issues.
 > On headless or SSH-only systems, `forgeiso-desktop` falls back to `forgeiso-tui` or `forgeiso`.
+
+### TUI (guided terminal workflow)
+```bash
+forgeiso-tui
+```
+
+The TUI uses the same flow as the desktop wizard: **Choose ISO** → **Configure** → **Build** → **Optional Checks**.
+Build is the completion point; optional checks are extra assurance only.
 
 ### Ubuntu (fully unattended)
 ```bash
@@ -342,7 +356,7 @@ forgeiso diff --base original.iso --target custom.iso
 ## scan
 
 ```bash
-forgeiso scan --source custom.iso
+forgeiso scan --artifact custom.iso
 ```
 
 ---

@@ -110,7 +110,7 @@ export component StepCheck inherits Rectangle {
                     width: 148px;
                     height: 32px;
                     border-radius: 16px;
-                    background: Palette.surface;
+                    background: Palette.elevated;
                     border-width: 1px;
                     border-color: Palette.border;
                     Text {
@@ -220,13 +220,13 @@ export component StepCheck inherits Rectangle {
                         width: 140px;
                         height: 36px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
                         Text {
                             text: "📋 Copy SHA-256";
                             font-size: Sizes.font-xs;
-                            color: Palette.muted;
+                            color: Palette.text;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -238,13 +238,13 @@ export component StepCheck inherits Rectangle {
                         width: 120px;
                         height: 36px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
                         Text {
                             text: "📂 Open Folder";
                             font-size: Sizes.font-xs;
-                            color: Palette.muted;
+                            color: Palette.text;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -362,14 +362,14 @@ export component StepCheck inherits Rectangle {
                         width: 170px;
                         height: 38px;
                         border-radius: Sizes.radius-sm;
-                        background: verify-source != "" && !running ? Palette.accent : Palette.surface;
-                        opacity: verify-source != "" && !running ? 1.0 : 0.45;
+                        background: verify-source != "" && !running ? Palette.accent : Palette.elevated;
+                        opacity: verify-source != "" && !running ? 1.0 : 0.6;
                         animate background { duration: 180ms; }
                         Text {
                             text: "🔍 Check File Integrity";
                             font-size: Sizes.font-sm;
                             font-weight: 600;
-                            color: verify-source != "" && !running ? Palette.on-accent : Palette.muted;
+                            color: verify-source != "" && !running ? Palette.on-accent : Palette.subtle;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -382,14 +382,14 @@ export component StepCheck inherits Rectangle {
                         width: 170px;
                         height: 38px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: verify-source != "" && !running ? Palette.accent : Palette.border;
-                        opacity: verify-source != "" && !running ? 1.0 : 0.45;
+                        opacity: verify-source != "" && !running ? 1.0 : 0.6;
                         Text {
                             text: "📋 ISO-9660 Layout";
                             font-size: Sizes.font-sm;
-                            color: verify-source != "" && !running ? Palette.text : Palette.muted;
+                            color: verify-source != "" && !running ? Palette.text : Palette.subtle;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -445,13 +445,13 @@ export component StepCheck inherits Rectangle {
             width: 150px;
             height: 36px;
             border-radius: Sizes.radius-sm;
-            background: Palette.surface;
+            background: Palette.elevated;
             border-width: 1px;
             border-color: Palette.border;
             Text {
                 text: "🗑 Reset All Forms";
                 font-size: Sizes.font-xs;
-                color: Palette.muted;
+                color: Palette.text;
                 vertical-alignment: center;
                 horizontal-alignment: center;
             }

@@ -14,9 +14,7 @@ use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 
 use crate::state::{lines, opt, InjectState, VerifyState};
-use crate::AppWindow;
-use crate::LogEntry;
-use crate::PresetCard;
+use crate::{clear_build_results, AppWindow, LogEntry, PresetCard};
 
 // ── Thread-local app handle ───────────────────────────────────────────────────
 //
@@ -421,11 +419,7 @@ impl ForgeApp {
         }
 
         // Reset build/check state while preserving completed configuration.
-        w.set_step3_done(false);
-        w.set_artifact_path("".into());
-        w.set_artifact_sha256("".into());
-        w.set_verify_done(false);
-        w.set_iso9660_done(false);
+        clear_build_results(&w);
 
         self.start_job("Injecting…");
 
@@ -509,6 +503,8 @@ impl ForgeApp {
         let sums_opt = opt(&sums);
 
         w.set_verify_done(false);
+        w.set_verify_matched(false);
+        w.set_verify_hash_display("".into());
         self.start_job("Verifying checksum…");
 
         let engine = Arc::clone(&self.engine);
@@ -585,6 +581,10 @@ impl ForgeApp {
             return;
         }
         w.set_iso9660_done(false);
+        w.set_iso9660_compliant(false);
+        w.set_iso9660_boot_bios(false);
+        w.set_iso9660_boot_uefi(false);
+        w.set_iso9660_volume_id("".into());
         self.start_job("Validating ISO-9660…");
 
         let engine = Arc::clone(&self.engine);
@@ -761,11 +761,7 @@ pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut ForgeApp) {
         w.set_distro(p.distro.into());
         // Clear stale build state
         w.set_step2_done(false);
-        w.set_step3_done(false);
-        w.set_artifact_path("".into());
-        w.set_artifact_sha256("".into());
-        w.set_verify_done(false);
-        w.set_iso9660_done(false);
+        clear_build_results(w);
 
         if p.strategy == AcquisitionStrategy::DirectUrl {
             if let Ok(Some(url)) = resolve_url(p) {

@@ -9,8 +9,25 @@ use forgeiso_engine::{
     SshConfig, SwapConfig, UserConfig, VmLaunchSpec,
 };
 
+const CLI_AFTER_HELP: &str = "\
+GUIDED INTERFACES:
+    forgeiso-desktop  Desktop wizard for normal users
+    forgeiso-tui      Guided terminal workflow for operators
+
+ADVANCED CLI:
+    forgeiso is the explicit interface for scripting, CI, and power-user workflows.
+    Use `forgeiso inject`, `build`, `scan`, `test`, and `report` directly when you
+    want stable flags, machine-readable output, or full control over the pipeline.
+";
+
 #[derive(Debug, Parser)]
-#[command(name = "forgeiso", version, about = "ForgeISO local bare-metal CLI")]
+#[command(
+    name = "forgeiso",
+    version,
+    about = "Advanced CLI for local Linux ISO automation",
+    arg_required_else_help = true,
+    after_help = CLI_AFTER_HELP
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -31,34 +48,45 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
-    /// Build a customised ISO from a source image and optional project overlay
+    /// Build a customised ISO artifact from a source image and optional overlay
     Build {
-        #[arg(long, conflicts_with = "preset")]
+        #[arg(long, conflicts_with = "preset", help_heading = "Source")]
         source: Option<String>,
         /// Use a built-in source preset instead of --source.
         /// Run 'forgeiso sources list' to see available presets.
-        #[arg(long, conflicts_with = "source")]
+        #[arg(long, conflicts_with = "source", help_heading = "Source")]
         preset: Option<String>,
-        #[arg(long)]
+        /// Load a build definition from a project file instead of individual flags.
+        #[arg(long, help_heading = "Source")]
         project: Option<PathBuf>,
-        #[arg(long)]
+        /// Directory to write the output ISO into
+        #[arg(long, help_heading = "Output")]
         out: PathBuf,
-        #[arg(long)]
+        /// Output ISO filename (e.g., my-server.iso)
+        #[arg(long, help_heading = "Output")]
         name: Option<String>,
-        #[arg(long)]
+        /// Directory of files to overlay into the ISO root filesystem.
+        #[arg(long, help_heading = "Output")]
         overlay: Option<PathBuf>,
-        #[arg(long)]
+        #[arg(long, help_heading = "Output")]
         volume_label: Option<String>,
-        #[arg(long)]
+        /// Build profile: minimal or desktop.
+        #[arg(
+            long,
+            help_heading = "Output",
+            value_name = "PROFILE",
+            value_parser = ["minimal", "desktop"]
+        )]
         profile: Option<String>,
         /// Expected SHA-256 hex digest of the source ISO; operation aborts if it does not match.
-        #[arg(long)]
+        #[arg(long, help_heading = "Output")]
         expected_sha256: Option<String>,
         #[arg(long)]
         json: bool,
     },
     /// Run security scans on a built ISO artifact (trivy, syft, grype, oscap)
     Scan {
+        /// Built ISO artifact to scan.
         #[arg(long)]
         artifact: PathBuf,
         #[arg(long)]
@@ -81,7 +109,8 @@ enum Commands {
     Report {
         #[arg(long)]
         build: PathBuf,
-        #[arg(long)]
+        /// Report format: html or json.
+        #[arg(long, value_name = "FORMAT", value_parser = ["html", "json"])]
         format: String,
     },
     /// Verify ISO integrity against upstream SHA-256 checksums
@@ -93,194 +122,203 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
-    /// Inject an autoinstall/preseed/kickstart configuration into an ISO
+    /// Inject a distro-appropriate unattended install configuration into an ISO
+    #[command(after_long_help = "\
+EXAMPLES:
+    # Minimal Ubuntu server ISO
+    forgeiso inject --source ubuntu-24.04.iso --out /tmp --hostname myserver --username admin --password secret
+
+    # Fedora with Docker and firewall
+    forgeiso inject --preset fedora-server --out /tmp --hostname web01 --username ops --password secret --docker --firewall --allow-port 22 --allow-port 443
+
+    # From preset with SSH keys
+    forgeiso inject --preset ubuntu-server-lts --out /tmp --hostname prod01 --username deploy --ssh-key \"ssh-ed25519 AAAA... user@host\" --sudo-nopasswd
+")]
     Inject {
-        #[arg(long, conflicts_with = "preset")]
+        #[arg(long, conflicts_with = "preset", help_heading = "Source")]
         source: Option<String>,
         /// Use a built-in source preset instead of --source.
         /// Run 'forgeiso sources list' to see available presets.
-        #[arg(long, conflicts_with = "source")]
+        #[arg(long, conflicts_with = "source", help_heading = "Source")]
         preset: Option<String>,
-        #[arg(long)]
+        /// Merge CLI flags into an existing Ubuntu autoinstall YAML.
+        #[arg(long, help_heading = "Source")]
         autoinstall: Option<PathBuf>,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long)]
-        name: Option<String>,
-        #[arg(long)]
-        volume_label: Option<String>,
-        /// Expected SHA-256 hex digest of the source ISO; operation aborts if it does not match.
-        #[arg(long)]
-        expected_sha256: Option<String>,
+        /// Installer path override: ubuntu, fedora, mint, or arch.
+        #[arg(
+            long,
+            value_name = "DISTRO",
+            help_heading = "Source",
+            value_parser = ["ubuntu", "fedora", "mint", "arch"]
+        )]
+        distro: Option<String>,
+        #[arg(long, help_heading = "Source")]
+        json: bool,
 
         // Identity
-        #[arg(long)]
+        #[arg(long, help_heading = "Identity")]
         hostname: Option<String>,
-        #[arg(long)]
+        #[arg(long, help_heading = "Identity")]
         username: Option<String>,
-        #[arg(long)]
+        #[arg(long, help_heading = "Identity")]
         password: Option<String>,
-        #[arg(long)]
+        #[arg(long, help_heading = "Identity")]
         password_file: Option<PathBuf>,
-        #[arg(long)]
+        #[arg(long, help_heading = "Identity")]
         password_stdin: bool,
-        #[arg(long)]
+        #[arg(long, help_heading = "Identity")]
         realname: Option<String>,
 
         // SSH
-        #[arg(long, action = clap::ArgAction::Append)]
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "SSH")]
         ssh_key: Vec<String>,
-        #[arg(long, action = clap::ArgAction::Append)]
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "SSH")]
         ssh_key_file: Vec<PathBuf>,
-        #[arg(long)]
+        #[arg(long, help_heading = "SSH")]
         ssh_password_auth: bool,
-        #[arg(long)]
+        #[arg(long, help_heading = "SSH")]
         no_ssh_password_auth: bool,
-        #[arg(long)]
+        #[arg(long, help_heading = "SSH")]
         ssh_install_server: bool,
-        #[arg(long)]
+        #[arg(long, help_heading = "SSH")]
         no_ssh_install_server: bool,
 
         // Network
-        #[arg(long, action = clap::ArgAction::Append)]
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Network")]
         dns: Vec<String>,
-        #[arg(long, action = clap::ArgAction::Append)]
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Network")]
         ntp_server: Vec<String>,
+        #[arg(long, help_heading = "Network")]
+        static_ip: Option<String>,
+        #[arg(long, help_heading = "Network")]
+        gateway: Option<String>,
+        #[arg(long, help_heading = "Network")]
+        http_proxy: Option<String>,
+        #[arg(long, help_heading = "Network")]
+        https_proxy: Option<String>,
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Network")]
+        no_proxy: Vec<String>,
 
         // System
-        #[arg(long)]
+        #[arg(long, help_heading = "System")]
         timezone: Option<String>,
-        #[arg(long)]
+        #[arg(long, help_heading = "System")]
         locale: Option<String>,
-        #[arg(long)]
+        #[arg(long, help_heading = "System")]
         keyboard_layout: Option<String>,
-
-        // Storage/Apt
-        #[arg(long)]
+        #[arg(long, help_heading = "System")]
         storage_layout: Option<String>,
-        #[arg(long)]
+        /// Override the Ubuntu/Debian package mirror used during install.
+        #[arg(long, help_heading = "System")]
         apt_mirror: Option<String>,
 
-        // Packages
-        #[arg(long, action = clap::ArgAction::Append)]
+        // Packages & Repos
+        /// Extra package to install. Repeatable.
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Packages & Repos")]
         package: Vec<String>,
+        /// Additional APT repository entry. Repeatable.
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Packages & Repos")]
+        apt_repo: Vec<String>,
+        /// Additional DNF repository stanza or URL. Repeatable.
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Packages & Repos")]
+        dnf_repo: Vec<String>,
+        /// Override the primary Fedora/RHEL DNF mirror base URL
+        #[arg(long, help_heading = "Packages & Repos")]
+        dnf_mirror: Option<String>,
+        /// Additional pacman repository mirror line. Repeatable.
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Packages & Repos")]
+        pacman_repo: Vec<String>,
+        /// Override the primary Arch Linux pacman mirror URL
+        #[arg(long, help_heading = "Packages & Repos")]
+        pacman_mirror: Option<String>,
 
-        // Branding
-        #[arg(long)]
-        wallpaper: Option<PathBuf>,
-
-        // Escape hatches
-        #[arg(long, action = clap::ArgAction::Append)]
-        late_command: Vec<String>,
-        #[arg(long)]
-        no_user_interaction: bool,
-
-        // User & access management
-        #[arg(long, action = clap::ArgAction::Append)]
+        // User & Access
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "User & Access")]
         group: Vec<String>,
-        #[arg(long)]
+        #[arg(long, help_heading = "User & Access")]
         shell: Option<String>,
-        #[arg(long)]
+        #[arg(long, help_heading = "User & Access")]
         sudo_nopasswd: bool,
-        #[arg(long, action = clap::ArgAction::Append)]
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "User & Access")]
         sudo_command: Vec<String>,
 
         // Firewall
-        #[arg(long)]
+        #[arg(long, help_heading = "Firewall")]
         firewall: bool,
-        #[arg(long)]
+        /// Firewall default policy, e.g. deny or reject.
+        #[arg(long, help_heading = "Firewall")]
         firewall_policy: Option<String>,
-        #[arg(long, action = clap::ArgAction::Append)]
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Firewall")]
         allow_port: Vec<String>,
-        #[arg(long, action = clap::ArgAction::Append)]
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Firewall")]
         deny_port: Vec<String>,
 
-        // Network extras
-        #[arg(long)]
-        static_ip: Option<String>,
-        #[arg(long)]
-        gateway: Option<String>,
-        #[arg(long)]
-        http_proxy: Option<String>,
-        #[arg(long)]
-        https_proxy: Option<String>,
-        #[arg(long, action = clap::ArgAction::Append)]
-        no_proxy: Vec<String>,
-
         // Services
-        #[arg(long, action = clap::ArgAction::Append)]
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Services")]
         enable_service: Vec<String>,
-        #[arg(long, action = clap::ArgAction::Append)]
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Services")]
         disable_service: Vec<String>,
 
-        // Kernel
-        #[arg(long, action = clap::ArgAction::Append)]
-        sysctl: Vec<String>,
-
-        // Swap
-        #[arg(long)]
-        swap_size: Option<u32>,
-        #[arg(long)]
-        swap_file: Option<String>,
-        #[arg(long)]
-        swappiness: Option<u8>,
-
-        // APT repos (Ubuntu/Debian)
-        #[arg(long, action = clap::ArgAction::Append)]
-        apt_repo: Vec<String>,
-
-        // DNF repos (Fedora/RHEL) — full "[id]\nbaseurl=..." stanza or URL
-        #[arg(long, action = clap::ArgAction::Append)]
-        dnf_repo: Vec<String>,
-        /// Override the primary Fedora/RHEL DNF mirror base URL
-        #[arg(long)]
-        dnf_mirror: Option<String>,
-
-        // Pacman repos (Arch) — "Server = https://..." mirror lines
-        #[arg(long, action = clap::ArgAction::Append)]
-        pacman_repo: Vec<String>,
-        /// Override the primary Arch Linux pacman mirror URL
-        #[arg(long)]
-        pacman_mirror: Option<String>,
-
         // Containers
-        #[arg(long)]
+        #[arg(long, help_heading = "Containers")]
         docker: bool,
-        #[arg(long)]
+        #[arg(long, help_heading = "Containers")]
         podman: bool,
-        #[arg(long, action = clap::ArgAction::Append)]
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Containers")]
         docker_user: Vec<String>,
 
-        // GRUB
-        #[arg(long)]
-        grub_timeout: Option<u32>,
-        #[arg(long, action = clap::ArgAction::Append)]
-        grub_cmdline: Vec<String>,
-        #[arg(long)]
-        grub_default: Option<String>,
-
-        // Encryption
-        #[arg(long)]
+        // Storage & Encryption
+        #[arg(long, help_heading = "Storage & Encryption")]
+        swap_size: Option<u32>,
+        #[arg(long, help_heading = "Storage & Encryption")]
+        swap_file: Option<String>,
+        #[arg(long, help_heading = "Storage & Encryption")]
+        swappiness: Option<u8>,
+        #[arg(long, help_heading = "Storage & Encryption")]
         encrypt: bool,
-        #[arg(long)]
+        #[arg(long, help_heading = "Storage & Encryption")]
         encrypt_passphrase: Option<String>,
-        #[arg(long)]
+        #[arg(long, help_heading = "Storage & Encryption")]
         encrypt_passphrase_file: Option<PathBuf>,
-
-        // Mounts
-        #[arg(long, action = clap::ArgAction::Append)]
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Storage & Encryption")]
         mount: Vec<String>,
 
-        // Run commands
-        #[arg(long, action = clap::ArgAction::Append)]
+        // Boot
+        #[arg(long, help_heading = "Boot")]
+        grub_timeout: Option<u32>,
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Boot")]
+        grub_cmdline: Vec<String>,
+        #[arg(long, help_heading = "Boot")]
+        grub_default: Option<String>,
+
+        // Advanced
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Advanced")]
+        sysctl: Vec<String>,
+        /// Shell command to run AFTER install (in chroot). Repeatable.
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Advanced")]
+        late_command: Vec<String>,
+        /// Shell command to run BEFORE install. Repeatable.
+        #[arg(long, action = clap::ArgAction::Append, help_heading = "Advanced")]
         run_command: Vec<String>,
+        /// Finish without prompting during the target install when supported.
+        #[arg(long, help_heading = "Advanced")]
+        no_user_interaction: bool,
+        /// Wallpaper asset to copy into supported desktop installers.
+        #[arg(long, help_heading = "Advanced")]
+        wallpaper: Option<PathBuf>,
 
-        // Target distro: ubuntu (default), fedora, arch
-        #[arg(long, value_name = "DISTRO")]
-        distro: Option<String>,
-
-        #[arg(long)]
-        json: bool,
+        // Output
+        /// Directory to write the output ISO into
+        #[arg(long, help_heading = "Output")]
+        out: PathBuf,
+        /// Output ISO filename (e.g., my-server.iso)
+        #[arg(long, help_heading = "Output")]
+        name: Option<String>,
+        #[arg(long, help_heading = "Output")]
+        volume_label: Option<String>,
+        /// Expected SHA-256 hex digest of the source ISO; operation aborts if it does not match.
+        #[arg(long, help_heading = "Output")]
+        expected_sha256: Option<String>,
     },
     /// Show which files differ between two ISO images
     Diff {
@@ -1083,5 +1121,66 @@ fn resolve_source_from_preset_or_str(
         Ok((s, None))
     } else {
         anyhow::bail!("--source or --preset is required")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_profile, resolve_source_from_preset_or_str, Cli, Commands};
+    use clap::{CommandFactory, Subcommand};
+
+    fn render_help(mut command: clap::Command) -> String {
+        let mut buffer = Vec::new();
+        command
+            .write_long_help(&mut buffer)
+            .expect("help should render");
+        String::from_utf8(buffer).expect("help should be utf-8")
+    }
+
+    #[test]
+    fn root_help_frames_guided_and_advanced_interfaces() {
+        let help = render_help(Cli::command());
+        assert!(help.contains("forgeiso-desktop"));
+        assert!(help.contains("forgeiso-tui"));
+        assert!(help.contains("Advanced CLI for local Linux ISO automation"));
+    }
+
+    #[test]
+    fn inject_help_mentions_archinstall_and_valid_distros() {
+        let inject = Commands::augment_subcommands(clap::Command::new("forgeiso"))
+            .find_subcommand("inject")
+            .expect("inject subcommand should exist")
+            .clone();
+        let help = render_help(inject);
+        assert!(help.contains("distro-appropriate unattended install configuration"));
+        assert!(help.contains("ubuntu"));
+        assert!(help.contains("fedora"));
+        assert!(help.contains("mint"));
+        assert!(help.contains("arch"));
+    }
+
+    #[test]
+    fn scan_help_uses_artifact_flag() {
+        let scan = Commands::augment_subcommands(clap::Command::new("forgeiso"))
+            .find_subcommand("scan")
+            .expect("scan subcommand should exist")
+            .clone();
+        let help = render_help(scan);
+        assert!(help.contains("--artifact"));
+        assert!(!help.contains("--source"));
+    }
+
+    #[test]
+    fn parse_profile_accepts_supported_profiles() {
+        assert!(parse_profile("minimal").is_ok());
+        assert!(parse_profile("desktop").is_ok());
+        assert!(parse_profile("broken").is_err());
+    }
+
+    #[test]
+    fn resolve_source_requires_source_or_preset() {
+        let err =
+            resolve_source_from_preset_or_str(None, None).expect_err("missing source must fail");
+        assert!(err.to_string().contains("--source or --preset is required"));
     }
 }
