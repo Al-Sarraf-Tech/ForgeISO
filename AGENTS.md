@@ -234,6 +234,21 @@ Engine events flow: `engine.subscribe()` → tokio task →
 Password field (`InjectState::password`) has `#[serde(skip)]` — never
 written to disk.
 
+### configure.slint: live password validation
+
+`StepConfigure` has a computed `property <bool> pw-live-mismatch` that
+evaluates `password != "" && password-confirm != "" && password != password-confirm`.
+This is separate from the Rust-set `in property <bool> passwords-match` (which
+is set by the `configure-continue` callback). The inline error banner and the
+Continue button both react to `pw-live-mismatch` in real-time so the user sees
+the mismatch on every keystroke — no need to click Continue first.
+
+### GUI documentation
+
+See [`docs/runbook-gui.md`](docs/runbook-gui.md) for build instructions,
+launch flags, persistent state locations, GPU/display troubleshooting, and
+packaging steps for both `forge-slint` and `forge-gui`.
+
 ---
 
 ## Adding a New Engine Feature
