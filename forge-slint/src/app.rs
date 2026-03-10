@@ -16,7 +16,7 @@ use tokio::task::JoinHandle;
 use std::collections::HashSet;
 
 use crate::defaults;
-use crate::state::{lines, opt, InjectState, VerifyState};
+use crate::state::{lines, opt, tokens, InjectState, VerifyState};
 use crate::{clear_build_results, AppWindow, LogEntry, PresetCard};
 
 // ── Thread-local app handle ───────────────────────────────────────────────────
@@ -410,8 +410,13 @@ impl ForgeApp {
 
         let username: String = w.get_username().into();
         let docker_enabled = w.get_docker();
-        let changes =
-            defaults::apply_defaults(&defs, &self.edited_fields, &username, docker_enabled);
+        let changes = defaults::apply_defaults(
+            &defs,
+            &self.edited_fields,
+            &distro,
+            &username,
+            docker_enabled,
+        );
 
         for (field, value) in &changes {
             match *field {
@@ -445,6 +450,66 @@ impl ForgeApp {
 
     pub fn clear_defaults_state(&mut self) {
         self.edited_fields.clear();
+    }
+
+    pub fn seed_default_edit_tracking(&mut self, w: &AppWindow) {
+        let distro: String = w.get_distro().into();
+        let preset: String = w.get_selected_preset().into();
+        let defs = defaults::defaults_for(&distro, &preset);
+        let username: String = w.get_username().into();
+        let docker_enabled = w.get_docker();
+
+        let expected =
+            defaults::apply_defaults(&defs, &HashSet::new(), &distro, &username, docker_enabled);
+
+        self.edited_fields.clear();
+
+        for (field, value) in expected {
+            let current = match field {
+                "packages" => w.get_packages().to_string(),
+                "user_groups" => w.get_user_groups().to_string(),
+                "user_shell" => w.get_user_shell().to_string(),
+                "enable_services" => w.get_enable_services().to_string(),
+                "disable_services" => w.get_disable_services().to_string(),
+                "firewall_policy" => w.get_firewall_policy().to_string(),
+                "allow_ports" => w.get_allow_ports().to_string(),
+                "docker_users" => w.get_docker_users().to_string(),
+                _ => continue,
+            };
+
+            if current.trim() != value.trim() {
+                self.edited_fields.insert(field.to_string());
+            }
+        }
+    }
+
+    fn sync_auto_managed_access(&self, w: &AppWindow) {
+        let username: String = w.get_username().into();
+        let distro: String = w.get_distro().into();
+
+        if !self.edited_fields.contains("user_groups") {
+            let groups = defaults::auto_user_groups(&distro, &username);
+            w.set_user_groups(groups.into());
+        }
+
+        if !self.edited_fields.contains("docker_users") {
+            if w.get_docker() && !username.is_empty() {
+                w.set_docker_users(username.into());
+            } else {
+                w.set_docker_users("".into());
+            }
+        }
+    }
+
+    /// Auto-manage user groups and Docker users when the username changes.
+    /// Only modifies fields that the user hasn't manually edited.
+    pub fn on_username_changed(&mut self, w: &AppWindow) {
+        self.sync_auto_managed_access(w);
+    }
+
+    /// Recompute Docker user defaults when Docker is toggled on or off.
+    pub fn on_docker_changed(&mut self, w: &AppWindow) {
+        self.sync_auto_managed_access(w);
     }
 
     // ── spawn_inject ──────────────────────────────────────────────────────────
@@ -856,14 +921,14 @@ pub fn build_inject_config(s: &InjectState) -> InjectConfig {
     };
 
     let network = NetworkConfig {
-        dns_servers: lines(&s.dns_servers),
-        ntp_servers: lines(&s.ntp_servers),
+        dns_servers: tokens(&s.dns_servers),
+        ntp_servers: tokens(&s.ntp_servers),
     };
 
     let proxy = ProxyConfig {
         http_proxy: opt(&s.http_proxy),
         https_proxy: opt(&s.https_proxy),
-        no_proxy: lines(&s.no_proxy),
+        no_proxy: tokens(&s.no_proxy),
     };
 
     let user = UserConfig {
@@ -876,8 +941,8 @@ pub fn build_inject_config(s: &InjectState) -> InjectConfig {
     let firewall = FirewallConfig {
         enabled: s.firewall_enabled,
         default_policy: opt(&s.firewall_policy),
-        allow_ports: lines(&s.allow_ports),
-        deny_ports: lines(&s.deny_ports),
+        allow_ports: tokens(&s.allow_ports),
+        deny_ports: tokens(&s.deny_ports),
     };
 
     let swap = s
@@ -898,7 +963,7 @@ pub fn build_inject_config(s: &InjectState) -> InjectConfig {
 
     let grub = GrubConfig {
         timeout: s.grub_timeout.parse::<u32>().ok(),
-        cmdline_extra: lines(&s.grub_cmdline),
+        cmdline_extra: tokens(&s.grub_cmdline),
         default_entry: opt(&s.grub_default),
     };
 
@@ -942,7 +1007,7 @@ pub fn build_inject_config(s: &InjectState) -> InjectConfig {
         keyboard_layout: opt(&s.keyboard_layout),
         storage_layout: opt(&s.storage_layout),
         apt_mirror: opt(&s.apt_mirror),
-        extra_packages: lines(&s.packages),
+        extra_packages: tokens(&s.packages),
         wallpaper: opt(&s.wallpaper_path).map(PathBuf::from),
         extra_late_commands: lines(&s.late_commands),
         no_user_interaction: s.no_user_interaction,
@@ -992,7 +1057,8 @@ pub fn build_inject_config(s: &InjectState) -> InjectConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::preset_display_name;
+    use super::{build_inject_config, preset_display_name};
+    use crate::state::InjectState;
 
     #[test]
     fn preset_display_name_uses_engine_metadata() {
@@ -1006,5 +1072,34 @@ mod tests {
     #[test]
     fn preset_display_name_rejects_unknown_ids() {
         assert_eq!(preset_display_name("unknown-preset"), None);
+    }
+
+    #[test]
+    fn build_inject_config_splits_flexible_token_fields() {
+        let state = InjectState {
+            dns_servers: "1.1.1.1, 8.8.8.8".into(),
+            ntp_servers: "time1.example.com\ntime2.example.com".into(),
+            no_proxy: "localhost,127.0.0.1 internal.example.com".into(),
+            packages: "curl git\nhtop".into(),
+            allow_ports: "22 80/tcp".into(),
+            deny_ports: "23,25".into(),
+            grub_cmdline: "quiet splash".into(),
+            ..InjectState::default()
+        };
+
+        let cfg = build_inject_config(&state);
+        assert_eq!(cfg.network.dns_servers, vec!["1.1.1.1", "8.8.8.8"]);
+        assert_eq!(
+            cfg.network.ntp_servers,
+            vec!["time1.example.com", "time2.example.com"]
+        );
+        assert_eq!(
+            cfg.proxy.no_proxy,
+            vec!["localhost", "127.0.0.1", "internal.example.com"]
+        );
+        assert_eq!(cfg.extra_packages, vec!["curl", "git", "htop"]);
+        assert_eq!(cfg.firewall.allow_ports, vec!["22", "80/tcp"]);
+        assert_eq!(cfg.firewall.deny_ports, vec!["23", "25"]);
+        assert_eq!(cfg.grub.cmdline_extra, vec!["quiet", "splash"]);
     }
 }

@@ -16,7 +16,7 @@ use app::{
     handle_preset_clicked, make_preset_cards, preset_display_name, with_app, with_app_result,
     ForgeApp, APP,
 };
-use forgeiso_engine::{ForgeIsoEngine, GuidedWorkflowProgress, GuidedWorkflowStep};
+use forgeiso_engine::ForgeIsoEngine;
 use persist::{load_state, save_state};
 use state::{InjectState, PersistedState, VerifyState};
 
@@ -61,6 +61,7 @@ fn main() -> anyhow::Result<()> {
         Arc::clone(&rt),
         Arc::clone(&engine),
     )));
+    app_rc.borrow_mut().seed_default_edit_tracking(&win);
     APP.with(|cell| {
         *cell.borrow_mut() = Some(Rc::clone(&app_rc));
     });
@@ -91,7 +92,7 @@ fn main() -> anyhow::Result<()> {
         });
     }
 
-    // step-bar-clicked  — gated: forward only to completed/current steps
+    // step-bar-clicked  — free navigation when not building; locked during builds
     {
         let weak = win.as_weak();
         win.on_step_bar_clicked(move |step| {
@@ -99,14 +100,18 @@ fn main() -> anyhow::Result<()> {
                 if w.get_job_running() {
                     return;
                 }
-                let Some(current) = guided_step_from_ui(w.get_current_step()) else {
-                    return;
+                // Allow backward navigation freely. Forward navigation
+                // requires that prerequisite steps are complete.
+                let target = step;
+                let allowed = match target {
+                    1 => true,
+                    2 => w.get_step1_done(),
+                    3 => w.get_step2_done(),
+                    4 => w.get_step3_done(),
+                    _ => false,
                 };
-                let Some(target) = guided_step_from_ui(step) else {
-                    return;
-                };
-                if window_progress(&w).can_open_step(current, target) {
-                    w.set_current_step(target.one_based());
+                if allowed {
+                    w.set_current_step(target);
                 }
             }
         });
@@ -309,14 +314,45 @@ fn main() -> anyhow::Result<()> {
         with_app(|a| a.mark_edited(&field));
     });
 
+    // username-changed  — auto-manage groups and Docker user
+    {
+        let weak = win.as_weak();
+        win.on_username_changed(move |_u| {
+            if let Some(w) = weak.upgrade() {
+                with_app(|a| a.on_username_changed(&w));
+            }
+        });
+    }
+
+    // docker-changed  — auto-manage Docker user membership when appropriate
+    {
+        let weak = win.as_weak();
+        win.on_docker_changed(move || {
+            if let Some(w) = weak.upgrade() {
+                with_app(|a| a.on_docker_changed(&w));
+            }
+        });
+    }
+
     // build-back  — navigate to step 2
     {
         let weak = win.as_weak();
         win.on_build_back(move || {
             if let Some(w) = weak.upgrade() {
                 if !w.get_job_running() {
-                    clear_build_results(&w);
                     w.set_current_step(2);
+                }
+            }
+        });
+    }
+
+    // build-back-to-source  — navigate to step 1
+    {
+        let weak = win.as_weak();
+        win.on_build_back_to_source(move || {
+            if let Some(w) = weak.upgrade() {
+                if !w.get_job_running() {
+                    w.set_current_step(1);
                 }
             }
         });
@@ -585,21 +621,6 @@ fn restore_inject(w: &AppWindow, s: &InjectState) {
 fn restore_verify(w: &AppWindow, s: &VerifyState) {
     w.set_verify_source(s.source.clone().into());
     w.set_sums_url(s.sums_url.clone().into());
-}
-
-fn guided_step_from_ui(step: i32) -> Option<GuidedWorkflowStep> {
-    let index = usize::try_from(step).ok()?.checked_sub(1)?;
-    GuidedWorkflowStep::from_index(index)
-}
-
-fn window_progress(w: &AppWindow) -> GuidedWorkflowProgress {
-    GuidedWorkflowProgress {
-        source_ready: w.get_step1_done(),
-        configure_done: w.get_step2_done(),
-        build_done: w.get_step3_done(),
-        verify_done: w.get_verify_done(),
-        iso9660_done: w.get_iso9660_done(),
-    }
 }
 
 pub(crate) fn clear_optional_checks(w: &AppWindow) {

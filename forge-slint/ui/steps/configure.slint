@@ -97,7 +97,7 @@ component SectionHeader inherits Rectangle {
                 text: title;
                 font-size: 12px;
                 font-weight: 700;
-                color: Palette.muted;
+                color: Palette.text-secondary;
                 vertical-alignment: center;
             }
         }
@@ -241,6 +241,8 @@ export component StepConfigure inherits Rectangle {
     callback apply-defaults();
     callback reset-defaults();
     callback field-edited(string);
+    callback username-changed(string);
+    callback docker-changed();
 
     in property <bool>    running: false;
     in property <bool>    can-continue: false;
@@ -428,7 +430,7 @@ export component StepConfigure inherits Rectangle {
                         VerticalLayout {
                             spacing: 4px;
                             FieldLabel { text: "USERNAME"; }
-                            FieldInput { value <=> username; hint: "admin"; enabled: !running; }
+                            FieldInput { value <=> username; hint: "admin"; enabled: !running; changed(t) => { username-changed(t); } }
                         }
                         VerticalLayout {
                             spacing: 4px;
@@ -477,7 +479,7 @@ export component StepConfigure inherits Rectangle {
                         + (user-groups != "" ? "  ·  groups: " + user-groups : "")
                         + (user-shell != "" ? "  ·  shell: " + user-shell : "");
                     font-size: Sizes.font-xs;
-                    color: Palette.subtle;
+                    color: Palette.text-secondary;
                     overflow: elide;
                 }
                 if s-access-ssh-open: VerticalLayout {
@@ -498,7 +500,7 @@ export component StepConfigure inherits Rectangle {
                         spacing: 16px;
                         VerticalLayout {
                             spacing: 4px;
-                            FieldLabel { text: "EXTRA GROUPS  (one per line)"; }
+                            FieldLabel { text: "GROUPS  (one per line)"; }
                             FieldTextarea { value <=> user-groups; hint: "docker\nsudo"; enabled: !running; changed(_t) => { field-edited("user_groups"); } }
                         }
                         VerticalLayout {
@@ -506,6 +508,11 @@ export component StepConfigure inherits Rectangle {
                             FieldLabel { text: "LOGIN SHELL"; }
                             FieldInput { value <=> user-shell; hint: "/bin/bash"; enabled: !running; changed(_t) => { field-edited("user_shell"); } }
                         }
+                    }
+                    FieldHelp {
+                        text: "ForgeISO fills in your private group plus "
+                            + (distro == "fedora" || distro == "arch" ? "wheel" : "sudo")
+                            + " for admin access once you choose a username. Edit the list only if you need something custom.";
                     }
                     CheckBox { text: "Grant passwordless sudo (NOPASSWD:ALL)"; checked <=> sudo-nopasswd; enabled: !running; }
                 }
@@ -521,7 +528,7 @@ export component StepConfigure inherits Rectangle {
                         + (dns-servers != "" ? "  ·  DNS: " + dns-servers : "")
                         + (http-proxy != "" ? "  ·  proxy: on" : "");
                     font-size: Sizes.font-xs;
-                    color: Palette.subtle;
+                    color: Palette.text-secondary;
                     overflow: elide;
                 }
                 if s-network-open: VerticalLayout {
@@ -622,7 +629,7 @@ export component StepConfigure inherits Rectangle {
                 if !s-packages-open && packages != "": Text {
                     text: packages;
                     font-size: Sizes.font-xs;
-                    color: Palette.subtle;
+                    color: Palette.text-secondary;
                     overflow: elide;
                 }
                 if s-packages-open: VerticalLayout {
@@ -645,7 +652,7 @@ export component StepConfigure inherits Rectangle {
                         + (firewall-policy != "" ? "  ·  policy: " + firewall-policy : "")
                         + (allow-ports != "" ? "  ·  allow: " + allow-ports : "");
                     font-size: Sizes.font-xs;
-                    color: Palette.subtle;
+                    color: Palette.text-secondary;
                     overflow: elide;
                 }
                 if s-firewall-open: VerticalLayout {
@@ -684,7 +691,7 @@ export component StepConfigure inherits Rectangle {
                     text: (docker && podman ? "Docker + Podman" : docker ? "Docker" : podman ? "Podman" : "")
                         + (enable-services != "" ? (docker || podman ? "  ·  " : "") + "enable: " + enable-services : "");
                     font-size: Sizes.font-xs;
-                    color: Palette.subtle;
+                    color: Palette.text-secondary;
                     overflow: elide;
                 }
                 if s-services-containers-open: VerticalLayout {
@@ -706,13 +713,21 @@ export component StepConfigure inherits Rectangle {
                     // Containers
                     HorizontalLayout {
                         spacing: 24px;
-                        CheckBox { text: "Install Docker"; checked <=> docker; enabled: !running; }
+                        CheckBox {
+                            text: "Install Docker";
+                            checked <=> docker;
+                            enabled: !running;
+                            toggled => { docker-changed(); }
+                        }
                         CheckBox { text: "Install Podman"; checked <=> podman; enabled: !running; }
                     }
                     if docker: VerticalLayout {
                         spacing: 4px;
                         FieldLabel { text: "ADD USERS TO DOCKER GROUP  (one per line)"; }
                         FieldInput { value <=> docker-users; hint: "admin"; enabled: !running; changed(_t) => { field-edited("docker_users"); } }
+                        FieldHelp {
+                            text: "When Docker is enabled, ForgeISO pre-fills this with the primary username unless you override it.";
+                        }
                     }
                 }
 
@@ -727,7 +742,7 @@ export component StepConfigure inherits Rectangle {
                         + (swap-size-mb != "" ? (storage-layout != "" ? "  ·  " : "") + "swap: " + swap-size-mb + " MB" : "")
                         + (encrypt ? "  ·  LUKS: on" : "");
                     font-size: Sizes.font-xs;
-                    color: Palette.subtle;
+                    color: Palette.text-secondary;
                     overflow: elide;
                 }
                 if s-storage-boot-open: VerticalLayout {

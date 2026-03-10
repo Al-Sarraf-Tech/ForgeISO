@@ -141,8 +141,11 @@ export component AppWindow inherits Window {
     callback apply-defaults();
     callback reset-defaults();
     callback field-edited(string);
+    callback username-changed(string);
+    callback docker-changed();
     // Build
     callback build-back();
+    callback build-back-to-source();
     callback build-run();
     callback build-view-results();
     // Optional checks
@@ -182,6 +185,7 @@ export component AppWindow inherits Window {
             step2-done: root.step2-done;
             step3-done: root.step3-done;
             step4-done: root.verify-done || root.iso9660-done;
+            job-running: root.job-running;
             step-clicked(s) => { root.step-bar-clicked(s); }
         }
 
@@ -268,26 +272,52 @@ export component AppWindow inherits Window {
                 apply-defaults => { root.apply-defaults(); }
                 reset-defaults => { root.reset-defaults(); }
                 field-edited(name) => { root.field-edited(name); }
+                username-changed(u) => { root.username-changed(u); }
+                docker-changed => { root.docker-changed(); }
             }
 
             if current-step == 3: StepBuild {
                 distro-display: root.distro-display;
+                admin-group: root.distro == "fedora" || root.distro == "arch" ? "wheel" : "sudo";
                 source: root.source-path;
+                expected-sha256: root.expected-sha256;
                 hostname: root.hostname;
                 username: root.username;
+                realname: root.realname;
                 password-set: root.password != "";
+                user-groups: root.user-groups;
+                user-shell: root.user-shell;
+                sudo-nopasswd: root.sudo-nopasswd;
+                ssh-password-auth: root.ssh-password-auth;
+                ssh-keys: root.ssh-keys;
                 timezone: root.timezone;
+                locale: root.locale;
+                keyboard-layout: root.keyboard-layout;
+                static-ip: root.static-ip;
+                gateway: root.gateway;
+                dns-servers: root.dns-servers;
+                ntp-servers: root.ntp-servers;
+                firewall-policy: root.firewall-policy;
+                allow-ports: root.allow-ports;
+                deny-ports: root.deny-ports;
                 output-dir: root.output-dir;
                 out-name: root.out-name;
                 output-label: root.output-label;
                 unattended: root.no-user-interaction;
                 ssh-server: root.ssh-install-server;
                 packages: root.packages;
+                extra-repos: root.apt-repos != "" ? root.apt-repos : root.dnf-repos;
+                enable-services: root.enable-services;
+                disable-services: root.disable-services;
                 firewall-on: root.firewall-enabled;
                 docker-on: root.docker;
                 podman-on: root.podman;
+                docker-users: root.docker-users;
                 encrypt-on: root.encrypt;
                 storage-layout: root.storage-layout;
+                mounts: root.mounts;
+                run-commands: root.run-commands;
+                late-commands: root.late-commands;
                 running: root.job-running;
                 artifact-path: root.artifact-path;
                 artifact-sha256: root.artifact-sha256;
@@ -297,6 +327,7 @@ export component AppWindow inherits Window {
                         : "Optional checks skipped for now")
                     : "";
                 back-clicked => { root.build-back(); }
+                back-to-source => { root.build-back-to-source(); }
                 run-clicked => { root.build-run(); }
                 view-results => { root.build-view-results(); }
                 open-folder => { root.open-folder(); }
