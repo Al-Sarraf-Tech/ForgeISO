@@ -11,7 +11,7 @@
 #   bash scripts/ci/run-parallel.sh c1 c3     # selected stages only
 #
 # Environment:
-#   CI_STAGES=c1,c2,c3,c4,c5,c6   override which stages to run (comma-separated)
+#   CI_STAGES=c1,c2,c3,c4,c5,c6,c7   override which stages to run (comma-separated)
 #   FORGEISO_CI_VERBOSE=1          stream container stdout/stderr to terminal
 
 set -euo pipefail
@@ -28,7 +28,7 @@ fail() { echo -e "${RED}${BOLD}  FAIL${RESET}  $*"; }
 info() { echo -e "${CYAN}▶${RESET} $*"; }
 
 # ── Stage list ────────────────────────────────────────────────────────────────
-STAGES=(c1 c2 c3 c4 c5 c6)
+STAGES=(c1 c2 c3 c4 c5 c6 c7)
 if [[ -n "${CI_STAGES:-}" ]]; then
     IFS=',' read -ra STAGES <<< "${CI_STAGES}"
 fi
@@ -93,6 +93,7 @@ for stage in "${STAGES[@]}"; do
         c4) label="C4 Security (trivy / syft / grype)" ;;
         c5) label="C5 Integration (build + inject smoke)" ;;
         c6) label="C6 E2E Smoke (QEMU boot)" ;;
+        c7) label="C7 Lint (fmt / clippy)" ;;
         *)  label="${stage}" ;;
     esac
 

@@ -110,9 +110,29 @@ docker compose -f docker-compose.ci.yml up --build \
 
 ---
 
+## Parallelism
+
+This host has **18 cores**. Use all of them for compilation and testing:
+
+```bash
+# Local builds
+cargo build --workspace --release -j 18
+cargo test --workspace -j 18
+cargo clippy --workspace --all-targets -j 18 -- -D warnings
+
+# Or set globally in the shell session
+export CARGO_BUILD_JOBS=18
+```
+
+`CARGO_BUILD_JOBS=18` is already set inside every CI container via
+`docker-compose.ci.yml`. Apply the same when running any `cargo` command
+locally so builds are as fast as possible.
+
+---
+
 ## CI Pipeline
 
-Six Docker containers run in parallel. **All six must pass** before a push
+Seven Docker containers run in parallel. **All seven must pass** before a push
 reaches GitHub (enforced by `.git/hooks/pre-push`).
 
 | ID | Label | Fails on |
@@ -123,9 +143,13 @@ reaches GitHub (enforced by `.git/hooks/pre-push`).
 | C4 | Security — trivy / syft / grype | high-severity CVEs |
 | C5 | Integration — xorriso smoke ISO | ISO build or inject failure |
 | C6 | E2E Smoke — QEMU BIOS/UEFI boot | boot test failure (skipped if no `/dev/kvm`) |
+| C7 | Lint — fmt / clippy only (fast fail) | any format or clippy warning |
 
-C1 image: `rust:1.93-bookworm` + system libs for Slint
-(`libxkbcommon-dev libwayland-dev libegl-dev libgl-dev libfontconfig1-dev
+C7 is a dedicated lint gate that fails fast without waiting for test
+compilation — giving immediate signal on style and warning regressions.
+
+C1 and C7 share the same Dockerfile base (`rust:1.93-bookworm` + Slint system
+libs: `libxkbcommon-dev libwayland-dev libegl-dev libgl-dev libfontconfig1-dev
 libdbus-1-dev libx11-dev libxcb-shape0-dev libxcb-xfixes0-dev`).
 
 ---

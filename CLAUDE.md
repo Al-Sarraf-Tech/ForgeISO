@@ -5,14 +5,24 @@ Read that file first. Everything below is Claude Code-specific operational guida
 
 ---
 
+## Parallelism
+
+This host has 18 cores. Always use them:
+
+```bash
+export CARGO_BUILD_JOBS=18
+```
+
+Or pass `-j 18` to any `cargo` invocation.
+
 ## Mandatory CI Gate
 
 Before committing or pushing, the following must be clean:
 
 ```bash
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo clippy --workspace --all-targets -j 18 -- -D warnings
+cargo test --workspace -j 18
 cargo deny check
 ```
 

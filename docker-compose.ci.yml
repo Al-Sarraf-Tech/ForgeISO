@@ -26,6 +26,7 @@ services:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
       - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=18
 
   c2:
     build:
@@ -40,6 +41,7 @@ services:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
       - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=18
 
   c3:
     build:
@@ -55,6 +57,7 @@ services:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
       - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=18
 
   c4:
     build:
@@ -79,6 +82,7 @@ services:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
       - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=18
 
   c6:
     build:
@@ -93,6 +97,22 @@ services:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
       - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=18
+
+  c7:
+    build:
+      context: .
+      dockerfile: containers/C7.lint.Dockerfile
+    command: ["bash", "-c", "scripts/ci/c7-lint.sh"]
+    volumes:
+      - .:/workspace
+      - c7-cargo-target:/ci-target
+      - c7-cargo-home:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=18
 
 # ── Ephemeral volumes ─────────────────────────────────────────────────────────
 # Removed on: docker compose -f docker-compose.ci.yml down -v --remove-orphans
@@ -108,3 +128,5 @@ volumes:
   c5-cargo-home:
   c6-cargo-target:
   c6-cargo-home:
+  c7-cargo-target:
+  c7-cargo-home:

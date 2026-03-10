@@ -433,6 +433,7 @@ Six ephemeral Docker containers run in parallel on every push.
 | C4 Security | `trivy`, `syft`, `grype` against workspace |
 | C5 Integration | Smoke ISO build with xorriso + grub |
 | C6 E2E | QEMU BIOS/UEFI boot test (skipped if no `/dev/kvm`) |
+| C7 Lint | `cargo fmt --check`, `cargo clippy -D warnings` — fast fail, no test compilation |
 
 ---
 
