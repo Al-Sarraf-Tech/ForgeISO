@@ -49,6 +49,7 @@ export component AppWindow inherits Window {
     // ── Source step ─────────────────────────────────────────────────────
     in-out property <string>  source-path;
     in-out property <string>  selected-preset;
+    in-out property <string>  selected-preset-name;
     in-out property <string>  detected-distro;
 
     // ── Configure step ──────────────────────────────────────────────────
@@ -118,6 +119,9 @@ export component AppWindow inherits Window {
     in property <bool>    iso9660-boot-uefi: false;
     in property <string>  iso9660-volume-id;
 
+    // ── Defaults ─────────────────────────────────────────────────────────
+    in property <string>  defaults-summary;
+
     // ── Callbacks ───────────────────────────────────────────────────────
     // Header
     callback cancel-job();
@@ -134,6 +138,9 @@ export component AppWindow inherits Window {
     callback browse-output-dir();
     callback configure-continue();
     callback configure-back();
+    callback apply-defaults();
+    callback reset-defaults();
+    callback field-edited(string);
     // Build
     callback build-back();
     callback build-run();
@@ -198,6 +205,9 @@ export component AppWindow inherits Window {
             if current-step == 2: StepConfigure {
                 source-display: root.source-path;
                 distro: root.distro;
+                selected-preset-name: root.selected-preset-name;
+                distro-display: root.distro-display;
+                defaults-summary: root.defaults-summary;
                 hostname <=> root.hostname;
                 username <=> root.username;
                 password <=> root.password;
@@ -255,6 +265,9 @@ export component AppWindow inherits Window {
                 back-clicked => { root.configure-back(); }
                 distro-changed(d) => { root.distro = d; }
                 clear-source => { root.clear-source(); }
+                apply-defaults => { root.apply-defaults(); }
+                reset-defaults => { root.reset-defaults(); }
+                field-edited(name) => { root.field-edited(name); }
             }
 
             if current-step == 3: StepBuild {

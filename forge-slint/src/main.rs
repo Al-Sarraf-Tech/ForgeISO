@@ -1,6 +1,7 @@
 slint::include_modules!();
 
 mod app;
+mod defaults;
 mod persist;
 mod state;
 mod worker;
@@ -11,7 +12,10 @@ use std::sync::Arc;
 
 use slint::ComponentHandle;
 
-use app::{handle_preset_clicked, make_preset_cards, with_app, with_app_result, ForgeApp, APP};
+use app::{
+    handle_preset_clicked, make_preset_cards, preset_display_name, with_app, with_app_result,
+    ForgeApp, APP,
+};
 use forgeiso_engine::{ForgeIsoEngine, GuidedWorkflowProgress, GuidedWorkflowStep};
 use persist::{load_state, save_state};
 use state::{InjectState, PersistedState, VerifyState};
@@ -128,11 +132,18 @@ fn main() -> anyhow::Result<()> {
                 // thread (inside invoke_from_event_loop in handle_zenity).
                 |w, path| {
                     w.set_source_path(path.clone().into());
+                    w.set_selected_preset("".into());
+                    w.set_selected_preset_name("".into());
+                    w.set_detected_distro("".into());
+                    w.set_defaults_summary("".into());
                     w.set_step1_done(true);
                     w.set_step2_done(false);
                     clear_build_results(&w);
                     // Access ForgeApp via thread-local — no Rc captured.
-                    with_app(|a| a.spawn_detect_iso(path));
+                    with_app(|a| {
+                        a.clear_defaults_state();
+                        a.spawn_detect_iso(path);
+                    });
                 },
             );
         });
@@ -145,10 +156,15 @@ fn main() -> anyhow::Result<()> {
             let t: String = text.into();
             let not_empty = !t.trim().is_empty();
             if let Some(w) = weak.upgrade() {
+                w.set_selected_preset("".into());
+                w.set_selected_preset_name("".into());
+                w.set_detected_distro("".into());
+                w.set_defaults_summary("".into());
                 w.set_step1_done(not_empty);
                 w.set_step2_done(false);
                 clear_build_results(&w);
             }
+            with_app(|a| a.clear_defaults_state());
             if not_empty {
                 with_app(|a| a.spawn_detect_iso(t));
             }
@@ -175,7 +191,9 @@ fn main() -> anyhow::Result<()> {
             if let Some(w) = weak.upgrade() {
                 w.set_source_path("".into());
                 w.set_selected_preset("".into());
+                w.set_selected_preset_name("".into());
                 w.set_detected_distro("".into());
+                w.set_defaults_summary("".into());
                 w.set_step1_done(false);
                 w.set_step2_done(false);
                 clear_build_results(&w);
@@ -194,6 +212,7 @@ fn main() -> anyhow::Result<()> {
                 if let Some(h) = a.sha256_task.take() {
                     h.abort();
                 }
+                a.clear_defaults_state();
                 a.finish_job();
             });
         });
@@ -263,6 +282,32 @@ fn main() -> anyhow::Result<()> {
             }
         });
     }
+
+    // apply-defaults  — apply distro defaults to unedited fields
+    {
+        let weak = win.as_weak();
+        win.on_apply_defaults(move || {
+            if let Some(w) = weak.upgrade() {
+                with_app(|a| a.apply_distro_defaults(&w));
+            }
+        });
+    }
+
+    // reset-defaults  — clear edit tracking and reapply defaults
+    {
+        let weak = win.as_weak();
+        win.on_reset_defaults(move || {
+            if let Some(w) = weak.upgrade() {
+                with_app(|a| a.reset_and_apply_defaults(&w));
+            }
+        });
+    }
+
+    // field-edited  — track which default-managed fields the user has touched
+    win.on_field_edited(move |name| {
+        let field: String = name.into();
+        with_app(|a| a.mark_edited(&field));
+    });
 
     // build-back  — navigate to step 2
     {
@@ -396,11 +441,13 @@ fn main() -> anyhow::Result<()> {
                 if let Some(h) = a.sha256_task.take() {
                     h.abort();
                 }
+                a.edited_fields.clear();
                 a.finish_job();
             });
             if let Some(w) = weak.upgrade() {
                 restore_inject(&w, &InjectState::default());
                 restore_verify(&w, &VerifyState::default());
+                w.set_defaults_summary("".into());
                 w.set_step1_done(false);
                 w.set_step2_done(false);
                 clear_build_results(&w);
@@ -466,6 +513,11 @@ fn main() -> anyhow::Result<()> {
 fn restore_inject(w: &AppWindow, s: &InjectState) {
     w.set_source_path(s.source.clone().into());
     w.set_selected_preset(s.source_preset.clone().into());
+    w.set_selected_preset_name(
+        preset_display_name(&s.source_preset)
+            .unwrap_or_default()
+            .into(),
+    );
     w.set_output_dir(s.output_dir.clone().into());
     w.set_out_name(s.out_name.clone().into());
     w.set_output_label(s.output_label.clone().into());
@@ -518,6 +570,12 @@ fn restore_inject(w: &AppWindow, s: &InjectState) {
     w.set_sysctl_pairs(s.sysctl_pairs.clone().into());
     w.set_no_user_interaction(s.no_user_interaction);
     w.set_expected_sha256(s.expected_sha256.clone().into());
+    let defaults_summary = if s.source_preset.is_empty() {
+        String::new()
+    } else {
+        defaults::summary_for(&defaults::defaults_for(&s.distro, &s.source_preset))
+    };
+    w.set_defaults_summary(defaults_summary.into());
 
     // Mark step 1 done if source path was restored.
     w.set_step1_done(!s.source.is_empty());

@@ -136,6 +136,8 @@ export component StepConfigure inherits Rectangle {
     // Source row (read-only display + distro picker)
     in property <string>  source-display;
     in property <string>  distro;
+    in property <string>  selected-preset-name;
+    in property <string>  distro-display;
     callback distro-changed(string);
     callback clear-source();
 
@@ -234,6 +236,12 @@ export component StepConfigure inherits Rectangle {
     in-out property <bool> s-storage-boot-open: false;
     in-out property <bool> s-output-open: true;
 
+    // Defaults
+    in property <string>  defaults-summary;
+    callback apply-defaults();
+    callback reset-defaults();
+    callback field-edited(string);
+
     in property <bool>    running: false;
     in property <bool>    can-continue: false;
     callback browse-output-dir();
@@ -292,27 +300,112 @@ export component StepConfigure inherits Rectangle {
 
                 // Source display
                 Rectangle {
-                    height: 44px;
+                    height: selected-preset-name != "" ? 62px : 44px;
                     border-radius: Sizes.radius-sm;
                     background: rgba(47, 129, 247, 0.08);
                     border-width: 1px;
                     border-color: rgba(47, 129, 247, 0.3);
-                    HorizontalLayout {
+                    VerticalLayout {
                         padding-left: 14px;
                         padding-right: 14px;
-                        spacing: 8px;
+                        padding-top: 10px;
+                        padding-bottom: 10px;
+                        spacing: 6px;
                         alignment: start;
-                        Text {
-                            text: "📀";
-                            font-size: 16px;
-                            vertical-alignment: center;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            Text {
+                                text: "📀";
+                                font-size: 16px;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                text: source-display;
+                                font-size: Sizes.font-sm;
+                                color: Palette.text;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
                         }
-                        Text {
-                            text: source-display;
-                            font-size: Sizes.font-sm;
-                            color: Palette.text;
-                            vertical-alignment: center;
+                        if selected-preset-name != "": Text {
+                            text: "Preset: " + selected-preset-name + "  ·  " + distro-display;
+                            font-size: Sizes.font-xs;
+                            color: Palette.muted;
                             overflow: elide;
+                        }
+                    }
+                }
+
+                // ── Defaults banner ──────────────────────────────────────
+                if defaults-summary != "": Rectangle {
+                    height: 44px;
+                    border-radius: Sizes.radius-sm;
+                    background: rgba(63, 185, 80, 0.06);
+                    border-width: 1px;
+                    border-color: rgba(63, 185, 80, 0.25);
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 8px;
+                        spacing: 10px;
+                        alignment: space-between;
+                        HorizontalLayout {
+                            spacing: 6px;
+                            alignment: start;
+                            Text {
+                                text: "⚙";
+                                font-size: 14px;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                text: "Defaults: " + defaults-summary;
+                                font-size: Sizes.font-xs;
+                                color: Palette.muted;
+                                vertical-alignment: center;
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            alignment: end;
+                            Rectangle {
+                                width: 116px;
+                                height: 28px;
+                                border-radius: Sizes.radius-sm;
+                                background: Palette.elevated;
+                                border-width: 1px;
+                                border-color: Palette.border;
+                                Text {
+                                    text: "Apply Defaults";
+                                    font-size: Sizes.font-xs;
+                                    font-weight: 600;
+                                    color: Palette.text;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: center;
+                                }
+                                TouchArea {
+                                    enabled: !running;
+                                    clicked => { apply-defaults(); }
+                                }
+                            }
+                            Rectangle {
+                                width: 72px;
+                                height: 28px;
+                                border-radius: Sizes.radius-sm;
+                                background: Palette.elevated;
+                                border-width: 1px;
+                                border-color: Palette.border;
+                                Text {
+                                    text: "Reset";
+                                    font-size: Sizes.font-xs;
+                                    color: Palette.muted;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: center;
+                                }
+                                TouchArea {
+                                    enabled: !running;
+                                    clicked => { reset-defaults(); }
+                                }
+                            }
                         }
                     }
                 }
@@ -379,6 +472,14 @@ export component StepConfigure inherits Rectangle {
                     open: s-access-ssh-open;
                     toggle => { s-access-ssh-open = !s-access-ssh-open; }
                 }
+                if !s-access-ssh-open && (ssh-install-server || user-groups != "" || user-shell != ""): Text {
+                    text: (ssh-install-server ? "SSH: on" : "SSH: off")
+                        + (user-groups != "" ? "  ·  groups: " + user-groups : "")
+                        + (user-shell != "" ? "  ·  shell: " + user-shell : "");
+                    font-size: Sizes.font-xs;
+                    color: Palette.subtle;
+                    overflow: elide;
+                }
                 if s-access-ssh-open: VerticalLayout {
                     spacing: 10px;
                     // SSH
@@ -398,12 +499,12 @@ export component StepConfigure inherits Rectangle {
                         VerticalLayout {
                             spacing: 4px;
                             FieldLabel { text: "EXTRA GROUPS  (one per line)"; }
-                            FieldTextarea { value <=> user-groups; hint: "docker\nsudo"; enabled: !running; }
+                            FieldTextarea { value <=> user-groups; hint: "docker\nsudo"; enabled: !running; changed(_t) => { field-edited("user_groups"); } }
                         }
                         VerticalLayout {
                             spacing: 4px;
                             FieldLabel { text: "LOGIN SHELL"; }
-                            FieldInput { value <=> user-shell; hint: "/bin/bash"; enabled: !running; }
+                            FieldInput { value <=> user-shell; hint: "/bin/bash"; enabled: !running; changed(_t) => { field-edited("user_shell"); } }
                         }
                     }
                     CheckBox { text: "Grant passwordless sudo (NOPASSWD:ALL)"; checked <=> sudo-nopasswd; enabled: !running; }
@@ -414,6 +515,14 @@ export component StepConfigure inherits Rectangle {
                     title: "Network";
                     open: s-network-open;
                     toggle => { s-network-open = !s-network-open; }
+                }
+                if !s-network-open && (dns-servers != "" || static-ip != "" || http-proxy != ""): Text {
+                    text: (static-ip != "" ? "IP: " + static-ip : "DHCP")
+                        + (dns-servers != "" ? "  ·  DNS: " + dns-servers : "")
+                        + (http-proxy != "" ? "  ·  proxy: on" : "");
+                    font-size: Sizes.font-xs;
+                    color: Palette.subtle;
+                    overflow: elide;
                 }
                 if s-network-open: VerticalLayout {
                     spacing: 10px;
@@ -510,10 +619,16 @@ export component StepConfigure inherits Rectangle {
                     open: s-packages-open;
                     toggle => { s-packages-open = !s-packages-open; }
                 }
+                if !s-packages-open && packages != "": Text {
+                    text: packages;
+                    font-size: Sizes.font-xs;
+                    color: Palette.subtle;
+                    overflow: elide;
+                }
                 if s-packages-open: VerticalLayout {
                     spacing: 10px;
                     FieldLabel { text: "PACKAGES  (space-separated)"; }
-                    FieldTextarea { value <=> packages; hint: "curl git vim htop"; enabled: !running; }
+                    FieldTextarea { value <=> packages; hint: "curl git vim htop"; enabled: !running; changed(_t) => { field-edited("packages"); } }
                     FieldHelp { text: "Use a short list of must-have packages. You can add more later in the installed system."; }
                     FieldLabel { text: "EXTRA APT / DNF / PACMAN REPOS  (one per line)"; }
                     FieldTextarea { value <=> apt-repos; hint: "ppa:ondrej/php\ndeb https://…"; enabled: !running; }
@@ -525,6 +640,14 @@ export component StepConfigure inherits Rectangle {
                     open: s-firewall-open;
                     toggle => { s-firewall-open = !s-firewall-open; }
                 }
+                if !s-firewall-open && firewall-enabled: Text {
+                    text: "Firewall: on"
+                        + (firewall-policy != "" ? "  ·  policy: " + firewall-policy : "")
+                        + (allow-ports != "" ? "  ·  allow: " + allow-ports : "");
+                    font-size: Sizes.font-xs;
+                    color: Palette.subtle;
+                    overflow: elide;
+                }
                 if s-firewall-open: VerticalLayout {
                     spacing: 10px;
                     CheckBox { text: "Enable firewall"; checked <=> firewall-enabled; enabled: !running; }
@@ -533,14 +656,14 @@ export component StepConfigure inherits Rectangle {
                         VerticalLayout {
                             spacing: 4px;
                             FieldLabel { text: "DEFAULT POLICY"; }
-                            FieldInput { value <=> firewall-policy; hint: "deny  (or allow / reject)"; enabled: !running; }
+                            FieldInput { value <=> firewall-policy; hint: "deny  (or allow / reject)"; enabled: !running; changed(_t) => { field-edited("firewall_policy"); } }
                         }
                         HorizontalLayout {
                             spacing: 16px;
                             VerticalLayout {
                                 spacing: 4px;
                                 FieldLabel { text: "ALLOWED PORTS  (space-separated)"; }
-                                FieldInput { value <=> allow-ports; hint: "22 80 443"; enabled: !running; }
+                                FieldInput { value <=> allow-ports; hint: "22 80 443"; enabled: !running; changed(_t) => { field-edited("allow_ports"); } }
                             }
                             VerticalLayout {
                                 spacing: 4px;
@@ -557,6 +680,13 @@ export component StepConfigure inherits Rectangle {
                     open: s-services-containers-open;
                     toggle => { s-services-containers-open = !s-services-containers-open; }
                 }
+                if !s-services-containers-open && (docker || podman || enable-services != ""): Text {
+                    text: (docker && podman ? "Docker + Podman" : docker ? "Docker" : podman ? "Podman" : "")
+                        + (enable-services != "" ? (docker || podman ? "  ·  " : "") + "enable: " + enable-services : "");
+                    font-size: Sizes.font-xs;
+                    color: Palette.subtle;
+                    overflow: elide;
+                }
                 if s-services-containers-open: VerticalLayout {
                     spacing: 10px;
                     // Services
@@ -565,12 +695,12 @@ export component StepConfigure inherits Rectangle {
                         VerticalLayout {
                             spacing: 4px;
                             FieldLabel { text: "ENABLE  (one per line)"; }
-                            FieldTextarea { value <=> enable-services; hint: "docker\nnginx"; enabled: !running; }
+                            FieldTextarea { value <=> enable-services; hint: "docker\nnginx"; enabled: !running; changed(_t) => { field-edited("enable_services"); } }
                         }
                         VerticalLayout {
                             spacing: 4px;
                             FieldLabel { text: "DISABLE  (one per line)"; }
-                            FieldTextarea { value <=> disable-services; hint: "snapd"; enabled: !running; }
+                            FieldTextarea { value <=> disable-services; hint: "snapd"; enabled: !running; changed(_t) => { field-edited("disable_services"); } }
                         }
                     }
                     // Containers
@@ -582,7 +712,7 @@ export component StepConfigure inherits Rectangle {
                     if docker: VerticalLayout {
                         spacing: 4px;
                         FieldLabel { text: "ADD USERS TO DOCKER GROUP  (one per line)"; }
-                        FieldInput { value <=> docker-users; hint: "admin"; enabled: !running; }
+                        FieldInput { value <=> docker-users; hint: "admin"; enabled: !running; changed(_t) => { field-edited("docker_users"); } }
                     }
                 }
 
@@ -591,6 +721,14 @@ export component StepConfigure inherits Rectangle {
                     title: "Storage & Boot";
                     open: s-storage-boot-open;
                     toggle => { s-storage-boot-open = !s-storage-boot-open; }
+                }
+                if !s-storage-boot-open && (encrypt || swap-size-mb != "" || storage-layout != ""): Text {
+                    text: (storage-layout != "" ? "layout: " + storage-layout : "")
+                        + (swap-size-mb != "" ? (storage-layout != "" ? "  ·  " : "") + "swap: " + swap-size-mb + " MB" : "")
+                        + (encrypt ? "  ·  LUKS: on" : "");
+                    font-size: Sizes.font-xs;
+                    color: Palette.subtle;
+                    overflow: elide;
                 }
                 if s-storage-boot-open: VerticalLayout {
                     spacing: 10px;
