@@ -220,11 +220,11 @@ The C3 CI container validates `forge-gui`. `forge-slint` is covered by C1
 Release packages are built by `scripts/release/make-packages.sh`:
 
 ```bash
-bash scripts/release/make-packages.sh 0.2.0
+bash scripts/release/make-packages.sh 0.2.1
 ```
 
 This produces RPM, DEB, pacman `.pkg.tar.zst`, tarball, and checksums
-under `dist/release/`. All three GUI binaries are included.
+under `dist/release/`. Both GUI binaries are included when they are built.
 
 ---
 
@@ -244,16 +244,16 @@ npm run build          # Vite + Tauri bundle (Linux)
 
 Requires Node.js 20+ and Rust (for the Tauri backend).
 
-### Key versions (as of v0.2.0)
+### Key versions (as of v0.2.1)
 
 | Package | Version |
 |---|---|
-| `@tauri-apps/api` | ^2.2.0 |
+| `@tauri-apps/api` | 2.10.1 |
 | `react` | ^18.3.1 |
-| `@tauri-apps/cli` | ^2.2.5 |
+| `@tauri-apps/cli` | 2.10.1 |
 | TypeScript | ^5.8.3 |
 | Vite | ^6.3.5 |
-| `tauri` (Rust) | 2.1.1 |
+| `tauri` (Rust) | 2.10.3 |
 
 To check the Rust backend only (no npm required):
 

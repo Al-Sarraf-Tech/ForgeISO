@@ -1,6 +1,6 @@
 # Maintainer: Jamal Al-Sarraf <https://github.com/jalsarraf0>
 pkgname=forgeiso
-pkgver=1.0.1
+pkgver=0.2.1
 pkgrel=1
 pkgdesc="Linux ISO builder and autoinstall injection tool"
 arch=('x86_64')
@@ -21,6 +21,12 @@ package() {
 
   install -Dm755 "bin/forgeiso"     "${pkgdir}/usr/bin/forgeiso"
   install -Dm755 "bin/forgeiso-tui" "${pkgdir}/usr/bin/forgeiso-tui"
+  if [[ -f "bin/forge-slint" ]]; then
+    install -Dm755 "bin/forge-slint" "${pkgdir}/usr/bin/forge-slint"
+  fi
+  if [[ -f "bin/forge-gui" ]]; then
+    install -Dm755 "bin/forge-gui" "${pkgdir}/usr/bin/forge-gui"
+  fi
   install -Dm644 "README.md"        "${pkgdir}/usr/share/doc/${pkgname}/README.md"
 
   if [[ -f "VERSION" ]]; then

@@ -9,14 +9,20 @@ forgeiso_root_dir() {
 forgeiso_release_version() {
   local root_dir="$1"
   local explicit_version="${2:-}"
+  local cargo_version=""
 
   if [[ -n "${explicit_version}" ]]; then
     echo "${explicit_version}"
     return
   fi
 
-  git -C "${root_dir}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || \
-    grep '^version' "${root_dir}/Cargo.toml" | head -1 | cut -d'"' -f2
+  cargo_version="$(grep '^version' "${root_dir}/Cargo.toml" | head -1 | cut -d'"' -f2 || true)"
+  if [[ -n "${cargo_version}" ]]; then
+    echo "${cargo_version}"
+    return
+  fi
+
+  git -C "${root_dir}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//'
 }
 
 forgeiso_bin_dir() {
@@ -77,6 +83,19 @@ Terminal=false
 Categories=System;Utility;Development;
 StartupNotify=true
 DESKTOP
+
+  local icon_src=""
+  for candidate in \
+    "${root_dir}/forge-gui/assets/icon_256.png" \
+    "${root_dir}/gui/src-tauri/icons/icon.png"; do
+    if [[ -f "${candidate}" ]]; then
+      icon_src="${candidate}"
+      break
+    fi
+  done
+  if [[ -n "${icon_src}" ]]; then
+    install -Dm644 "${icon_src}" "${staging}/usr/share/pixmaps/forgeiso.png"
+  fi
 
   install -Dm644 "${root_dir}/README.md" \
     "${staging}/usr/share/doc/forgeiso/README.md"

@@ -365,8 +365,10 @@ impl ForgeApp {
         if output_dir.trim().is_empty() {
             return Err("Output directory is required".to_string());
         }
-        if !std::path::Path::new(output_dir.trim()).exists() {
-            return Err("Output directory does not exist — create it first".to_string());
+        let output_path = std::path::Path::new(output_dir.trim());
+        if !output_path.exists() {
+            std::fs::create_dir_all(output_path)
+                .map_err(|e| format!("Failed to create output directory: {e}"))?;
         }
 
         let password: String = w.get_password().into();

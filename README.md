@@ -20,7 +20,7 @@ ForgeISO injects fully automated installation configs into Linux ISOs (Ubuntu, L
 | GUI (`forge-slint`) | Primary desktop GUI — Slint 1.15 wizard interface |
 | GUI (`forge-gui`) | Alternate desktop GUI — egui/eframe 0.33 |
 | TUI (`forgeiso-tui`) | Basic progress view only |
-| CI | 6-stage Docker pipeline (Rust, SBOM, GUI, Security, Integration, E2E) |
+| CI | 7-stage Docker pipeline (Rust, SBOM, GUI, Security, Integration, E2E, Lint) |
 
 > Ubuntu and Fedora unattended installs are CI-tested and reliable. Mint and Arch are best-effort.
 

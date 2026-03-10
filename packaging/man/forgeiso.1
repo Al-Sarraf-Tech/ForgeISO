@@ -26,9 +26,9 @@ Auto-detects the Ubuntu SHA256SUMS URL from ISO metadata.
 Build a customised ISO from a base source ISO and optional overlay directory.
 .TP
 .B inject \fI\-\-source\fP \fISOURCE\fP \fI\-\-out\fP \fIDIR\fP [\fIOPTIONS\fP]
-Embed a cloud-init autoinstall configuration into an Ubuntu ISO for fully
-unattended installation. Supports 60+ configuration flags covering identity,
-SSH, networking, firewall, storage, encryption, services, containers, and more.
+Embed a distro-appropriate unattended install configuration into an ISO.
+ForgeISO emits cloud-init for Ubuntu, Kickstart for Fedora/RHEL-family,
+preseed.cfg for Linux Mint, and archinstall JSON for Arch Linux.
 .TP
 .B diff \fI\-\-base\fP \fIISO\fP \fI\-\-target\fP \fIISO\fP
 Compare two ISOs and list added, removed, modified, and unchanged files.
@@ -37,7 +37,7 @@ Compare two ISOs and list added, removed, modified, and unchanged files.
 Run security scans (SBOM generation, vulnerability scanning, secrets detection)
 against a built ISO artifact.
 .TP
-.B test \fI\-\-source\fP \fIISO\fP [\fIOPTIONS\fP]
+.B test \fI\-\-iso\fP \fIISO\fP [\fIOPTIONS\fP]
 Run BIOS and UEFI boot smoke tests against an ISO using QEMU.
 .TP
 .B report \fI\-\-build\fP \fIDIR\fP [\fI\-\-format\fP html|json]

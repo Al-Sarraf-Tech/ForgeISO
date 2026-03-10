@@ -11,7 +11,7 @@ from version bump through published GitHub Release with signed packages.
 [ ] 1. Bump version in all locations
 [ ] 2. Update PKGBUILD sha256sum placeholder
 [ ] 3. Commit and push feature branch
-[ ] 4. Open PR — wait for all 6 CI stages to pass
+[ ] 4. Open PR — wait for all 7 CI stages to pass
 [ ] 5. Merge PR via squash
 [ ] 6. Create and push annotated git tag
 [ ] 7. GitHub Actions release job fires — wait for completion
@@ -23,30 +23,34 @@ from version bump through published GitHub Release with signed packages.
 
 ## 1. Bump Version
 
-All version strings live in a single file:
+Release versions are split across the Rust workspace and the legacy Tauri GUI:
 
 ```
-Cargo.toml          [workspace.package] version = "X.Y.Z"
-packaging/PKGBUILD  pkgver=X.Y.Z
+Cargo.toml                  [workspace.package] version = "X.Y.Z"
+gui/package.json            version = "X.Y.Z"
+gui/src-tauri/Cargo.toml    version = "X.Y.Z"
+gui/src-tauri/tauri.conf.json version = "X.Y.Z"
 ```
 
-Use the bump-version script (handles Cargo.toml and PKGBUILD atomically):
+Use the bump-version script for the Rust workspace version:
 
 ```bash
-bash scripts/release/bump-version.sh 0.3.2
+bash scripts/release/bump-version.sh 0.2.1
 ```
 
 The script will:
 1. Update `Cargo.toml` workspace version
-2. Update `packaging/PKGBUILD` pkgver
-3. Run `cargo build --release` to regenerate `Cargo.lock`
+2. Update `packaging/PKGBUILD` when that file is present
+3. Regenerate `Cargo.lock`
 4. Print a summary of changed files
+
+Update the legacy Tauri GUI version files separately when that frontend is part of the release.
 
 Verify binary version after build:
 
 ```bash
 ./target/release/forgeiso --version
-# forgeiso 0.3.2
+# forgeiso 0.2.1
 ```
 
 ---
@@ -61,6 +65,7 @@ Verify binary version after build:
 | C4 | Security | SBOM generation (best-effort) | trivy, grype, gitleaks reports |
 | C5 | Integration | Integration test failures | — |
 | C6 | E2E Smoke | Boot smoke test failures | — |
+| C7 | Lint | fmt / clippy regressions (fast fail) | — |
 
 C2 is the enforcement gate. The advisory database is fetched live in CI.
 Run locally with:
@@ -86,10 +91,10 @@ Build all packages locally before tagging:
 
 ```bash
 # Build release binaries first
-cargo build --release -p forgeiso-cli -p forgeiso-tui
+cargo build --release -p forgeiso-cli -p forgeiso-tui -p forge-slint -p forge-gui
 
 # Build RPM + DEB + pacman + tarball + checksums
-bash scripts/release/make-packages.sh 0.3.2
+bash scripts/release/make-packages.sh 0.2.1
 
 # Verify
 cd dist/release
@@ -101,10 +106,10 @@ Outputs in `dist/release/`:
 
 | File | Format | Distro |
 |---|---|---|
-| `forgeiso-0.3.2-1.x86_64.rpm` | RPM | Fedora / RHEL / openSUSE |
-| `forgeiso_0.3.2-1_amd64.deb` | DEB | Debian / Ubuntu / Mint |
-| `forgeiso-0.3.2-1-x86_64.pkg.tar.zst` | pacman | Arch Linux |
-| `forgeiso-0.3.2-linux-x86_64.tar.gz` | tarball | Any x86-64 Linux |
+| `forgeiso-0.2.1-1.x86_64.rpm` | RPM | Fedora / RHEL / openSUSE |
+| `forgeiso_0.2.1-1_amd64.deb` | DEB | Debian / Ubuntu / Mint |
+| `forgeiso-0.2.1-1-x86_64.pkg.tar.zst` | pacman | Arch Linux |
+| `forgeiso-0.2.1-linux-x86_64.tar.gz` | tarball | Any x86-64 Linux |
 | `checksums.txt` | SHA-256 | — |
 
 ---
@@ -118,15 +123,15 @@ After the PR is merged and local packages verify cleanly:
 git fetch origin main && git reset --hard origin/main
 
 # Create annotated tag
-git tag -a v0.3.2 -m "Release v0.3.2"
+git tag -a v0.2.1 -m "Release v0.2.1"
 
 # Push tag — this triggers the GitHub Actions release job
-git push origin v0.3.2
+git push origin v0.2.1
 ```
 
 The release job will:
 1. Install fpm + syft
-2. Build CLI and TUI binaries
+2. Build CLI, TUI, `forge-slint`, and `forge-gui`
 3. Run `make-packages.sh` (RPM + DEB + pacman + tarball)
 4. Generate `sbom.cdx.json` and `sbom.spdx.json`
 5. Verify checksums
@@ -145,7 +150,7 @@ gh run watch --exit-status
 ### Verify checksums
 
 ```bash
-VERSION=0.3.2
+VERSION=0.2.1
 gh release download v${VERSION} -D /tmp/forgeiso-verify-${VERSION}
 cd /tmp/forgeiso-verify-${VERSION}
 sha256sum -c checksums.txt
@@ -176,7 +181,7 @@ forgeiso doctor
 After the tarball is published, update the Arch Linux PKGBUILD with the real checksum:
 
 ```bash
-VERSION=0.3.2
+VERSION=0.2.1
 TARBALL="forgeiso-${VERSION}-linux-x86_64.tar.gz"
 
 # Get checksum from the published checksums.txt
