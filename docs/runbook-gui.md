@@ -1,0 +1,277 @@
+# GUI Runbook — forge-slint and forge-gui
+
+This document covers building, running, packaging, and troubleshooting both
+desktop GUI frontends for ForgeISO.
+
+---
+
+## Overview
+
+ForgeISO ships two desktop GUIs that wrap the same `forgeiso-engine` crate:
+
+| Binary | Crate | Toolkit | Status |
+|---|---|---|---|
+| `forge-slint` | `forge-slint/` | Slint 1.15 (declarative DSL) | **Primary** |
+| `forge-gui` | `forge-gui/` | egui/eframe 0.33 | Alternate |
+
+Both GUIs implement the same 4-step wizard:
+
+1. **Choose ISO** — select a distro preset or paste a path/URL
+2. **Configure** — set hostname, user, network, firewall, packages, etc.
+3. **Build** — review settings and start the inject + ISO repack
+4. **Verify** — check SHA-256 integrity and ISO-9660 compliance
+
+---
+
+## Prerequisites
+
+### Required system tools
+
+```bash
+# Fedora / RHEL
+sudo dnf install xorriso squashfs-tools mtools
+
+# Debian / Ubuntu
+sudo apt-get install xorriso squashfs-tools mtools
+
+# Arch Linux
+sudo pacman -S libisoburn squashfs-tools mtools
+```
+
+### Optional (for smoke testing)
+
+```bash
+# Fedora
+sudo dnf install qemu-system-x86 edk2-ovmf
+
+# Debian / Ubuntu
+sudo apt-get install qemu-system-x86 ovmf
+```
+
+### For the file picker (forge-slint)
+
+`forge-slint` uses `zenity` for file/folder dialogs:
+
+```bash
+# Fedora
+sudo dnf install zenity
+
+# Debian / Ubuntu
+sudo apt-get install zenity
+
+# Arch
+sudo pacman -S zenity
+```
+
+---
+
+## Building
+
+Use `CARGO_BUILD_JOBS=18` on the 18-core host (or `-j 18` per command):
+
+```bash
+export CARGO_BUILD_JOBS=18
+
+# Both GUIs + CLI + engine in one pass
+cargo build --workspace --release
+
+# forge-slint only
+cargo build --release -p forge-slint -j 18
+
+# forge-gui only
+cargo build --release -p forge-gui -j 18
+```
+
+Binaries land in `target/release/forge-slint` and `target/release/forge-gui`.
+
+### Dev builds (faster, no optimisation)
+
+```bash
+cargo build -p forge-slint -j 18
+cargo build -p forge-gui -j 18
+```
+
+---
+
+## Running
+
+### forge-slint (primary)
+
+```bash
+# Standard launch
+./target/release/forge-slint
+
+# From PATH after install
+forge-slint
+```
+
+#### GPU / display troubleshooting (Intel integrated GPUs)
+
+```bash
+# Intel Arc / integrated — override Mesa GL version if rendering is broken
+MESA_GL_VERSION_OVERRIDE=3.3 forge-slint
+
+# Force software renderer (slow but always works)
+SLINT_BACKEND=software forge-slint
+
+# Force winit + femtovg explicitly
+SLINT_BACKEND=winit forge-slint
+```
+
+#### Wayland vs X11
+
+`forge-slint` auto-detects the display server. To force one:
+
+```bash
+# Force X11 on a Wayland session
+DISPLAY=:0 WAYLAND_DISPLAY="" forge-slint
+
+# Force Wayland on an X11 session
+WAYLAND_DISPLAY=wayland-0 DISPLAY="" forge-slint
+```
+
+#### Clipboard
+
+The `Copy SHA-256` button uses `xclip` (preferred) or `xsel` as fallback:
+
+```bash
+# Fedora
+sudo dnf install xclip
+
+# Debian / Ubuntu
+sudo apt-get install xclip
+```
+
+### forge-gui (egui/eframe)
+
+```bash
+# Standard launch
+./target/release/forge-gui
+
+# Intel Arc / integrated GPU — avoid Vulkan stability issues
+WGPU_BACKEND=gl forge-gui
+
+# Force OpenGL ES explicitly
+WGPU_BACKEND=gles forge-gui
+```
+
+---
+
+## Persistent State
+
+### forge-slint
+
+State is saved to:
+```
+~/.local/share/forgeiso/slint-state.json
+```
+
+- All form fields are persisted **except passwords** (`#[serde(skip)]`).
+- State is loaded at startup and saved when the window closes.
+- To reset: `rm ~/.local/share/forgeiso/slint-state.json`
+
+### forge-gui
+
+State is saved via the eframe storage API to:
+```
+~/.local/share/forgeiso/  (Linux XDG)
+```
+
+Persist key: `"forgeiso_v1"`. If the schema breaks, bump to `"forgeiso_v2"`
+in `forge-gui/src/app.rs`.
+
+---
+
+## Installing
+
+After building:
+
+```bash
+sudo install -m755 target/release/forge-slint /usr/local/bin/
+sudo install -m755 target/release/forge-gui   /usr/local/bin/
+```
+
+From the RPM/DEB package, binaries are placed in `/usr/bin/` automatically.
+
+---
+
+## Linting and CI Checks
+
+```bash
+# Format check
+cargo fmt --all --check
+
+# Lint (zero warnings allowed)
+cargo clippy --workspace --all-targets -j 18 -- -D warnings
+
+# forge-gui specific (C3 CI gate)
+cargo fmt --manifest-path forge-gui/Cargo.toml --all --check
+cargo clippy -p forge-gui --all-targets -j 18 -- -D warnings
+cargo build -p forge-gui -j 18
+```
+
+The C3 CI container validates `forge-gui`. `forge-slint` is covered by C1
+(workspace clippy + tests) and C7 (lint-only fast gate).
+
+---
+
+## Packaging
+
+Release packages are built by `scripts/release/make-packages.sh`:
+
+```bash
+bash scripts/release/make-packages.sh 0.2.0
+```
+
+This produces RPM, DEB, pacman `.pkg.tar.zst`, tarball, and checksums
+under `dist/release/`. All three GUI binaries are included.
+
+---
+
+## Legacy Tauri GUI (`gui/`)
+
+The `gui/` directory contains an older Tauri 2 + React frontend. It is
+kept for CI validation (C3 builds it) but **not recommended for end users**.
+
+### Dependencies
+
+```bash
+cd gui
+npm ci                 # install Node deps
+npm run lint           # TypeScript lint
+npm run build          # Vite + Tauri bundle (Linux)
+```
+
+Requires Node.js 20+ and Rust (for the Tauri backend).
+
+### Key versions (as of v0.2.0)
+
+| Package | Version |
+|---|---|
+| `@tauri-apps/api` | ^2.2.0 |
+| `react` | ^18.3.1 |
+| `@tauri-apps/cli` | ^2.2.5 |
+| TypeScript | ^5.8.3 |
+| Vite | ^6.3.5 |
+| `tauri` (Rust) | 2.1.1 |
+
+To check the Rust backend only (no npm required):
+
+```bash
+cargo check --manifest-path gui/src-tauri/Cargo.toml
+```
+
+---
+
+## Common Issues
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Black window / no rendering | Mesa/GPU driver issue | `MESA_GL_VERSION_OVERRIDE=3.3 forge-slint` |
+| `wgpu` crash on launch | Vulkan not available for forge-gui | `WGPU_BACKEND=gl forge-gui` |
+| File picker does nothing | `zenity` not installed | `sudo dnf install zenity` |
+| Clipboard copy silently fails | Neither `xclip` nor `xsel` installed | `sudo dnf install xclip` |
+| Build fails: missing libs | Slint system deps not installed | See Prerequisites above |
+| `SLINT_BACKEND` env ignored | Slint build compiled without that backend | Rebuild without `--no-default-features` |
+| State not persisted | Write error on `~/.local/share/forgeiso/` | Check directory permissions |
+| Password field reset on reopen | By design (`#[serde(skip)]`) | Re-enter password each session |

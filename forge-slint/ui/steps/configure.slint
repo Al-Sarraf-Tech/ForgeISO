@@ -129,6 +129,11 @@ export component StepConfigure inherits Rectangle {
     in-out property <string> realname;
     in property <bool>       passwords-match: true;
 
+    // Derived: real-time mismatch — true when both fields are filled and differ.
+    // Updates on every keystroke without waiting for the Rust callback.
+    property <bool> pw-live-mismatch: password != "" && password-confirm != ""
+                                       && password != password-confirm;
+
     // SSH
     in-out property <string> ssh-keys;
     in-out property <bool>   ssh-password-auth: false;
@@ -213,6 +218,7 @@ export component StepConfigure inherits Rectangle {
     in-out property <bool> s-storage-open: false;
     in-out property <bool> s-grub-open: false;
     in-out property <bool> s-advanced-open: false;
+    in-out property <bool> s-output-open: true;
 
     in property <bool>    running: false;
     in property <bool>    can-continue: false;
@@ -334,7 +340,7 @@ export component StepConfigure inherits Rectangle {
                             FieldInput { value <=> password-confirm; password: true; hint: "••••••••"; enabled: !running; }
                         }
                     }
-                    if !passwords-match: Rectangle {
+                    if !passwords-match || pw-live-mismatch: Rectangle {
                         height: 28px;
                         border-radius: Sizes.radius-sm;
                         background: rgba(248, 81, 73, 0.1);
@@ -500,17 +506,25 @@ export component StepConfigure inherits Rectangle {
                 if s-firewall-open: VerticalLayout {
                     spacing: 10px;
                     CheckBox { text: "Enable firewall"; checked <=> firewall-enabled; enabled: !running; }
-                    if firewall-enabled: HorizontalLayout {
-                        spacing: 16px;
+                    if firewall-enabled: VerticalLayout {
+                        spacing: 10px;
                         VerticalLayout {
                             spacing: 4px;
-                            FieldLabel { text: "ALLOWED PORTS  (space-separated)"; }
-                            FieldInput { value <=> allow-ports; hint: "22 80 443"; enabled: !running; }
+                            FieldLabel { text: "DEFAULT POLICY"; }
+                            FieldInput { value <=> firewall-policy; hint: "deny  (or allow / reject)"; enabled: !running; }
                         }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "DENIED PORTS"; }
-                            FieldInput { value <=> deny-ports; hint: "23 21"; enabled: !running; }
+                        HorizontalLayout {
+                            spacing: 16px;
+                            VerticalLayout {
+                                spacing: 4px;
+                                FieldLabel { text: "ALLOWED PORTS  (space-separated)"; }
+                                FieldInput { value <=> allow-ports; hint: "22 80 443"; enabled: !running; }
+                            }
+                            VerticalLayout {
+                                spacing: 4px;
+                                FieldLabel { text: "DENIED PORTS"; }
+                                FieldInput { value <=> deny-ports; hint: "23 21"; enabled: !running; }
+                            }
                         }
                     }
                 }
@@ -642,8 +656,12 @@ export component StepConfigure inherits Rectangle {
                 }
 
                 // ── OUTPUT ────────────────────────────────────────────────
-                SectionHeader { title: "OUTPUT"; open: true; }
-                VerticalLayout {
+                SectionHeader {
+                    title: "OUTPUT";
+                    open: s-output-open;
+                    toggle => { s-output-open = !s-output-open; }
+                }
+                if s-output-open: VerticalLayout {
                     spacing: 10px;
                     HorizontalLayout {
                         spacing: 8px;
@@ -723,20 +741,21 @@ export component StepConfigure inherits Rectangle {
                         width: 260px;
                         height: 44px;
                         border-radius: Sizes.radius-sm;
-                        background: can-continue ? Palette.accent : Palette.surface;
-                        opacity: can-continue ? 1.0 : 0.45;
+                        property <bool> btn-active: can-continue && !pw-live-mismatch;
+                        background: btn-active ? Palette.accent : Palette.surface;
+                        opacity: btn-active ? 1.0 : 0.45;
                         animate background { duration: 180ms; }
                         animate opacity  { duration: 180ms; }
                         Text {
                             text: "Continue: Build My ISO  →";
                             font-size: Sizes.font-sm;
                             font-weight: 600;
-                            color: can-continue ? Palette.on-accent : Palette.muted;
+                            color: btn-active ? Palette.on-accent : Palette.muted;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
                         TouchArea {
-                            enabled: can-continue && !running;
+                            enabled: btn-active && !running;
                             clicked => { configure-continue(); }
                         }
                     }

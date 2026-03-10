@@ -202,7 +202,7 @@ export component AppWindow inherits Window {
                 password <=> root.password;
                 password-confirm <=> root.password-confirm;
                 realname <=> root.realname;
-                passwords-match: root.passwords-match;
+                passwords-match: root.password == "" || root.password == root.password-confirm;
                 ssh-keys <=> root.ssh-keys;
                 ssh-password-auth <=> root.ssh-password-auth;
                 ssh-install-server <=> root.ssh-install-server;
@@ -248,7 +248,7 @@ export component AppWindow inherits Window {
                 expected-sha256 <=> root.expected-sha256;
                 no-user-interaction <=> root.no-user-interaction;
                 running: root.job-running;
-                can-continue: root.source-path != "";
+                can-continue: root.source-path != "" && root.hostname != "" && root.username != "" && root.output-dir != "" && root.out-name != "";
                 browse-output-dir => { root.browse-output-dir(); }
                 configure-continue => { root.configure-continue(); }
                 back-clicked => { root.configure-back(); }

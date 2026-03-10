@@ -356,6 +356,7 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
     let mut root = serde_yaml::Mapping::new();
 
     let mut autoinstall = serde_yaml::Mapping::new();
+    let is_ubuntu_like = !matches!(cfg.distro, Some(Distro::Fedora | Distro::Arch));
 
     // version
     autoinstall.insert("version".into(), serde_yaml::Value::Number(1.into()));
@@ -522,23 +523,26 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
     }
 
     // apt (only if apt_mirror set)
-    if let Some(mirror) = &cfg.apt_mirror {
-        let mut apt = serde_yaml::Mapping::new();
-        let mut primary_seq = serde_yaml::Sequence::new();
-        let mut primary_entry = serde_yaml::Mapping::new();
+    if is_ubuntu_like {
+        if let Some(mirror) = &cfg.apt_mirror {
+            let mut apt = serde_yaml::Mapping::new();
+            let mut primary_seq = serde_yaml::Sequence::new();
+            let mut primary_entry = serde_yaml::Mapping::new();
 
-        // Use ["default"] so the entry applies to all architectures (amd64, arm64, etc.).
-        // Hardcoding ["amd64"] would cause cloud-init to silently skip this entry on
-        // non-amd64 systems, leaving the apt_mirror setting with no effect.
-        let arches: serde_yaml::Sequence = vec![serde_yaml::Value::String("default".to_string())];
-        primary_entry.insert("arches".into(), serde_yaml::Value::Sequence(arches));
+            // Use ["default"] so the entry applies to all architectures (amd64, arm64, etc.).
+            // Hardcoding ["amd64"] would cause cloud-init to silently skip this entry on
+            // non-amd64 systems, leaving the apt_mirror setting with no effect.
+            let arches: serde_yaml::Sequence =
+                vec![serde_yaml::Value::String("default".to_string())];
+            primary_entry.insert("arches".into(), serde_yaml::Value::Sequence(arches));
 
-        primary_entry.insert("uri".into(), serde_yaml::Value::String(mirror.clone()));
+            primary_entry.insert("uri".into(), serde_yaml::Value::String(mirror.clone()));
 
-        primary_seq.push(serde_yaml::Value::Mapping(primary_entry));
-        apt.insert("primary".into(), serde_yaml::Value::Sequence(primary_seq));
+            primary_seq.push(serde_yaml::Value::Mapping(primary_entry));
+            apt.insert("primary".into(), serde_yaml::Value::Sequence(primary_seq));
 
-        autoinstall.insert("apt".into(), serde_yaml::Value::Mapping(apt));
+            autoinstall.insert("apt".into(), serde_yaml::Value::Mapping(apt));
+        }
     }
 
     // packages (with auto-added feature packages)
@@ -546,13 +550,13 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
     if cfg.wallpaper.is_some() {
         all_packages.push("dconf-cli".to_string());
     }
-    if cfg.firewall.enabled {
+    if cfg.firewall.enabled && is_ubuntu_like {
         all_packages.push("ufw".to_string());
     }
     if cfg.containers.podman {
         all_packages.push("podman".to_string());
     }
-    if cfg.apt_repos.iter().any(|r| r.starts_with("ppa:")) {
+    if is_ubuntu_like && cfg.apt_repos.iter().any(|r| r.starts_with("ppa:")) {
         all_packages.push("software-properties-common".to_string());
     }
     all_packages.sort();
@@ -607,6 +611,8 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
 #[allow(clippy::missing_errors_doc)]
 #[allow(clippy::missing_panics_doc)]
 pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResult<String> {
+    let is_ubuntu_like = !matches!(cfg.distro, Some(Distro::Fedora | Distro::Arch));
+
     // Parse existing YAML
     let mut root: serde_yaml::Value = serde_yaml::from_str(existing)
         .map_err(|e| EngineError::Runtime(format!("Failed to parse YAML: {e}")))?;
@@ -811,24 +817,27 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
     }
 
     // apt
-    if let Some(mirror) = &cfg.apt_mirror {
-        let mut apt = autoinstall_map
-            .remove("apt")
-            .and_then(|v| v.as_mapping().cloned())
-            .unwrap_or_default();
-        let mut primary_seq = serde_yaml::Sequence::new();
-        let mut primary_entry = serde_yaml::Mapping::new();
+    if is_ubuntu_like {
+        if let Some(mirror) = &cfg.apt_mirror {
+            let mut apt = autoinstall_map
+                .remove("apt")
+                .and_then(|v| v.as_mapping().cloned())
+                .unwrap_or_default();
+            let mut primary_seq = serde_yaml::Sequence::new();
+            let mut primary_entry = serde_yaml::Mapping::new();
 
-        // Use ["default"] so the entry applies to all architectures (amd64, arm64, etc.).
-        let arches: serde_yaml::Sequence = vec![serde_yaml::Value::String("default".to_string())];
-        primary_entry.insert("arches".into(), serde_yaml::Value::Sequence(arches));
+            // Use ["default"] so the entry applies to all architectures (amd64, arm64, etc.).
+            let arches: serde_yaml::Sequence =
+                vec![serde_yaml::Value::String("default".to_string())];
+            primary_entry.insert("arches".into(), serde_yaml::Value::Sequence(arches));
 
-        primary_entry.insert("uri".into(), serde_yaml::Value::String(mirror.clone()));
+            primary_entry.insert("uri".into(), serde_yaml::Value::String(mirror.clone()));
 
-        primary_seq.push(serde_yaml::Value::Mapping(primary_entry));
-        apt.insert("primary".into(), serde_yaml::Value::Sequence(primary_seq));
+            primary_seq.push(serde_yaml::Value::Mapping(primary_entry));
+            apt.insert("primary".into(), serde_yaml::Value::Sequence(primary_seq));
 
-        autoinstall_map.insert("apt".into(), serde_yaml::Value::Mapping(apt));
+            autoinstall_map.insert("apt".into(), serde_yaml::Value::Mapping(apt));
+        }
     }
 
     // packages: merge (auto-add + dedup)
@@ -836,13 +845,13 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
     if cfg.wallpaper.is_some() {
         all_packages.push("dconf-cli".to_string());
     }
-    if cfg.firewall.enabled {
+    if cfg.firewall.enabled && is_ubuntu_like {
         all_packages.push("ufw".to_string());
     }
     if cfg.containers.podman {
         all_packages.push("podman".to_string());
     }
-    if cfg.apt_repos.iter().any(|r| r.starts_with("ppa:")) {
+    if is_ubuntu_like && cfg.apt_repos.iter().any(|r| r.starts_with("ppa:")) {
         all_packages.push("software-properties-common".to_string());
     }
 
@@ -885,9 +894,15 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
 
     // Append all feature late-commands
     all_late_commands.extend(build_feature_late_commands(cfg)?);
+    let mut deduped_late_commands = Vec::with_capacity(all_late_commands.len());
+    for command in all_late_commands {
+        if !deduped_late_commands.contains(&command) {
+            deduped_late_commands.push(command);
+        }
+    }
 
-    if !all_late_commands.is_empty() {
-        let cmds: Vec<serde_yaml::Value> = all_late_commands
+    if !deduped_late_commands.is_empty() {
+        let cmds: Vec<serde_yaml::Value> = deduped_late_commands
             .iter()
             .map(|c: &String| serde_yaml::Value::String(c.clone()))
             .collect();
@@ -2601,6 +2616,55 @@ autoinstall:
         assert!(
             !yaml.contains("amd64"),
             "merged apt primary arches must not be hardcoded to 'amd64': {yaml}"
+        );
+    }
+
+    #[test]
+    fn arch_generate_with_firewall_does_not_add_ufw_package() {
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            distro: Some(Distro::Arch),
+            firewall: FirewallConfig {
+                enabled: true,
+                default_policy: Some("deny".to_string()),
+                allow_ports: vec!["22".to_string()],
+                deny_ports: vec![],
+            },
+            ..Default::default()
+        };
+
+        let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+        assert!(
+            !yaml.contains("ufw"),
+            "Arch cloud-init fallback must not inject Ubuntu-specific ufw package: {yaml}"
+        );
+    }
+
+    #[test]
+    fn merge_autoinstall_yaml_deduplicates_existing_late_commands() {
+        let existing = concat!(
+            "autoinstall:\n",
+            "  version: 1\n",
+            "  late-commands:\n",
+            "    - chroot /target systemctl enable systemd-timesyncd\n"
+        );
+        let cfg = InjectConfig {
+            source: IsoSource::from_raw("/tmp/test.iso"),
+            out_name: "out.iso".to_string(),
+            network: NetworkConfig {
+                ntp_servers: vec!["time.cloudflare.com".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+        assert_eq!(
+            yaml.matches("chroot /target systemctl enable systemd-timesyncd")
+                .count(),
+            1,
+            "merge must keep existing late-commands stable instead of duplicating them: {yaml}"
         );
     }
 

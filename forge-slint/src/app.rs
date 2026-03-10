@@ -36,6 +36,14 @@ pub fn with_app<F: FnOnce(&mut ForgeApp)>(f: F) {
     });
 }
 
+/// Run `f` on the event-loop thread with a mutable reference to ForgeApp and return a value.
+pub fn with_app_result<F, R>(f: F) -> Option<R>
+where
+    F: FnOnce(&mut ForgeApp) -> R,
+{
+    APP.with(|cell| cell.borrow().as_ref().map(|rc| f(&mut rc.borrow_mut())))
+}
+
 // ── Preset cards shown on Step 1 ─────────────────────────────────────────────
 
 pub fn make_preset_cards() -> ModelRc<PresetCard> {
@@ -136,7 +144,8 @@ impl ForgeApp {
 
     // ── Job lifecycle ─────────────────────────────────────────────────────────
 
-    fn start_job(&self, phase: &str) {
+    fn start_job(&mut self, phase: &str) {
+        self.download_idx.clear();
         if let Some(w) = self.win.upgrade() {
             w.set_job_running(true);
             w.set_job_phase(phase.into());
@@ -341,6 +350,49 @@ impl ForgeApp {
         })
     }
 
+    fn collect_inject_config(&self) -> Result<(InjectState, InjectConfig), String> {
+        let w = self
+            .win
+            .upgrade()
+            .ok_or_else(|| "application window is no longer available".to_string())?;
+
+        let source = w.get_source_path().to_string();
+        if source.trim().is_empty() {
+            return Err("Source ISO is required".to_string());
+        }
+
+        let output_dir = w.get_output_dir().to_string();
+        if output_dir.trim().is_empty() {
+            return Err("Output directory is required".to_string());
+        }
+        if !std::path::Path::new(output_dir.trim()).exists() {
+            return Err("Output directory does not exist — create it first".to_string());
+        }
+
+        let password: String = w.get_password().into();
+        let password_confirm: String = w.get_password_confirm().into();
+        if !password.is_empty() && !password_confirm.is_empty() && password != password_confirm {
+            return Err("Passwords do not match".to_string());
+        }
+
+        let label: String = w.get_output_label().into();
+        if !label.is_empty() && label.chars().count() > 32 {
+            return Err("Volume label exceeds 32 characters".to_string());
+        }
+
+        let inject = self
+            .snap_inject()
+            .ok_or_else(|| "failed to capture current form state".to_string())?;
+        let cfg = build_inject_config(&inject);
+        cfg.validate().map_err(|e| format!("Config error: {e}"))?;
+
+        Ok((inject, cfg))
+    }
+
+    pub fn validate_inject_form(&self) -> Result<(), String> {
+        self.collect_inject_config().map(|_| ())
+    }
+
     // ── spawn_inject ──────────────────────────────────────────────────────────
 
     pub fn spawn_inject(&mut self) {
@@ -353,45 +405,13 @@ impl ForgeApp {
             return;
         }
 
-        let source = w.get_source_path().to_string();
-        if source.trim().is_empty() {
-            self.set_status_err("Source ISO is required");
-            return;
-        }
-        let output_dir = w.get_output_dir().to_string();
-        if output_dir.trim().is_empty() {
-            self.set_status_err("Output directory is required");
-            return;
-        }
-        if !std::path::Path::new(output_dir.trim()).exists() {
-            self.set_status_err("Output directory does not exist — create it first");
-            return;
-        }
-        let password: String = w.get_password().into();
-        let password_confirm: String = w.get_password_confirm().into();
-        if !password.is_empty() && !password_confirm.is_empty() && password != password_confirm {
-            self.set_status_err("Passwords do not match");
-            return;
-        }
-
-        let inject = match self.snap_inject() {
-            Some(s) => s,
-            None => return,
+        let (inject, cfg) = match self.collect_inject_config() {
+            Ok(values) => values,
+            Err(msg) => {
+                self.set_status_err(msg);
+                return;
+            }
         };
-
-        // Validate output label length
-        let label: String = w.get_output_label().into();
-        if !label.is_empty() && label.chars().count() > 32 {
-            self.set_status_err("Volume label exceeds 32 characters");
-            return;
-        }
-
-        // Pre-flight config validation
-        let cfg = build_inject_config(&inject);
-        if let Err(e) = cfg.validate() {
-            self.set_status_err(format!("Config error: {e}"));
-            return;
-        }
 
         // Abort stale tasks
         if let Some(h) = self.detect_task.take() {
@@ -403,6 +423,7 @@ impl ForgeApp {
 
         // Reset done flags
         w.set_step2_done(false);
+        w.set_step3_done(false);
         w.set_artifact_path("".into());
         w.set_artifact_sha256("".into());
         w.set_verify_done(false);
@@ -413,7 +434,6 @@ impl ForgeApp {
         let engine = Arc::clone(&self.engine);
         let win2 = self.win.clone();
         let out_dir = PathBuf::from(&inject.output_dir);
-        let ev_task = self.subscribe_events();
 
         self.current_task = Some(self.rt.spawn(async move {
             match engine.inject_autoinstall(&cfg, &out_dir).await {
@@ -462,7 +482,6 @@ impl ForgeApp {
                     });
                 }
             }
-            ev_task.abort();
         }));
     }
 
@@ -494,7 +513,6 @@ impl ForgeApp {
 
         let engine = Arc::clone(&self.engine);
         let win2 = self.win.clone();
-        let ev_task = self.subscribe_events();
 
         self.current_task = Some(self.rt.spawn(async move {
             match engine.verify(&source, sums_opt.as_deref()).await {
@@ -544,7 +562,6 @@ impl ForgeApp {
                     });
                 }
             }
-            ev_task.abort();
         }));
     }
 
@@ -572,7 +589,6 @@ impl ForgeApp {
 
         let engine = Arc::clone(&self.engine);
         let win2 = self.win.clone();
-        let ev_task = self.subscribe_events();
 
         self.current_task = Some(self.rt.spawn(async move {
             match engine.validate_iso9660(&source).await {
@@ -616,7 +632,6 @@ impl ForgeApp {
                     });
                 }
             }
-            ev_task.abort();
         }));
     }
 
@@ -640,7 +655,6 @@ impl ForgeApp {
 
         let engine = Arc::clone(&self.engine);
         let win2 = self.win.clone();
-        let ev_task = self.subscribe_events();
 
         self.current_task = Some(self.rt.spawn(async move {
             let report = engine.doctor().await;
@@ -665,7 +679,6 @@ impl ForgeApp {
                     w.set_doctor_text(text.into());
                 }
             });
-            ev_task.abort();
         }));
     }
 
@@ -768,6 +781,7 @@ pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut ForgeApp) {
 
 pub fn build_inject_config(s: &InjectState) -> InjectConfig {
     let source = IsoSource::from_raw(s.source.trim());
+    let shared_repo_lines = lines(&s.apt_repos);
 
     let distro = match s.distro.as_str() {
         "fedora" => Some(Distro::Fedora),
@@ -880,10 +894,32 @@ pub fn build_inject_config(s: &InjectState) -> InjectConfig {
         disable_services: lines(&s.disable_services),
         sysctl,
         swap,
-        apt_repos: lines(&s.apt_repos),
-        dnf_repos: lines(&s.dnf_repos),
+        apt_repos: if matches!(distro, None | Some(Distro::Mint)) {
+            shared_repo_lines.clone()
+        } else {
+            Vec::new()
+        },
+        dnf_repos: if matches!(distro, Some(Distro::Fedora)) {
+            let repos = lines(&s.dnf_repos);
+            if repos.is_empty() {
+                shared_repo_lines.clone()
+            } else {
+                repos
+            }
+        } else {
+            Vec::new()
+        },
         dnf_mirror: opt(&s.dnf_mirror),
-        pacman_repos: lines(&s.pacman_repos),
+        pacman_repos: if matches!(distro, Some(Distro::Arch)) {
+            let repos = lines(&s.pacman_repos);
+            if repos.is_empty() {
+                shared_repo_lines.clone()
+            } else {
+                repos
+            }
+        } else {
+            Vec::new()
+        },
         pacman_mirror: opt(&s.pacman_mirror),
         containers,
         grub,

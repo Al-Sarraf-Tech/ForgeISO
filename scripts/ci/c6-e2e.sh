@@ -4,6 +4,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 mkdir -p "$ROOT_DIR/.cargo-tmp"
 export TMPDIR="$ROOT_DIR/.cargo-tmp"
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-18}"
 
 clean_path() {
   local path="$1"
@@ -23,8 +24,8 @@ mkdir -p artifacts/e2e
 fake_iso=artifacts/e2e/fake.iso
 head -c 4096 /dev/zero > "$fake_iso"
 
-cargo run -p forgeiso-cli "${offline_flag[@]}" -- inspect --source "$fake_iso" > artifacts/e2e/inspect.txt || true
-cargo run -p forgeiso-cli "${offline_flag[@]}" -- test --iso "$fake_iso" --bios --uefi --json > artifacts/e2e/test.json || true
+cargo run -p forgeiso-cli -j "${CARGO_BUILD_JOBS}" "${offline_flag[@]}" -- inspect --source "$fake_iso" > artifacts/e2e/inspect.txt || true
+cargo run -p forgeiso-cli -j "${CARGO_BUILD_JOBS}" "${offline_flag[@]}" -- test --iso "$fake_iso" --bios --uefi --json > artifacts/e2e/test.json || true
 
 if command -v qemu-system-x86_64 >/dev/null 2>&1; then
   echo '{"nested_virtualization":"available"}' > artifacts/e2e/virt.json
@@ -41,14 +42,14 @@ if command -v qemu-system-x86_64 >/dev/null 2>&1 \
   clean_path "$smoke_dir/out"
   eval "$(scripts/test/make-smoke-iso.sh "$smoke_dir")"
 
-  cargo run -p forgeiso-cli "${offline_flag[@]}" -- build \
+  cargo run -p forgeiso-cli -j "${CARGO_BUILD_JOBS}" "${offline_flag[@]}" -- build \
     --source "$ISO" \
     --out "$smoke_dir/out" \
     --name ci-e2e \
     --overlay "$OVERLAY" \
     --profile minimal \
     --json > "$smoke_dir/build.json"
-  cargo run -p forgeiso-cli "${offline_flag[@]}" -- test \
+  cargo run -p forgeiso-cli -j "${CARGO_BUILD_JOBS}" "${offline_flag[@]}" -- test \
     --iso "$smoke_dir/out/ci-e2e.iso" \
     --bios \
     --uefi \

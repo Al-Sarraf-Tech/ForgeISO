@@ -4,6 +4,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 mkdir -p "$ROOT_DIR/.cargo-tmp"
 export TMPDIR="$ROOT_DIR/.cargo-tmp"
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-18}"
 
 clean_path() {
   local path="$1"
@@ -18,11 +19,11 @@ if [[ "${CI:-false}" != "true" ]]; then
   offline_flag+=(--offline)
 fi
 
-cargo test -p forgeiso-engine "${offline_flag[@]}"
+cargo test -p forgeiso-engine -j "${CARGO_BUILD_JOBS}" "${offline_flag[@]}"
 
 mkdir -p artifacts/integration
-cargo run -p forgeiso-cli "${offline_flag[@]}" -- doctor --json > artifacts/integration/doctor.json
-cargo run -p forgeiso-cli "${offline_flag[@]}" -- inspect --source README.md > artifacts/integration/inspect-invalid.txt || true
+cargo run -p forgeiso-cli -j "${CARGO_BUILD_JOBS}" "${offline_flag[@]}" -- doctor --json > artifacts/integration/doctor.json
+cargo run -p forgeiso-cli -j "${CARGO_BUILD_JOBS}" "${offline_flag[@]}" -- inspect --source README.md > artifacts/integration/inspect-invalid.txt || true
 
 if command -v grub2-mkrescue >/dev/null 2>&1 || command -v grub-mkrescue >/dev/null 2>&1; then
   smoke_dir="artifacts/integration/smoke"
@@ -30,15 +31,15 @@ if command -v grub2-mkrescue >/dev/null 2>&1 || command -v grub-mkrescue >/dev/n
   clean_path "$smoke_dir/extract"
   eval "$(scripts/test/make-smoke-iso.sh "$smoke_dir")"
 
-  cargo run -p forgeiso-cli "${offline_flag[@]}" -- inspect --source "$ISO" --json > "$smoke_dir/inspect.json"
-  cargo run -p forgeiso-cli "${offline_flag[@]}" -- build \
+  cargo run -p forgeiso-cli -j "${CARGO_BUILD_JOBS}" "${offline_flag[@]}" -- inspect --source "$ISO" --json > "$smoke_dir/inspect.json"
+  cargo run -p forgeiso-cli -j "${CARGO_BUILD_JOBS}" "${offline_flag[@]}" -- build \
     --source "$ISO" \
     --out "$smoke_dir/out" \
     --name ci-integration \
     --overlay "$OVERLAY" \
     --profile minimal \
     --json > "$smoke_dir/build.json"
-  cargo run -p forgeiso-cli "${offline_flag[@]}" -- report --build "$smoke_dir/out" --format html > "$smoke_dir/report-path.txt"
+  cargo run -p forgeiso-cli -j "${CARGO_BUILD_JOBS}" "${offline_flag[@]}" -- report --build "$smoke_dir/out" --format html > "$smoke_dir/report-path.txt"
 
   extract_dir="$smoke_dir/extract"
   mkdir -p "$extract_dir"

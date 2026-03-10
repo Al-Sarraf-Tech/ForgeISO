@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use slint::ComponentHandle;
 
-use app::{handle_preset_clicked, make_preset_cards, with_app, ForgeApp, APP};
+use app::{handle_preset_clicked, make_preset_cards, with_app, with_app_result, ForgeApp, APP};
 use forgeiso_engine::ForgeIsoEngine;
 use persist::{load_state, save_state};
 use state::{InjectState, PersistedState, VerifyState};
@@ -51,6 +51,7 @@ fn main() -> anyhow::Result<()> {
     APP.with(|cell| {
         *cell.borrow_mut() = Some(Rc::clone(&app_rc));
     });
+    std::mem::drop(app_rc.borrow().subscribe_events());
 
     // Wire log model into the window.
     win.set_log_entries(app_rc.borrow().log_model.clone());
@@ -58,7 +59,9 @@ fn main() -> anyhow::Result<()> {
     // ── Callback wiring ───────────────────────────────────────────────────────
 
     // cancel-job
-    win.on_cancel_job(|| with_app(|a| a.cancel_job()));
+    win.on_cancel_job(|| {
+        with_app(|a| a.cancel_job());
+    });
 
     // doctor-toggle
     {
@@ -164,13 +167,21 @@ fn main() -> anyhow::Result<()> {
                 w.set_detected_distro("".into());
                 w.set_step1_done(false);
                 w.set_step2_done(false);
+                w.set_step3_done(false);
                 w.set_artifact_path("".into());
                 w.set_artifact_sha256("".into());
                 w.set_verify_done(false);
                 w.set_iso9660_done(false);
+                w.set_verify_matched(false);
+                w.set_verify_hash_display("".into());
+                w.set_iso9660_compliant(false);
+                w.set_iso9660_boot_bios(false);
+                w.set_iso9660_boot_uefi(false);
+                w.set_iso9660_volume_id("".into());
                 w.set_current_step(1);
                 w.set_status_text("".into());
                 w.set_status_is_error(false);
+                w.set_passwords_match(true);
             }
             with_app(|a| {
                 if let Some(h) = a.detect_task.take() {
@@ -208,10 +219,28 @@ fn main() -> anyhow::Result<()> {
 
                 let pw: String = w.get_password().into();
                 let pc: String = w.get_password_confirm().into();
+                if w.get_hostname().trim().is_empty() {
+                    w.set_status_text("Hostname is required".into());
+                    w.set_status_is_error(true);
+                    return;
+                }
+                if w.get_username().trim().is_empty() {
+                    w.set_status_text("Username is required".into());
+                    w.set_status_is_error(true);
+                    return;
+                }
                 let match_ok = pw.is_empty() || pw == pc;
                 w.set_passwords_match(match_ok);
                 if !match_ok {
                     w.set_status_text("Passwords do not match".into());
+                    w.set_status_is_error(true);
+                    return;
+                }
+
+                let validation = with_app_result(|a| a.validate_inject_form())
+                    .unwrap_or_else(|| Err("application state is unavailable".to_string()));
+                if let Err(msg) = validation {
+                    w.set_status_text(msg.into());
                     w.set_status_is_error(true);
                     return;
                 }
@@ -246,7 +275,9 @@ fn main() -> anyhow::Result<()> {
     }
 
     // build-run  — kick off the inject pipeline
-    win.on_build_run(|| with_app(|a| a.spawn_inject()));
+    win.on_build_run(|| {
+        with_app(|a| a.spawn_inject());
+    });
 
     // build-view-results  — jump to check step
     {
@@ -278,10 +309,14 @@ fn main() -> anyhow::Result<()> {
     }
 
     // run-verify
-    win.on_run_verify(|| with_app(|a| a.spawn_verify()));
+    win.on_run_verify(|| {
+        with_app(|a| a.spawn_verify());
+    });
 
     // run-iso9660
-    win.on_run_iso9660(|| with_app(|a| a.spawn_iso9660()));
+    win.on_run_iso9660(|| {
+        with_app(|a| a.spawn_iso9660());
+    });
 
     // copy-sha256  — write artifact hash to clipboard via xclip/xsel
     {
@@ -413,6 +448,8 @@ fn restore_inject(w: &AppWindow, s: &InjectState) {
     w.set_hostname(s.hostname.clone().into());
     w.set_username(s.username.clone().into());
     // passwords intentionally NOT restored (#[serde(skip)])
+    w.set_password("".into());
+    w.set_password_confirm("".into());
     w.set_realname(s.realname.clone().into());
     w.set_ssh_keys(s.ssh_keys.clone().into());
     w.set_ssh_password_auth(s.ssh_password_auth);
@@ -449,6 +486,7 @@ fn restore_inject(w: &AppWindow, s: &InjectState) {
     w.set_swap_size_mb(s.swap_size_mb.clone().into());
     w.set_encrypt(s.encrypt);
     // encrypt_passphrase intentionally NOT restored (#[serde(skip)])
+    w.set_encrypt_passphrase("".into());
     w.set_mounts(s.mounts.clone().into());
     w.set_grub_timeout(s.grub_timeout.clone().into());
     w.set_grub_cmdline(s.grub_cmdline.clone().into());
