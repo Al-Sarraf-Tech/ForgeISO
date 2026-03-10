@@ -537,7 +537,7 @@ impl ForgeApp {
                             w.set_verify_done(true);
                             w.set_verify_matched(matched);
                             w.set_verify_hash_display(display.into());
-                            w.set_step3_done(matched);
+                            w.set_step3_done(true);
                             w.set_status_text(
                                 if matched {
                                     "Integrity verified ✓"

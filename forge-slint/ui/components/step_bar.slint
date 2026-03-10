@@ -142,7 +142,7 @@ export component StepBar inherits Rectangle {
         }
 
         StepBadge {
-            num: "4"; label: "Check"; sublabel: "Verify & inspect";
+            num: "4"; label: "Check"; sublabel: "Verify (optional)";
             done: step4-done; current: current-step == 4;
             clickable: step3-done || current-step == 4;
             clicked => {

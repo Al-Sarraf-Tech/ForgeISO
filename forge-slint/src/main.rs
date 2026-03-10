@@ -100,7 +100,7 @@ fn main() -> anyhow::Result<()> {
                     1 => true,
                     2 => w.get_step1_done() || current >= 2,
                     3 => w.get_step2_done() || current >= 3,
-                    4 => w.get_step3_done() || current >= 4,
+                    4 => w.get_step2_done() || current >= 4,
                     _ => false,
                 };
                 if can {

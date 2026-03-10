@@ -173,7 +173,7 @@ export component AppWindow inherits Window {
             step1-done: root.step1-done;
             step2-done: root.step2-done;
             step3-done: root.step2-done;   // Build done = inject done
-            step4-done: root.step3-done;
+            step4-done: root.step2-done;   // Verify optional — badge ✓ once build is done
             step-clicked(s) => { root.step-bar-clicked(s); }
         }
 
