@@ -18,7 +18,7 @@ pub enum WorkerMsg {
     VerifyOk(Box<VerifyResult>),
     Iso9660Ok(Box<Iso9660Compliance>),
     #[allow(dead_code)]
-    DiffOk,  // Diff removed from pipeline; kept so engine diff_isos can still be wired later
+    DiffOk, // Diff removed from pipeline; kept so engine diff_isos can still be wired later
     /// Background ISO detection triggered after a file is picked for the inject
     /// source — used to auto-populate the distro/label fields without touching
     /// the build-tab inspect result.

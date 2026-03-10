@@ -3,16 +3,15 @@ use std::sync::{mpsc, Arc};
 
 use egui::{Color32, Frame, RichText, Stroke, Ui, Vec2};
 use forgeiso_engine::{
-    find_preset_by_str, resolve_url, AcquisitionStrategy,
-    ContainerConfig, Distro, FirewallConfig, ForgeIsoEngine, GrubConfig, InjectConfig, IsoSource,
-    NetworkConfig, ProxyConfig, SshConfig, SwapConfig, UserConfig,
+    find_preset_by_str, resolve_url, AcquisitionStrategy, ContainerConfig, Distro, FirewallConfig,
+    ForgeIsoEngine, GrubConfig, InjectConfig, IsoSource, NetworkConfig, ProxyConfig, SshConfig,
+    SwapConfig, UserConfig,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::state::{
-    lines, opt, BuildResult, DoctorReport, InjectState,
-    Iso9660Compliance, LogEntry, LogLevel, PickTarget, StatusMsg,
-    VerifyResult, VerifyState,
+    lines, opt, BuildResult, DoctorReport, InjectState, Iso9660Compliance, LogEntry, LogLevel,
+    PickTarget, StatusMsg, VerifyResult, VerifyState,
 };
 use crate::worker::{self, WorkerMsg};
 
@@ -55,7 +54,11 @@ const LOG_PROGRESS: Color32 = Color32::from_rgb(80, 200, 120);
 /// Thin muted label that sits above a field — slightly smaller than body text
 /// so form structure is immediately obvious without visual noise.
 fn lbl(ui: &mut Ui, text: &str) {
-    ui.label(RichText::new(text).size(12.0).color(Color32::from_rgb(110, 120, 134)));
+    ui.label(
+        RichText::new(text)
+            .size(12.0)
+            .color(Color32::from_rgb(110, 120, 134)),
+    );
     ui.add_space(2.0);
 }
 
@@ -77,13 +80,9 @@ fn section(ui: &mut Ui, text: &str) {
     ui.add_space(5.0);
     // Full-width hairline under the section title
     let available = ui.available_width();
-    let (line_rect, _) =
-        ui.allocate_exact_size(Vec2::new(available, 1.0), egui::Sense::hover());
-    ui.painter().rect_filled(
-        line_rect,
-        0.0,
-        Color32::from_rgb(33, 38, 46),
-    );
+    let (line_rect, _) = ui.allocate_exact_size(Vec2::new(available, 1.0), egui::Sense::hover());
+    ui.painter()
+        .rect_filled(line_rect, 0.0, Color32::from_rgb(33, 38, 46));
     ui.add_space(8.0);
 }
 
@@ -223,7 +222,6 @@ fn now_ts() -> String {
     chrono::Utc::now().format("%H:%M:%S UTC").to_string()
 }
 
-
 /// Map a detected `Distro` enum value to the lowercase string used by the
 /// inject form's distro selector (must match the chip values in
 /// `show_inject_configure`).
@@ -261,7 +259,7 @@ const MAX_LOG_ENTRIES: usize = 10_000;
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 enum AppStep {
     #[default]
-    Source,    // 1 — Pick the source ISO
+    Source, // 1 — Pick the source ISO
     Configure, // 2 — Set up autoinstall options
     Build,     // 3 — Build My ISO (run inject)
     Check,     // 4 — Verify & inspect the output
@@ -307,7 +305,6 @@ pub struct ForgeApp {
     /// an initial doctor check without blocking the constructor.
     needs_initial_doctor: bool,
 }
-
 
 impl ForgeApp {
     pub fn new(cc: &eframe::CreationContext<'_>, rt: tokio::runtime::Runtime) -> Self {
@@ -712,7 +709,9 @@ impl ForgeApp {
     }
 
     fn spawn_inject(&mut self) {
-        if self.job_running { return; }
+        if self.job_running {
+            return;
+        }
         if self.inject.source.trim().is_empty() {
             self.set_status(StatusMsg::err(
                 "Source ISO is required — pick a file or paste a URL",
@@ -745,9 +744,7 @@ impl ForgeApp {
             self.inject.out_name.push_str(".iso");
         }
         // ISO 9660 volume label is max 32 characters (not bytes — use chars()).
-        if !self.inject.output_label.is_empty()
-            && self.inject.output_label.chars().count() > 32
-        {
+        if !self.inject.output_label.is_empty() && self.inject.output_label.chars().count() > 32 {
             self.set_status(StatusMsg::err(
                 "Volume label exceeds 32 characters — ISO-9660 maximum",
             ));
@@ -808,7 +805,9 @@ impl ForgeApp {
     }
 
     fn spawn_verify(&mut self) {
-        if self.job_running { return; }
+        if self.job_running {
+            return;
+        }
         // Abort any previous verify task — double-click or rapid re-run must
         // not create two concurrent writers to verify_result.
         if let Some(h) = self.current_task.take() {
@@ -843,7 +842,9 @@ impl ForgeApp {
     }
 
     fn spawn_iso9660(&mut self) {
-        if self.job_running { return; }
+        if self.job_running {
+            return;
+        }
         // Abort any previous ISO-9660 task — rapid double-click must not race.
         if let Some(h) = self.current_task.take() {
             h.abort();
@@ -868,7 +869,9 @@ impl ForgeApp {
     // spawn_diff removed — Diff tab is no longer part of the pipeline.
 
     fn spawn_doctor(&mut self) {
-        if self.job_running { return; }
+        if self.job_running {
+            return;
+        }
         // Clear stale result so the UI shows the spinner while the new run is
         // in flight rather than keeping the previous check's output visible.
         self.doctor_result = None;
@@ -914,9 +917,7 @@ impl ForgeApp {
                             if ui
                                 .add(
                                     egui::Button::new(
-                                        RichText::new("✕  Cancel")
-                                            .size(13.0)
-                                            .color(Color32::WHITE),
+                                        RichText::new("✕  Cancel").size(13.0).color(Color32::WHITE),
                                     )
                                     .fill(Color32::from_rgb(90, 25, 25))
                                     .stroke(Stroke::new(1.0, RED))
@@ -929,9 +930,7 @@ impl ForgeApp {
                             }
                             ui.add_space(12.0);
                             // Phase label
-                            ui.label(
-                                RichText::new(&self.job_phase).size(13.0).color(MUTED),
-                            );
+                            ui.label(RichText::new(&self.job_phase).size(13.0).color(MUTED));
                             ui.add_space(10.0);
                             // Progress bar (deterministic) or spinner (indeterminate)
                             if let Some(pct) = self.job_pct {
@@ -945,8 +944,11 @@ impl ForgeApp {
                                 ui.spinner();
                             }
                         } else if let Some(s) = self.status.as_ref() {
-                            let (col, icon) =
-                                if s.is_error { (RED, "✗") } else { (GREEN, "✓") };
+                            let (col, icon) = if s.is_error {
+                                (RED, "✗")
+                            } else {
+                                (GREEN, "✓")
+                            };
                             ui.label(
                                 RichText::new(format!("{icon}  {}", s.text))
                                     .size(13.0)
@@ -962,10 +964,34 @@ impl ForgeApp {
     fn render_step_bar(&mut self, ctx: &egui::Context) {
         // Step definitions: (variant, badge_num, label, sublabel, done_flag)
         let steps: &[(AppStep, &str, &str, &str, bool)] = &[
-            (AppStep::Source,    "1", "Source",    "Pick your ISO",          !self.inject.source.trim().is_empty()),
-            (AppStep::Configure, "2", "Configure", "Autoinstall options",    self.inject_done),
-            (AppStep::Build,     "3", "Build",     "Build My ISO",           self.inject_done),
-            (AppStep::Check,     "4", "Check",     "Verify & inspect",       self.verify_done),
+            (
+                AppStep::Source,
+                "1",
+                "Source",
+                "Pick your ISO",
+                !self.inject.source.trim().is_empty(),
+            ),
+            (
+                AppStep::Configure,
+                "2",
+                "Configure",
+                "Autoinstall options",
+                self.inject_done,
+            ),
+            (
+                AppStep::Build,
+                "3",
+                "Build",
+                "Build My ISO",
+                self.inject_done,
+            ),
+            (
+                AppStep::Check,
+                "4",
+                "Check",
+                "Verify & inspect",
+                self.verify_done,
+            ),
         ];
 
         egui::TopBottomPanel::top("step_bar")
@@ -995,51 +1021,57 @@ impl ForgeApp {
                             (Color32::from_rgb(28, 33, 40), MUTED)
                         };
                         let badge_num = if *done { "✓" } else { *num };
-                        let label_col = if current { TEXT } else if *done { GREEN } else { MUTED };
+                        let label_col = if current {
+                            TEXT
+                        } else if *done {
+                            GREEN
+                        } else {
+                            MUTED
+                        };
 
-                        let clicked = ui.vertical(|ui| {
-                            ui.horizontal(|ui| {
-                                Frame::new()
-                                    .fill(badge_fill)
-                                    .stroke(Stroke::new(
-                                        1.5,
-                                        if current || *done { ACCENT } else { BORDER },
-                                    ))
-                                    .corner_radius(14.0f32)
-                                    .show(ui, |ui| {
-                                        ui.set_min_size(Vec2::new(26.0, 26.0));
-                                        ui.centered_and_justified(|ui| {
-                                            ui.label(
-                                                RichText::new(badge_num)
-                                                    .size(12.0)
-                                                    .strong()
-                                                    .color(badge_text_col),
-                                            );
+                        let clicked = ui
+                            .vertical(|ui| {
+                                ui.horizontal(|ui| {
+                                    Frame::new()
+                                        .fill(badge_fill)
+                                        .stroke(Stroke::new(
+                                            1.5,
+                                            if current || *done { ACCENT } else { BORDER },
+                                        ))
+                                        .corner_radius(14.0f32)
+                                        .show(ui, |ui| {
+                                            ui.set_min_size(Vec2::new(26.0, 26.0));
+                                            ui.centered_and_justified(|ui| {
+                                                ui.label(
+                                                    RichText::new(badge_num)
+                                                        .size(12.0)
+                                                        .strong()
+                                                        .color(badge_text_col),
+                                                );
+                                            });
                                         });
-                                    });
-                                ui.add_space(6.0);
-                                ui.vertical(|ui| {
-                                    let rt = RichText::new(*label).size(13.0).color(label_col);
-                                    ui.label(if current { rt.strong() } else { rt });
-                                    ui.label(
-                                        RichText::new(*sublabel)
-                                            .size(10.0)
-                                            .color(if current {
+                                    ui.add_space(6.0);
+                                    ui.vertical(|ui| {
+                                        let rt = RichText::new(*label).size(13.0).color(label_col);
+                                        ui.label(if current { rt.strong() } else { rt });
+                                        ui.label(RichText::new(*sublabel).size(10.0).color(
+                                            if current {
                                                 Color32::from_rgb(80, 100, 130)
                                             } else {
                                                 Color32::from_rgb(48, 54, 61)
-                                            }),
-                                    );
+                                            },
+                                        ));
+                                    });
                                 });
-                            });
-                            // Invisible click target over the whole cell
-                            ui.interact(
-                                ui.min_rect(),
-                                ui.id().with(("step_click", i)),
-                                egui::Sense::click(),
-                            )
-                            .clicked()
-                        }).inner;
+                                // Invisible click target over the whole cell
+                                ui.interact(
+                                    ui.min_rect(),
+                                    ui.id().with(("step_click", i)),
+                                    egui::Sense::click(),
+                                )
+                                .clicked()
+                            })
+                            .inner;
 
                         if clicked && !self.job_running {
                             // Allow backward navigation freely; forward navigation only to
@@ -1082,7 +1114,11 @@ impl ForgeApp {
                                 "⚠  {} error{}{}",
                                 error_count,
                                 if error_count == 1 { "" } else { "s" },
-                                if self.log_errors_only { "  [filtered]" } else { "" },
+                                if self.log_errors_only {
+                                    "  [filtered]"
+                                } else {
+                                    ""
+                                },
                             )
                         } else if self.log_entries.is_empty() {
                             if self.log_errors_only {
@@ -1265,14 +1301,29 @@ impl ForgeApp {
     fn show_distro_cards(&mut self, ui: &mut Ui, running: bool) {
         section(ui, "Choose Your Linux");
         let top_picks: &[(&str, &str, &str, &str)] = &[
-            ("ubuntu-server-lts",   "🟠", "Ubuntu Server",  "LTS · unattended"),
-            ("ubuntu-desktop-lts",  "🟠", "Ubuntu Desktop", "LTS · full GUI"),
-            ("linux-mint-cinnamon", "🟢", "Linux Mint",     "Beginner-friendly"),
-            ("fedora-workstation",  "🔵", "Fedora",         "Cutting-edge"),
-            ("rocky-linux",         "🪨", "Rocky Linux",    "RHEL-compatible"),
-            ("arch-linux",          "🏹", "Arch Linux",     "Rolling release"),
-            ("debian-netinst",      "🌀", "Debian",         "Rock-solid"),
-            ("pop-os-24-intel",     "🚀", "Pop!_OS",        "Gaming & science"),
+            (
+                "ubuntu-server-lts",
+                "🟠",
+                "Ubuntu Server",
+                "LTS · unattended",
+            ),
+            (
+                "ubuntu-desktop-lts",
+                "🟠",
+                "Ubuntu Desktop",
+                "LTS · full GUI",
+            ),
+            (
+                "linux-mint-cinnamon",
+                "🟢",
+                "Linux Mint",
+                "Beginner-friendly",
+            ),
+            ("fedora-workstation", "🔵", "Fedora", "Cutting-edge"),
+            ("rocky-linux", "🪨", "Rocky Linux", "RHEL-compatible"),
+            ("arch-linux", "🏹", "Arch Linux", "Rolling release"),
+            ("debian-netinst", "🌀", "Debian", "Rock-solid"),
+            ("pop-os-24-intel", "🚀", "Pop!_OS", "Gaming & science"),
         ];
         let gap = 10.0;
         let card_w = ((ui.available_width() - gap * 3.0).max(0.0) / 4.0).max(110.0);
@@ -1297,10 +1348,11 @@ impl ForgeApp {
                                 ui.label(RichText::new(*emoji).size(28.0));
                                 ui.add_space(5.0);
                                 ui.label(
-                                    RichText::new(*name)
-                                        .size(13.0)
-                                        .strong()
-                                        .color(if selected { ACCENT } else { TEXT }),
+                                    RichText::new(*name).size(13.0).strong().color(if selected {
+                                        ACCENT
+                                    } else {
+                                        TEXT
+                                    }),
                                 );
                                 ui.add_space(1.0);
                                 ui.label(RichText::new(*desc).size(11.0).color(MUTED));
@@ -1338,10 +1390,7 @@ impl ForgeApp {
         // Source URL / file picker
         section(ui, "Source ISO");
         let has_source = !self.inject.source.trim().is_empty();
-        let text_w = (ui.available_width()
-            - 104.0
-            - if has_source { 46.0 } else { 0.0 })
-        .max(50.0);
+        let text_w = (ui.available_width() - 104.0 - if has_source { 46.0 } else { 0.0 }).max(50.0);
         ui.horizontal(|ui| {
             ui.add_enabled(
                 !running,
@@ -1384,9 +1433,9 @@ impl ForgeApp {
             if !self.inject.distro.is_empty() && self.inject.distro != "ubuntu" {
                 let label = match self.inject.distro.as_str() {
                     "fedora" => "Fedora / RHEL",
-                    "arch"   => "Arch Linux",
-                    "mint"   => "Linux Mint",
-                    other    => other,
+                    "arch" => "Arch Linux",
+                    "mint" => "Linux Mint",
+                    other => other,
                 };
                 ui.label(
                     RichText::new(format!("Detected: {label}"))
@@ -1471,16 +1520,32 @@ impl ForgeApp {
                         egui::ComboBox::from_id_salt("distro_inline_combo")
                             .selected_text(match self.inject.distro.as_str() {
                                 "fedora" => "Fedora  (Kickstart)",
-                                "arch"   => "Arch Linux  (archinstall)",
-                                "mint"   => "Linux Mint  (preseed)",
-                                _        => "Ubuntu / Debian  (cloud-init)",
+                                "arch" => "Arch Linux  (archinstall)",
+                                "mint" => "Linux Mint  (preseed)",
+                                _ => "Ubuntu / Debian  (cloud-init)",
                             })
                             .width(240.0)
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.inject.distro, "ubuntu".into(), "Ubuntu / Debian  (cloud-init)");
-                                ui.selectable_value(&mut self.inject.distro, "mint".into(),   "Linux Mint  (preseed)");
-                                ui.selectable_value(&mut self.inject.distro, "fedora".into(), "Fedora  (Kickstart)");
-                                ui.selectable_value(&mut self.inject.distro, "arch".into(),   "Arch Linux  (archinstall)");
+                                ui.selectable_value(
+                                    &mut self.inject.distro,
+                                    "ubuntu".into(),
+                                    "Ubuntu / Debian  (cloud-init)",
+                                );
+                                ui.selectable_value(
+                                    &mut self.inject.distro,
+                                    "mint".into(),
+                                    "Linux Mint  (preseed)",
+                                );
+                                ui.selectable_value(
+                                    &mut self.inject.distro,
+                                    "fedora".into(),
+                                    "Fedora  (Kickstart)",
+                                );
+                                ui.selectable_value(
+                                    &mut self.inject.distro,
+                                    "arch".into(),
+                                    "Arch Linux  (archinstall)",
+                                );
                             });
                     });
                 });
@@ -1548,8 +1613,7 @@ impl ForgeApp {
                                     .size(12.0)
                                     .color(RED),
                             );
-                        } else if !self.inject.password.is_empty()
-                            && self.inject.password.len() < 8
+                        } else if !self.inject.password.is_empty() && self.inject.password.len() < 8
                         {
                             ui.label(
                                 RichText::new("Use at least 8 characters")
@@ -3163,7 +3227,6 @@ impl ForgeApp {
         }
     }
 
-
     fn show_doctor(&mut self, ui: &mut Ui) {
         let running = self.job_running;
 
@@ -3368,10 +3431,10 @@ impl eframe::App for ForgeApp {
                     .inner_margin(egui::Margin::symmetric(28, 20)),
             )
             .show(ctx, |ui| match self.app_step {
-                AppStep::Source    => self.show_step_source(ui),
+                AppStep::Source => self.show_step_source(ui),
                 AppStep::Configure => self.show_step_configure(ui),
-                AppStep::Build     => self.show_step_build(ui),
-                AppStep::Check     => self.show_verify(ui),
+                AppStep::Build => self.show_step_build(ui),
+                AppStep::Check => self.show_verify(ui),
             });
 
         // Floating Doctor window
