@@ -43,6 +43,9 @@ fpm \
   --depends       "xorriso" \
   --depends       "squashfs-tools" \
   --depends       "mtools" \
+  --deb-recommends "zenity | kdialog" \
+  --deb-recommends "wl-clipboard | xclip | xsel" \
+  --deb-recommends "xdg-utils" \
   --deb-priority  "optional" \
   --deb-no-default-config-files \
   --package       "${DEB_OUT}" \
@@ -50,7 +53,7 @@ fpm \
   usr
 
 echo "[deb] verifying package..."
-dpkg-deb --info "${DEB_OUT}" 2>/dev/null | grep -E "Package|Version|Architecture|Installed-Size|Depends" || true
+dpkg-deb --info "${DEB_OUT}" 2>/dev/null | grep -E "Package|Version|Architecture|Installed-Size|Depends|Recommends" || true
 
 echo "[deb] OK: ${DEB_OUT}"
 ls -lh "${DEB_OUT}"

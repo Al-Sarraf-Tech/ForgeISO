@@ -21,6 +21,15 @@ use state::{InjectState, PersistedState, VerifyState};
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
+    if !has_display_env(
+        std::env::var_os("DISPLAY").as_deref(),
+        std::env::var_os("WAYLAND_DISPLAY").as_deref(),
+    ) {
+        anyhow::bail!(
+            "No graphical display detected. Use `forgeiso-desktop` from a desktop session, or run `forgeiso-tui` / `forgeiso` on headless systems."
+        );
+    }
+
     // Multi-threaded tokio runtime for engine async work.
     let rt = Arc::new(
         tokio::runtime::Builder::new_multi_thread()
@@ -318,16 +327,23 @@ fn main() -> anyhow::Result<()> {
         with_app(|a| a.spawn_iso9660());
     });
 
-    // copy-sha256  — write artifact hash to clipboard via xclip/xsel
+    // copy-sha256  — write artifact hash to clipboard via wl-copy/xclip/xsel
     {
         let weak = win.as_weak();
         win.on_copy_sha256(move || {
             if let Some(w) = weak.upgrade() {
                 let hash: String = w.get_artifact_sha256().into();
                 if !hash.is_empty() {
-                    copy_to_clipboard(&hash);
-                    w.set_status_text("SHA-256 copied to clipboard".into());
-                    w.set_status_is_error(false);
+                    match copy_to_clipboard(&hash) {
+                        Ok(()) => {
+                            w.set_status_text("SHA-256 copied to clipboard".into());
+                            w.set_status_is_error(false);
+                        }
+                        Err(msg) => {
+                            w.set_status_text(msg.into());
+                            w.set_status_is_error(true);
+                        }
+                    }
                 }
             }
         });
@@ -344,10 +360,16 @@ fn main() -> anyhow::Result<()> {
                         .parent()
                         .map(|p| p.to_string_lossy().into_owned())
                         .unwrap_or(path);
-                    std::process::Command::new("xdg-open")
-                        .arg(&dir)
-                        .spawn()
-                        .ok();
+                    match open_in_file_manager(&dir) {
+                        Ok(()) => {
+                            w.set_status_text("Opened artifact folder".into());
+                            w.set_status_is_error(false);
+                        }
+                        Err(msg) => {
+                            w.set_status_text(msg.into());
+                            w.set_status_is_error(true);
+                        }
+                    }
                 }
             }
         });
@@ -506,30 +528,168 @@ fn restore_verify(w: &AppWindow, s: &VerifyState) {
 
 // ── Clipboard helper ──────────────────────────────────────────────────────────
 
-fn copy_to_clipboard(text: &str) {
-    // Try xclip first, fall back to xsel.
-    let ok = std::process::Command::new("xclip")
-        .args(["-selection", "clipboard"])
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .and_then(|mut c| {
-            use std::io::Write;
-            c.stdin.as_mut().map(|s| s.write_all(text.as_bytes()));
-            c.wait()
-        })
-        .map(|s| s.success())
-        .unwrap_or(false);
+fn copy_to_clipboard(text: &str) -> Result<(), &'static str> {
+    if let Some(message) = clipboard_unavailable_message(has_graphical_session()) {
+        return Err(message);
+    }
+    for (program, args) in clipboard_programs(has_wayland_session()) {
+        if try_write_command(program, args, text)? {
+            return Ok(());
+        }
+    }
 
-    if !ok {
-        std::process::Command::new("xsel")
-            .args(["--clipboard", "--input"])
-            .stdin(std::process::Stdio::piped())
-            .spawn()
-            .and_then(|mut c| {
+    Err("Clipboard helper not found — install wl-clipboard, xclip, or xsel")
+}
+
+fn open_in_file_manager(path: &str) -> Result<(), &'static str> {
+    if !has_graphical_session() {
+        return Err(
+            "Open Folder requires a graphical session — open the output directory manually",
+        );
+    }
+
+    for (program, args) in file_manager_programs() {
+        let result = std::process::Command::new(program)
+            .args(args)
+            .arg(path)
+            .output();
+
+        match result {
+            Ok(output) if output.status.success() => return Ok(()),
+            Ok(_) => {
+                return Err("File manager launcher failed — open the output directory manually");
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(_) => return Err("Failed to launch a file manager for the artifact directory"),
+        }
+    }
+
+    Err("No file manager launcher found — install xdg-utils or gio")
+}
+
+fn has_graphical_session() -> bool {
+    has_display_env(
+        std::env::var_os("DISPLAY").as_deref(),
+        std::env::var_os("WAYLAND_DISPLAY").as_deref(),
+    )
+}
+
+fn has_display_env(
+    display: Option<&std::ffi::OsStr>,
+    wayland_display: Option<&std::ffi::OsStr>,
+) -> bool {
+    display.is_some_and(|value| !value.is_empty())
+        || wayland_display.is_some_and(|value| !value.is_empty())
+}
+
+fn has_wayland_session() -> bool {
+    has_wayland_session_from(
+        std::env::var_os("WAYLAND_DISPLAY").is_some(),
+        std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+    )
+}
+
+fn has_wayland_session_from(wayland_display: bool, session_type: Option<&str>) -> bool {
+    wayland_display || session_type.is_some_and(|value| value.eq_ignore_ascii_case("wayland"))
+}
+
+fn clipboard_unavailable_message(has_graphical_session: bool) -> Option<&'static str> {
+    (!has_graphical_session).then_some(
+        "Clipboard copy requires a graphical session — copy the SHA-256 manually from the field",
+    )
+}
+
+fn try_write_command(program: &str, args: &[&str], text: &str) -> Result<bool, &'static str> {
+    let spawned = std::process::Command::new(program)
+        .args(args)
+        .stdin(std::process::Stdio::piped())
+        .spawn();
+
+    match spawned {
+        Ok(mut child) => {
+            if let Some(stdin) = child.stdin.as_mut() {
                 use std::io::Write;
-                c.stdin.as_mut().map(|s| s.write_all(text.as_bytes()));
-                c.wait()
-            })
-            .ok();
+                if stdin.write_all(text.as_bytes()).is_err() {
+                    return Err("Failed to write to the clipboard helper");
+                }
+            }
+            match child.wait() {
+                Ok(status) => Ok(status.success()),
+                Err(_) => Err("Failed to wait for the clipboard helper"),
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(_) => Err("Failed to launch the clipboard helper"),
+    }
+}
+
+fn clipboard_programs(has_wayland: bool) -> Vec<(&'static str, &'static [&'static str])> {
+    let mut programs = Vec::new();
+    if has_wayland {
+        programs.push(("wl-copy", &[][..]));
+    }
+    programs.push(("xclip", &["-selection", "clipboard"][..]));
+    programs.push(("xsel", &["--clipboard", "--input"][..]));
+    programs
+}
+
+fn file_manager_programs() -> [(&'static str, &'static [&'static str]); 2] {
+    [("xdg-open", &[]), ("gio", &["open"])]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        clipboard_programs, clipboard_unavailable_message, file_manager_programs, has_display_env,
+        has_wayland_session_from,
+    };
+    use std::ffi::OsStr;
+
+    #[test]
+    fn wayland_clipboard_prefers_wl_copy() {
+        let programs = clipboard_programs(true);
+        assert_eq!(programs[0].0, "wl-copy");
+        assert_eq!(programs[1].0, "xclip");
+        assert_eq!(programs[2].0, "xsel");
+    }
+
+    #[test]
+    fn x11_clipboard_fallback_skips_wl_copy() {
+        let programs = clipboard_programs(false);
+        assert_eq!(programs[0].0, "xclip");
+        assert_eq!(programs[1].0, "xsel");
+    }
+
+    #[test]
+    fn wayland_detection_accepts_wayland_display_or_session_type() {
+        assert!(has_wayland_session_from(true, None));
+        assert!(has_wayland_session_from(false, Some("wayland")));
+        assert!(!has_wayland_session_from(false, Some("x11")));
+    }
+
+    #[test]
+    fn display_env_accepts_x11_or_wayland() {
+        assert!(has_display_env(Some(OsStr::new(":0")), None));
+        assert!(has_display_env(None, Some(OsStr::new("wayland-0"))));
+    }
+
+    #[test]
+    fn display_env_rejects_missing_or_empty_values() {
+        assert!(!has_display_env(None, None));
+        assert!(!has_display_env(Some(OsStr::new("")), Some(OsStr::new(""))));
+    }
+
+    #[test]
+    fn headless_clipboard_returns_helpful_error() {
+        let err = clipboard_unavailable_message(false)
+            .expect("headless copy should report a user-facing error");
+        assert!(err.contains("graphical session"));
+    }
+
+    #[test]
+    fn file_manager_prefers_xdg_open_then_gio() {
+        let programs = file_manager_programs();
+        assert_eq!(programs[0].0, "xdg-open");
+        assert_eq!(programs[1].0, "gio");
     }
 }

@@ -70,11 +70,18 @@ sudo apt-get install -f        # pull in xorriso, squashfs-tools, mtools if miss
 ```bash
 tar -xzf forgeiso-0.2.1-linux-x86_64.tar.gz
 sudo install -m755 forgeiso-0.2.1-linux-x86_64/bin/forgeiso /usr/local/bin/
+sudo install -m755 forgeiso-0.2.1-linux-x86_64/bin/forgeiso-tui /usr/local/bin/
+sudo install -m755 forgeiso-0.2.1-linux-x86_64/bin/forgeiso-desktop /usr/local/bin/
 sudo install -m755 forgeiso-0.2.1-linux-x86_64/bin/forge-slint /usr/local/bin/
 ```
 
 > **Required tools:** `xorriso` · `squashfs-tools` · `mtools`
+> **GUI helpers:** `zenity` or `kdialog` for file picking, `wl-clipboard` or `xclip`/`xsel` for copy, `xdg-utils` for “Open Folder”
 > **Optional (smoke testing):** `qemu-system-x86_64` · `ovmf`
+
+For the safest desktop experience, launch `forgeiso-desktop` from packages or tarballs. It prefers `forge-slint`, falls back to `forge-gui`, then falls back to TUI/CLI when no graphical session is available.
+
+If you switch from a tarball install in `/usr/local/bin` to an RPM/DEB/pacman package, remove old `/usr/local/bin/forgeiso*`, `/usr/local/bin/forge-slint`, `/usr/local/bin/forge-gui`, and `/usr/local/bin/forgeiso-desktop` first. `/usr/local/bin` shadows `/usr/bin`, so stale tarball binaries can mask packaged upgrades.
 
 Verify your download:
 ```bash
@@ -92,12 +99,13 @@ forgeiso doctor
 
 ### GUI (recommended for new users)
 ```bash
-forge-slint
+forgeiso-desktop
 ```
 
 The wizard walks through: **Choose ISO** → **Configure** → **Build** → **Verify**.
 
 > On Intel integrated GPUs, set `MESA_GL_VERSION_OVERRIDE=3.3` if you see rendering issues.
+> On headless or SSH-only systems, `forgeiso-desktop` falls back to `forgeiso-tui` or `forgeiso`.
 
 ### Ubuntu (fully unattended)
 ```bash
@@ -408,14 +416,18 @@ cargo build --release
 Install binaries:
 ```bash
 sudo install -m755 target/release/forgeiso /usr/local/bin/
+sudo install -m755 target/release/forgeiso-tui /usr/local/bin/
+sudo install -m755 scripts/release/forgeiso-desktop /usr/local/bin/
 sudo install -m755 target/release/forge-slint /usr/local/bin/
 sudo install -m755 target/release/forge-gui /usr/local/bin/
-sudo install -m755 target/release/forgeiso-tui /usr/local/bin/
 ```
+
+If you later switch to an RPM/DEB/pacman package, remove stale `/usr/local/bin`
+ForgeISO binaries first so they do not shadow the packaged copies in `/usr/bin`.
 
 Run tests:
 ```bash
-cargo test --workspace        # 614 tests
+cargo test --workspace        # 627 tests
 cargo deny check              # license + advisory gate
 ```
 
@@ -423,7 +435,7 @@ cargo deny check              # license + advisory gate
 
 ## CI
 
-Six ephemeral Docker containers run in parallel on every push.
+Seven ephemeral Docker containers run in parallel on every push.
 
 | Stage | What it checks |
 |---|---|

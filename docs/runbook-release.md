@@ -170,9 +170,27 @@ forgeiso doctor
 ```bash
 sudo dpkg -r forgeiso 2>/dev/null || true
 sudo dpkg -i forgeiso_${VERSION}-1_amd64.deb
+sudo apt-get install -f        # pull in xorriso, squashfs-tools, mtools if missing
+sudo apt-get install -y zenity wl-clipboard xdg-utils   # optional GUI helpers
 forgeiso --version
 forgeiso doctor
 ```
+
+### Tarball upgrade hygiene
+
+If you tested a tarball before installing a distro package, clear old
+`/usr/local/bin` ForgeISO binaries first:
+
+```bash
+sudo rm -f /usr/local/bin/forgeiso \
+  /usr/local/bin/forgeiso-tui \
+  /usr/local/bin/forge-slint \
+  /usr/local/bin/forge-gui \
+  /usr/local/bin/forgeiso-desktop
+```
+
+This avoids `/usr/local/bin` shadowing newer package-managed binaries in
+`/usr/bin`.
 
 ---
 

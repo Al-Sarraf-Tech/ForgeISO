@@ -18,12 +18,16 @@ mkdir -p "${RELEASE_DIR}"
 STAGE_NAME="forgeiso-${VERSION}-linux-x86_64"
 STAGE_DIR="${ROOT_DIR}/dist/${STAGE_NAME}"
 ARCHIVE="${RELEASE_DIR}/${STAGE_NAME}.tar.gz"
+STAGING="$(mktemp -d)"
 
 rm -rf "${STAGE_DIR}"
+trap 'rm -rf "${STAGE_DIR}" "${STAGING}"' EXIT
+
 mkdir -p "${STAGE_DIR}/bin"
 
 cp "${BIN_DIR}/forgeiso"     "${STAGE_DIR}/bin/"
 cp "${BIN_DIR}/forgeiso-tui" "${STAGE_DIR}/bin/"
+cp "${ROOT_DIR}/scripts/release/forgeiso-desktop" "${STAGE_DIR}/bin/"
 # Slint GUI (primary) — include if built
 if [[ -f "${BIN_DIR}/forge-slint" ]]; then
   cp "${BIN_DIR}/forge-slint" "${STAGE_DIR}/bin/"
@@ -35,8 +39,11 @@ fi
 cp "${ROOT_DIR}/README.md"   "${STAGE_DIR}/README.md"
 printf '%s\n' "${VERSION}" > "${STAGE_DIR}/VERSION"
 
+forgeiso_build_staging "${BIN_DIR}" "${ROOT_DIR}" "${STAGING}"
+cp -a "${STAGING}/usr/share" "${STAGE_DIR}/share"
+
 tar -C "${ROOT_DIR}/dist" -czf "${ARCHIVE}" "${STAGE_NAME}"
-rm -rf "${STAGE_DIR}"
+rm -rf "${STAGE_DIR}" "${STAGING}"
 
 echo "[tarball] OK: ${ARCHIVE}"
 ls -lh "${ARCHIVE}"

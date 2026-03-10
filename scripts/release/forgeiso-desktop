@@ -13,12 +13,52 @@ _has_display() {
     [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]
 }
 
-if _has_display && command -v forge-slint &>/dev/null; then
-    exec forge-slint "$@"
-elif _has_display && command -v forge-gui &>/dev/null; then
-    exec forge-gui "$@"
-elif command -v forgeiso-tui &>/dev/null; then
-    exec forgeiso-tui "$@"
+_note() {
+    printf 'forgeiso-desktop: %s\n' "$*" >&2
+}
+
+_script_dir() {
+    cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+}
+
+_resolve_binary() {
+    local name="$1"
+    local sibling="$(_script_dir)/${name}"
+
+    if [ -x "${sibling}" ]; then
+        printf '%s\n' "${sibling}"
+        return 0
+    fi
+
+    command -v "${name}" 2>/dev/null || true
+}
+
+slint_bin="$(_resolve_binary forge-slint)"
+gui_bin="$(_resolve_binary forge-gui)"
+tui_bin="$(_resolve_binary forgeiso-tui)"
+cli_bin="$(_resolve_binary forgeiso)"
+
+if _has_display && [ -n "${slint_bin}" ]; then
+    exec "${slint_bin}" "$@"
+elif _has_display && [ -n "${gui_bin}" ]; then
+    _note "forge-slint not found; starting forge-gui instead"
+    exec "${gui_bin}" "$@"
+elif [ -n "${tui_bin}" ]; then
+    if ! _has_display; then
+        _note "no graphical display detected; falling back to forgeiso-tui"
+    else
+        _note "no desktop GUI binary found; falling back to forgeiso-tui"
+    fi
+    exec "${tui_bin}" "$@"
 else
-    exec forgeiso "$@"
+    if ! _has_display; then
+        _note "no graphical display detected; falling back to forgeiso CLI"
+    else
+        _note "no GUI or TUI binary found; falling back to forgeiso CLI"
+    fi
+    if [ -n "${cli_bin}" ]; then
+        exec "${cli_bin}" "$@"
+    fi
+    _note "forgeiso binary not found on PATH or next to launcher"
+    exit 127
 fi
