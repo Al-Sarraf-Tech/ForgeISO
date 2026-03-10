@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ForgeISO desktop launcher — shipped in all release packages.
-# Prefers the egui GUI when a display is available, falls back to TUI, then CLI.
+# Prefers forge-slint (Slint GUI, primary) when a display is available,
+# falls back to forge-gui (egui, alternate), then TUI, then CLI.
 #
 # Installation path: /usr/bin/forgeiso-desktop
 # The .desktop file (Exec=forgeiso-desktop) points here so that
@@ -8,8 +9,13 @@
 
 set -euo pipefail
 
-if { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; } \
-   && command -v forge-gui &>/dev/null; then
+_has_display() {
+    [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]
+}
+
+if _has_display && command -v forge-slint &>/dev/null; then
+    exec forge-slint "$@"
+elif _has_display && command -v forge-gui &>/dev/null; then
     exec forge-gui "$@"
 elif command -v forgeiso-tui &>/dev/null; then
     exec forgeiso-tui "$@"

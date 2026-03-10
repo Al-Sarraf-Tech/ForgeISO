@@ -24,6 +24,14 @@ mkdir -p "${STAGE_DIR}/bin"
 
 cp "${BIN_DIR}/forgeiso"     "${STAGE_DIR}/bin/"
 cp "${BIN_DIR}/forgeiso-tui" "${STAGE_DIR}/bin/"
+# Slint GUI (primary) — include if built
+if [[ -f "${BIN_DIR}/forge-slint" ]]; then
+  cp "${BIN_DIR}/forge-slint" "${STAGE_DIR}/bin/"
+fi
+# egui GUI (alternate) — include if built
+if [[ -f "${BIN_DIR}/forge-gui" ]]; then
+  cp "${BIN_DIR}/forge-gui" "${STAGE_DIR}/bin/"
+fi
 cp "${ROOT_DIR}/README.md"   "${STAGE_DIR}/README.md"
 printf '%s\n' "${VERSION}" > "${STAGE_DIR}/VERSION"
 

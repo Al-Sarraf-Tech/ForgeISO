@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/jalsarraf0/ForgeISO)](https://github.com/jalsarraf0/ForgeISO/releases/latest)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-**Current version: v0.2.0** — early-access baseline. The GUI and engine are functional but not production-hardened.
+**Current version: v0.2.1** — early-access baseline. The GUI and engine are functional but not production-hardened.
 
 ForgeISO injects fully automated installation configs into Linux ISOs (Ubuntu, Linux Mint, Fedora, Arch Linux, Rocky, AlmaLinux, CentOS Stream, and more) and produces bootable ISOs that install hands-free. It also inspects, verifies, diffs, scans, and smoke-tests ISOs — all from a single binary on your Linux host.
 
@@ -57,20 +57,20 @@ Download the latest release from the **[Releases page](https://github.com/jalsar
 
 ### Fedora · RHEL · openSUSE
 ```bash
-sudo rpm -ivh forgeiso-0.2.0-1.x86_64.rpm
+sudo rpm -ivh forgeiso-0.2.1-1.x86_64.rpm
 ```
 
 ### Debian · Ubuntu · Linux Mint
 ```bash
-sudo dpkg -i forgeiso_0.2.0-1_amd64.deb
+sudo dpkg -i forgeiso_0.2.1-1_amd64.deb
 sudo apt-get install -f        # pull in xorriso, squashfs-tools, mtools if missing
 ```
 
 ### Any x86-64 Linux (tarball)
 ```bash
-tar -xzf forgeiso-0.2.0-linux-x86_64.tar.gz
-sudo install -m755 forgeiso-0.2.0-linux-x86_64/bin/forgeiso /usr/local/bin/
-sudo install -m755 forgeiso-0.2.0-linux-x86_64/bin/forge-slint /usr/local/bin/
+tar -xzf forgeiso-0.2.1-linux-x86_64.tar.gz
+sudo install -m755 forgeiso-0.2.1-linux-x86_64/bin/forgeiso /usr/local/bin/
+sudo install -m755 forgeiso-0.2.1-linux-x86_64/bin/forge-slint /usr/local/bin/
 ```
 
 > **Required tools:** `xorriso` · `squashfs-tools` · `mtools`

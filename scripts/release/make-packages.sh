@@ -21,6 +21,11 @@ forgeiso_require_binary "${BIN_DIR}" "forgeiso"
 forgeiso_require_binary "${BIN_DIR}" "forgeiso-tui"
 echo "  forgeiso:     $(ls -lh "${BIN_DIR}/forgeiso" | awk '{print $5}')"
 echo "  forgeiso-tui: $(ls -lh "${BIN_DIR}/forgeiso-tui" | awk '{print $5}')"
+if [[ -f "${BIN_DIR}/forge-slint" ]]; then
+  echo "  forge-slint:  $(ls -lh "${BIN_DIR}/forge-slint" | awk '{print $5}')"
+else
+  echo "  forge-slint:  (not built — run: cargo build -p forge-slint --release)"
+fi
 if [[ -f "${BIN_DIR}/forge-gui" ]]; then
   echo "  forge-gui:    $(ls -lh "${BIN_DIR}/forge-gui" | awk '{print $5}')"
 else

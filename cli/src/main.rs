@@ -550,6 +550,9 @@ async fn main() -> anyhow::Result<()> {
                 println!("Actual:   {}", result.actual);
                 println!("Match:    {}", result.matched);
             }
+            if !result.matched {
+                std::process::exit(1);
+            }
         }
         Commands::Inject {
             source,

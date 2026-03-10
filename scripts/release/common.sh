@@ -52,7 +52,11 @@ forgeiso_build_staging() {
 
   install -Dm755 "${bin_dir}/forgeiso"     "${staging}/usr/bin/forgeiso"
   install -Dm755 "${bin_dir}/forgeiso-tui" "${staging}/usr/bin/forgeiso-tui"
-  # egui GUI — optional, only staged if built
+  # Slint GUI (primary) — optional, only staged if built
+  if [[ -f "${bin_dir}/forge-slint" ]]; then
+    install -Dm755 "${bin_dir}/forge-slint" "${staging}/usr/bin/forge-slint"
+  fi
+  # egui GUI (alternate) — optional, only staged if built
   if [[ -f "${bin_dir}/forge-gui" ]]; then
     install -Dm755 "${bin_dir}/forge-gui" "${staging}/usr/bin/forge-gui"
   fi
@@ -96,7 +100,7 @@ DESKTOP
 _forgeiso() {
   local cur prev
   _init_completion || return
-  local commands="doctor inspect verify build inject diff scan test report"
+  local commands="doctor inspect verify build inject diff scan test report sources vm"
   case "${prev}" in
     forgeiso) COMPREPLY=($(compgen -W "${commands}" -- "${cur}")) ;;
     --source|--out|--base|--target|--build|--autoinstall|--wallpaper)
