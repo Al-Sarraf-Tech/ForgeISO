@@ -17,7 +17,9 @@ ignore = [
     # number_prefix: unmaintained, no vulnerability, no upgrade path (indicatif dep)
     # Tracked: swap indicatif for a maintained alternative when available.
     { id = "RUSTSEC-2025-0119", reason = "number_prefix is unmaintained but has no vulnerability; indicatif has no safe upgrade path yet" },
-
+    # paste: unmaintained, no vulnerability. Slint → femtovg → image → rav1e pulls this on Linux.
+    # No safe upgrade path exists (rav1e 0.8.x is the latest).
+    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained but has no vulnerability; rav1e 0.8.x (via Slint femtovg→image) has no upgrade path" },
 ]
 
 # ── Licenses ─────────────────────────────────────────────────────────────────
@@ -45,6 +47,10 @@ allow = [
     "Ubuntu-font-1.0",
     # Slint Royalty-free license — forge-slint GUI crate
     "LicenseRef-Slint-Royalty-free-2.0",
+    # MPL-2.0: file-level weak copyleft (not GPL); used by option-ext 0.2.0
+    # pulled by dirs 5.0 (forge-slint persisted state path). Changes to MPL
+    # files must be shared, but our code using them is not affected.
+    "MPL-2.0",
 ]
 
 # ring uses a compound OpenSSL + ISC + MIT license in its source tree
