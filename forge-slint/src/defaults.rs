@@ -49,6 +49,31 @@ impl DistroFamily {
     }
 }
 
+pub fn admin_group_for_distro(distro: &str) -> Option<&'static str> {
+    match DistroFamily::from_distro_str(distro) {
+        Some(DistroFamily::Ubuntu | DistroFamily::Mint) => Some("sudo"),
+        Some(DistroFamily::Fedora | DistroFamily::Arch) => Some("wheel"),
+        None => None,
+    }
+}
+
+pub fn auto_user_groups(distro: &str, username: &str) -> String {
+    let mut groups = Vec::new();
+
+    let trimmed_username = username.trim();
+    if !trimmed_username.is_empty() {
+        groups.push(trimmed_username.to_string());
+    }
+
+    if let Some(admin_group) = admin_group_for_distro(distro) {
+        if !groups.iter().any(|group| group == admin_group) {
+            groups.push(admin_group.to_string());
+        }
+    }
+
+    groups.join("\n")
+}
+
 /// Whether a preset is server-oriented (gets more packages) vs desktop.
 fn is_server_preset(preset_id: &str) -> bool {
     matches!(
@@ -163,6 +188,7 @@ pub const DEFAULT_FIELDS: &[&str] = &[
 pub fn apply_defaults(
     defaults: &DistroDefaults,
     edited: &HashSet<String>,
+    distro: &str,
     username: &str,
     docker_enabled: bool,
 ) -> Vec<(&'static str, String)> {
@@ -170,7 +196,6 @@ pub fn apply_defaults(
 
     let fields: &[(&str, &str)] = &[
         ("packages", &defaults.packages),
-        ("user_groups", &defaults.user_groups),
         ("user_shell", &defaults.user_shell),
         ("enable_services", &defaults.enable_services),
         ("disable_services", &defaults.disable_services),
@@ -182,6 +207,10 @@ pub fn apply_defaults(
         if !edited.contains(*name) {
             changes.push((*name, value.to_string()));
         }
+    }
+
+    if !edited.contains("user_groups") {
+        changes.push(("user_groups", auto_user_groups(distro, username)));
     }
 
     // Auto-populate docker_users when Docker is enabled and field not edited.
@@ -289,7 +318,7 @@ mod tests {
         let d = defaults_for("ubuntu", "ubuntu-server-lts");
         let mut edited = HashSet::new();
         edited.insert("packages".to_string());
-        let changes = apply_defaults(&d, &edited, "admin", false);
+        let changes = apply_defaults(&d, &edited, "ubuntu", "admin", false);
         // packages should be skipped
         assert!(changes.iter().all(|(name, _)| *name != "packages"));
         // user_groups should be present
@@ -300,7 +329,7 @@ mod tests {
     fn apply_adds_docker_user_when_enabled() {
         let d = defaults_for("ubuntu", "ubuntu-server-lts");
         let edited = HashSet::new();
-        let changes = apply_defaults(&d, &edited, "admin", true);
+        let changes = apply_defaults(&d, &edited, "ubuntu", "admin", true);
         let docker = changes
             .iter()
             .find(|(name, _)| *name == "docker_users")
@@ -313,7 +342,7 @@ mod tests {
         let d = defaults_for("ubuntu", "ubuntu-server-lts");
         let mut edited = HashSet::new();
         edited.insert("docker_users".to_string());
-        let changes = apply_defaults(&d, &edited, "admin", true);
+        let changes = apply_defaults(&d, &edited, "ubuntu", "admin", true);
         assert!(changes.iter().all(|(name, _)| *name != "docker_users"));
     }
 
@@ -324,5 +353,52 @@ mod tests {
         assert!(s.contains("packages"));
         assert!(s.contains("wheel"));
         assert!(s.contains("/bin/bash"));
+    }
+
+    #[test]
+    fn ubuntu_family_uses_sudo_group() {
+        assert_eq!(defaults_for("ubuntu", "").user_groups, "sudo");
+        assert_eq!(defaults_for("mint", "").user_groups, "sudo");
+    }
+
+    #[test]
+    fn fedora_arch_family_uses_wheel_group() {
+        assert_eq!(defaults_for("fedora", "").user_groups, "wheel");
+        assert_eq!(defaults_for("arch", "").user_groups, "wheel");
+    }
+
+    #[test]
+    fn apply_empty_username_produces_empty_docker_users() {
+        let d = defaults_for("ubuntu", "ubuntu-server-lts");
+        let edited = HashSet::new();
+        let changes = apply_defaults(&d, &edited, "ubuntu", "", true);
+        let docker = changes
+            .iter()
+            .find(|(name, _)| *name == "docker_users")
+            .map(|(_, v)| v.as_str());
+        assert_eq!(docker, Some(""));
+    }
+
+    #[test]
+    fn auto_user_groups_include_private_and_admin_groups() {
+        assert_eq!(auto_user_groups("ubuntu", "admin"), "admin\nsudo");
+        assert_eq!(auto_user_groups("fedora", "admin"), "admin\nwheel");
+    }
+
+    #[test]
+    fn auto_user_groups_deduplicate_admin_named_users() {
+        assert_eq!(auto_user_groups("ubuntu", "sudo"), "sudo");
+        assert_eq!(auto_user_groups("fedora", "wheel"), "wheel");
+    }
+
+    #[test]
+    fn apply_defaults_uses_username_aware_group_defaults() {
+        let d = defaults_for("ubuntu", "ubuntu-server-lts");
+        let edited = HashSet::new();
+        let groups = apply_defaults(&d, &edited, "ubuntu", "admin", false)
+            .into_iter()
+            .find_map(|(name, value)| (name == "user_groups").then_some(value))
+            .expect("user_groups default should be present");
+        assert_eq!(groups, "admin\nsudo");
     }
 }

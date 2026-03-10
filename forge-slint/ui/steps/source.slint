@@ -14,28 +14,32 @@ component DistroCard inherits Rectangle {
     in property <bool>       running: false;
     callback clicked();
 
-    width: 160px;
-    height: 120px;
+    width: 156px;
+    height: 130px;
     border-radius: Sizes.radius-md;
-    background: selected ? rgba(63, 185, 80, 0.12)
-              : hovered && !running ? Palette.elevated
-              : Palette.surface;
-    border-width: 1.5px;
+    background: selected ? rgba(63, 185, 80, 0.16)
+              : hovered && !running ? rgba(255, 255, 255, 0.03)
+              : Palette.elevated;
+    border-width: selected ? 2px : 1px;
     border-color: selected ? Palette.green
                : hovered && !running ? Palette.border-focus
                : Palette.border;
-    opacity: running ? 0.76 : 1.0;
+    opacity: running ? 0.75 : 1.0;
     clip: true;
+    drop-shadow-blur: selected ? 22px : 0px;
+    drop-shadow-color: selected ? rgba(63, 185, 80, 0.20) : transparent;
     animate background { duration: 180ms; }
     animate border-color { duration: 180ms; }
+    animate border-width { duration: 180ms; }
     animate opacity { duration: 180ms; }
+    animate drop-shadow-blur { duration: 250ms; }
 
     property <bool> hovered: touch.has-hover;
 
     // Hover overlay
     Rectangle {
-        background: hovered && !running && selected ? rgba(86, 216, 128, 0.06)
-                  : hovered && !running ? rgba(255, 255, 255, 0.03)
+        background: hovered && !running && !selected ? rgba(255, 255, 255, 0.03)
+                  : hovered && !running && selected ? rgba(63, 185, 80, 0.05)
                   : transparent;
         animate background { duration: 150ms; }
     }
@@ -44,24 +48,23 @@ component DistroCard inherits Rectangle {
     if selected: Rectangle {
         height: 3px;
         background: @linear-gradient(90deg, Palette.green, #56d880);
-        border-radius: 0px;
     }
 
     VerticalLayout {
         alignment: center;
-        spacing: 8px;
-        padding: 16px;
+        spacing: 6px;
+        padding: 14px;
 
         Text {
             text: card.emoji;
-            font-size: 32px;
+            font-size: 30px;
             horizontal-alignment: center;
         }
         Text {
             text: card.name;
             font-size: Sizes.font-sm;
             font-weight: 700;
-            color: selected ? Palette.text : Palette.text;
+            color: Palette.text;
             horizontal-alignment: center;
         }
         Text {
@@ -75,13 +78,14 @@ component DistroCard inherits Rectangle {
             text: "✓ Selected";
             font-size: 10px;
             color: Palette.green;
-            font-weight: 600;
+            font-weight: 700;
             horizontal-alignment: center;
         }
     }
 
     touch := TouchArea {
         enabled: !running;
+        mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
         clicked => { root.clicked(); }
     }
 }
@@ -123,7 +127,7 @@ export component StepSource inherits Rectangle {
                 }
             }
 
-            // ── Distro grid ───────────────────────────────────────────────
+            // ── Distro grid ─────────────────────────────────────────────
             VerticalLayout {
                 spacing: 12px;
                 Text {
@@ -134,10 +138,10 @@ export component StepSource inherits Rectangle {
                     letter-spacing: 1.5px;
                 }
 
-                // Row 1
+                // Row 1 (indices 0–3)
                 HorizontalLayout {
                     spacing: 12px;
-                    alignment: start;
+                    alignment: center;
                     for card[i] in presets: DistroCard {
                         visible: i < 4;
                         card: card;
@@ -147,10 +151,10 @@ export component StepSource inherits Rectangle {
                     }
                 }
 
-                // Row 2
+                // Row 2 (indices 4+)
                 HorizontalLayout {
                     spacing: 12px;
-                    alignment: start;
+                    alignment: center;
                     for card[i] in presets: DistroCard {
                         visible: i >= 4;
                         card: card;
@@ -161,7 +165,7 @@ export component StepSource inherits Rectangle {
                 }
             }
 
-            // ── Manual path entry ─────────────────────────────────────────
+            // ── Manual path entry ───────────────────────────────────────
             VerticalLayout {
                 spacing: 10px;
                 HorizontalLayout {
@@ -275,7 +279,7 @@ export component StepSource inherits Rectangle {
                 }
             }
 
-            // ── Continue button ───────────────────────────────────────────
+            // ── Continue button ─────────────────────────────────────────
             HorizontalLayout {
                 alignment: start;
                 Rectangle {

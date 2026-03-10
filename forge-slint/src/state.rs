@@ -174,6 +174,16 @@ pub fn lines(s: &str) -> Vec<String> {
         .collect()
 }
 
+/// Split a flexible token field into non-empty trimmed strings.
+/// Accepts commas, whitespace, and newlines as separators.
+pub fn tokens(s: &str) -> Vec<String> {
+    s.split(|c: char| c == ',' || c.is_whitespace())
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
 /// Treat empty/whitespace-only string as None.
 pub fn opt(s: &str) -> Option<String> {
     let t = s.trim();
@@ -181,5 +191,29 @@ pub fn opt(s: &str) -> Option<String> {
         None
     } else {
         Some(t.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{lines, opt, tokens};
+
+    #[test]
+    fn lines_only_split_on_newlines() {
+        assert_eq!(lines("a\nb\n\n c "), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn tokens_split_on_commas_spaces_and_newlines() {
+        assert_eq!(
+            tokens("curl git,\nhtop\tvim"),
+            vec!["curl", "git", "htop", "vim"]
+        );
+    }
+
+    #[test]
+    fn opt_trims_whitespace() {
+        assert_eq!(opt("  value  "), Some("value".to_string()));
+        assert_eq!(opt("   "), None);
     }
 }
