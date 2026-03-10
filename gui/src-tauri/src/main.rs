@@ -23,6 +23,8 @@ struct BuildRequest {
     name: String,
     overlay_dir: Option<String>,
     output_label: Option<String>,
+    #[serde(default)]
+    expected_sha256: Option<String>,
     profile: String,
 }
 
@@ -36,6 +38,8 @@ struct InjectRequest {
     output_dir: String,
     out_name: String,
     output_label: Option<String>,
+    #[serde(default)]
+    expected_sha256: Option<String>,
     autoinstall_yaml: Option<String>,
 
     // Identity
@@ -111,6 +115,14 @@ struct InjectRequest {
     // Packages & repos
     packages: Vec<String>,
     apt_repos: Vec<String>,
+    #[serde(default)]
+    dnf_repos: Vec<String>,
+    #[serde(default)]
+    dnf_mirror: Option<String>,
+    #[serde(default)]
+    pacman_repos: Vec<String>,
+    #[serde(default)]
+    pacman_mirror: Option<String>,
 
     // Commands
     run_commands: Vec<String>,
@@ -208,6 +220,7 @@ async fn build_local(
         scanning: Default::default(),
         testing: Default::default(),
         keep_workdir: false,
+        expected_sha256: request.expected_sha256.filter(|v| !v.trim().is_empty()),
     };
 
     let out_dir = PathBuf::from(request.output_dir);
@@ -293,6 +306,7 @@ async fn inject_iso(
         source: IsoSource::from_raw(request.source),
         out_name: request.out_name,
         output_label: opt_str(request.output_label),
+        expected_sha256: opt_str(request.expected_sha256),
         autoinstall_yaml: opt_str(request.autoinstall_yaml).map(PathBuf::from),
         hostname: opt_str(request.hostname),
         username: opt_str(request.username),
@@ -344,6 +358,10 @@ async fn inject_iso(
             swappiness: request.swappiness,
         }),
         apt_repos: request.apt_repos,
+        dnf_repos: request.dnf_repos,
+        dnf_mirror: opt_str(request.dnf_mirror),
+        pacman_repos: request.pacman_repos,
+        pacman_mirror: opt_str(request.pacman_mirror),
         containers: ContainerConfig {
             docker: request.docker,
             podman: request.podman,

@@ -226,6 +226,10 @@ impl ForgeIsoEngine {
                 metadata.architecture.as_deref().unwrap_or("unknown")
             ),
         ));
+        self.emit(EngineEvent::info(
+            EventPhase::Complete,
+            "source inspection completed",
+        ));
         Ok(metadata)
     }
 
@@ -275,7 +279,7 @@ impl ForgeIsoEngine {
         // lossy runner so we still get stdout/stderr for diagnostics, and only
         // fail on an explicit non-zero status — matching the pattern used in
         // inject_autoinstall for the same operation.
-        let extract_out = run_command_lossy(
+        let extract_out = run_command_lossy_async(
             "xorriso",
             &[
                 "-osirrox".to_string(),
@@ -287,7 +291,8 @@ impl ForgeIsoEngine {
                 extract_dir.display().to_string(),
             ],
             None,
-        )?;
+        )
+        .await?;
         if extract_out.status != 0 {
             return Err(EngineError::Runtime(format!(
                 "xorriso extract failed (status {}): {}",
@@ -306,7 +311,7 @@ impl ForgeIsoEngine {
                 require_tools(&["unsquashfs", "mksquashfs"])?;
                 let unpack_dir = workspace.work.join("rootfs");
                 std::fs::create_dir_all(&unpack_dir)?;
-                run_command_lossy(
+                run_command_lossy_async(
                     "unsquashfs",
                     &[
                         "-f".to_string(),
@@ -316,13 +321,14 @@ impl ForgeIsoEngine {
                         rootfs_image.display().to_string(),
                     ],
                     None,
-                )?;
+                )
+                .await?;
                 if let Some(overlay) = cfg.overlay_dir.as_deref() {
                     copy_dir_contents(overlay, &unpack_dir)?;
                 }
                 write_rootfs_manifest(&unpack_dir, cfg, &iso)?;
                 std::fs::remove_file(&rootfs_image)?;
-                run_command_capture(
+                run_command_capture_async(
                     "mksquashfs",
                     &[
                         unpack_dir.display().to_string(),
@@ -333,7 +339,8 @@ impl ForgeIsoEngine {
                         "-no-xattrs".to_string(),
                     ],
                     None,
-                )?;
+                )
+                .await?;
                 rootfs_dir = Some(unpack_dir);
             } else if rootfs_image.exists() {
                 warnings.push(format!(
@@ -359,7 +366,7 @@ impl ForgeIsoEngine {
             &output_iso,
             cfg.output_label.as_deref(),
         )?;
-        run_command_capture("xorriso", &repack_args, None)?;
+        run_command_capture_async("xorriso", &repack_args, None).await?;
 
         let mut report = BuildReport::new(cfg, &iso);
         report.metadata.warnings.extend(warnings);
@@ -525,6 +532,10 @@ impl ForgeIsoEngine {
             EventPhase::Report,
             format!("report rendered to {}", output.display()),
         ));
+        self.emit(EngineEvent::info(
+            EventPhase::Complete,
+            "report generation completed",
+        ));
         Ok(output)
     }
 
@@ -653,18 +664,20 @@ impl ForgeIsoEngine {
         let mut response = response;
         let mut downloaded = 0u64;
         let emit_interval = 512 * 1024; // 512 KB
+        let mut next_emit = emit_interval;
 
         while let Some(chunk) = response.chunk().await? {
             file.write_all(&chunk).await?;
             downloaded += chunk.len() as u64;
 
-            if (downloaded.is_multiple_of(emit_interval) || downloaded == total_size)
-                && total_size > 0
-            {
+            if total_size > 0 && (downloaded >= next_emit || downloaded == total_size) {
                 let msg = format!("{}/{} bytes", downloaded, total_size);
                 self.emit(
                     EngineEvent::info(EventPhase::Download, msg).with_bytes(downloaded, total_size),
                 );
+                while next_emit <= downloaded {
+                    next_emit = next_emit.saturating_add(emit_interval);
+                }
             }
         }
         file.flush().await?;
@@ -764,6 +777,11 @@ impl ForgeIsoEngine {
             ));
             ("no checksums source provided".to_string(), false)
         };
+
+        self.emit(EngineEvent::info(
+            EventPhase::Complete,
+            format!("checksum verification completed (matched={matched})"),
+        ));
 
         Ok(VerifyResult {
             filename,
@@ -961,7 +979,7 @@ impl ForgeIsoEngine {
         // Extract ISO
         let extract_dir = work_dir.join("extract");
         std::fs::create_dir_all(&extract_dir)?;
-        let output = run_command_lossy(
+        let output = run_command_lossy_async(
             "xorriso",
             &[
                 "-osirrox".to_string(),
@@ -973,7 +991,8 @@ impl ForgeIsoEngine {
                 extract_dir.to_string_lossy().to_string(),
             ],
             None,
-        )?;
+        )
+        .await?;
         if output.status != 0 {
             return Err(EngineError::Runtime(format!(
                 "xorriso extract failed: {}",
@@ -1184,7 +1203,7 @@ impl ForgeIsoEngine {
             cfg.output_label.as_deref(),
         )?;
 
-        let output = run_command_lossy("xorriso", &args, None)?;
+        let output = run_command_lossy_async("xorriso", &args, None).await?;
         if output.status != 0 {
             return Err(EngineError::Runtime(format!(
                 "xorriso repack failed: {}",
@@ -1224,6 +1243,11 @@ impl ForgeIsoEngine {
                 ),
             ));
         }
+
+        self.emit(EngineEvent::info(
+            EventPhase::Complete,
+            "autoinstall injection completed",
+        ));
 
         Ok(result)
     }
@@ -1274,6 +1298,10 @@ impl ForgeIsoEngine {
                 modified.len(),
                 unchanged
             ),
+        ));
+        self.emit(EngineEvent::info(
+            EventPhase::Complete,
+            "ISO diff completed",
         ));
 
         Ok(IsoDiff {
@@ -1345,7 +1373,7 @@ impl ForgeIsoEngine {
             check_method = "iso9660_header+xorriso".to_string();
             // xorriso may exit non-zero on some ISOs even when useful output is produced;
             // use the lossy runner so we still get stdout/stderr.
-            if let Ok(result) = run_command_lossy(
+            if let Ok(result) = run_command_lossy_async(
                 "xorriso",
                 &[
                     "-indev".to_string(),
@@ -1354,7 +1382,9 @@ impl ForgeIsoEngine {
                     "plain".to_string(),
                 ],
                 None,
-            ) {
+            )
+            .await
+            {
                 let report = format!(
                     "{}\n{}",
                     result.stdout.to_lowercase(),
@@ -1486,6 +1516,32 @@ pub fn run_command_lossy(
         stdout: String::from_utf8_lossy(&output.stdout).to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
     })
+}
+
+async fn run_command_capture_async(
+    program: &str,
+    args: &[String],
+    cwd: Option<&Path>,
+) -> EngineResult<CommandOutput> {
+    let program = program.to_string();
+    let args = args.to_vec();
+    let cwd = cwd.map(Path::to_path_buf);
+    tokio::task::spawn_blocking(move || run_command_capture(&program, &args, cwd.as_deref()))
+        .await
+        .map_err(|e| EngineError::Runtime(format!("failed to join blocking task: {e}")))?
+}
+
+async fn run_command_lossy_async(
+    program: &str,
+    args: &[String],
+    cwd: Option<&Path>,
+) -> EngineResult<CommandOutput> {
+    let program = program.to_string();
+    let args = args.to_vec();
+    let cwd = cwd.map(Path::to_path_buf);
+    tokio::task::spawn_blocking(move || run_command_lossy(&program, &args, cwd.as_deref()))
+        .await
+        .map_err(|e| EngineError::Runtime(format!("failed to join blocking task: {e}")))?
 }
 
 pub fn sha256_file(path: &Path) -> EngineResult<String> {

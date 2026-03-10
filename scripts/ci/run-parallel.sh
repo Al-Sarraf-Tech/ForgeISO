@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ForgeISO parallel CI runner
 #
-# Builds all 6 CI images in parallel, then launches every stage simultaneously
+# Builds all 7 CI images in parallel, then launches every stage simultaneously
 # in its own ephemeral container with an isolated Cargo target volume.
 # Waits for every job to finish, reports pass/fail for each, then tears down
 # ALL volumes and containers.  Exits 0 only when every stage passes.
 #
 # Usage:
-#   bash scripts/ci/run-parallel.sh           # all 6 stages
+#   bash scripts/ci/run-parallel.sh           # all 7 stages
 #   bash scripts/ci/run-parallel.sh c1 c3     # selected stages only
 #
 # Environment:
@@ -19,6 +19,17 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="${REPO_ROOT}/docker-compose.ci.yml"
 VERBOSE="${FORGEISO_CI_VERBOSE:-0}"
+TOTAL_CPUS="${FORGEISO_CI_TOTAL_CPUS:-18}"
+
+declare -A CPU_WEIGHT=(
+    [c1]=5
+    [c2]=1
+    [c3]=3
+    [c4]=1
+    [c5]=4
+    [c6]=3
+    [c7]=1
+)
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'
@@ -36,6 +47,40 @@ if [[ $# -gt 0 ]]; then
     STAGES=("$@")
 fi
 
+rebalance_cpus() {
+    local running=()
+    local total_weight=0
+
+    for stage in "${STAGES[@]}"; do
+        local cid="${CONTAINERS[$stage]:-}"
+        [[ -n "${cid}" ]] || continue
+        if docker inspect -f '{{.State.Running}}' "${cid}" 2>/dev/null | grep -qx true; then
+            running+=("${stage}")
+            total_weight=$((total_weight + ${CPU_WEIGHT[$stage]:-1}))
+        fi
+    done
+
+    if [[ ${#running[@]} -eq 0 || ${total_weight} -eq 0 ]]; then
+        return
+    fi
+
+    info "Rebalancing CPU budget across ${#running[@]} running stage(s) (total ${TOTAL_CPUS} cores)…"
+    for stage in "${running[@]}"; do
+        local cid="${CONTAINERS[$stage]}"
+        local weight="${CPU_WEIGHT[$stage]:-1}"
+        local cpus
+        local shares
+
+        cpus="$(awk -v total="${TOTAL_CPUS}" -v weight="${weight}" -v sum="${total_weight}" \
+            'BEGIN { printf "%.2f", (total * weight) / sum }')"
+        shares="$(awk -v total="${TOTAL_CPUS}" -v weight="${weight}" -v sum="${total_weight}" \
+            'BEGIN { printf "%d", int((1024 * total * weight) / sum) }')"
+
+        docker update --cpus "${cpus}" --cpu-shares "${shares}" "${cid}" >/dev/null
+        echo "  ${stage}: cpus=${cpus} cpu-shares=${shares}"
+    done
+}
+
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 cleanup() {
     info "Tearing down ephemeral containers and volumes…"
@@ -48,37 +93,63 @@ info "Building CI images in parallel (${STAGES[*]})…"
 docker compose -f "${COMPOSE_FILE}" build --parallel "${STAGES[@]}"
 
 # ── Step 2: Launch all containers simultaneously ──────────────────────────────
-info "Launching ${#STAGES[@]} ephemeral containers in parallel…"
+info "Launching ${#STAGES[@]} ephemeral containers in parallel with a ${TOTAL_CPUS}-core budget…"
 
 declare -A PIDS       # stage → background PID
+declare -A WAIT_PIDS  # stage → docker wait PID
+declare -A CONTAINERS # stage → container id
 declare -A LOG_FILES  # stage → temp log file
+declare -A STATUS_FILES
 
 for stage in "${STAGES[@]}"; do
     log="$(mktemp /tmp/forgeiso-ci-${stage}-XXXXXX.log)"
     LOG_FILES[$stage]="${log}"
+    STATUS_FILES[$stage]="$(mktemp /tmp/forgeiso-ci-${stage}-status-XXXXXX)"
+
+    cid="$(docker compose -f "${COMPOSE_FILE}" run -d --rm --no-deps "${stage}")"
+    CONTAINERS[$stage]="${cid}"
 
     if [[ "${VERBOSE}" == "1" ]]; then
-        docker compose -f "${COMPOSE_FILE}" run --rm --no-deps "${stage}" \
-            2>&1 | tee "${log}" &
+        docker logs -f "${cid}" 2>&1 | tee "${log}" &
     else
-        docker compose -f "${COMPOSE_FILE}" run --rm --no-deps "${stage}" \
-            >"${log}" 2>&1 &
+        docker logs -f "${cid}" >"${log}" 2>&1 &
     fi
     PIDS[$stage]=$!
-    echo "  Started ${stage} (PID ${PIDS[$stage]})"
+
+    docker wait "${cid}" >"${STATUS_FILES[$stage]}" &
+    WAIT_PIDS[$stage]=$!
+    echo "  Started ${stage} (container ${cid})"
 done
+
+rebalance_cpus
 
 # ── Step 3: Wait for every job, collect results ───────────────────────────────
 echo ""
 FAILED=()
 PASSED=()
+PENDING=("${STAGES[@]}")
 
-for stage in "${STAGES[@]}"; do
-    if wait "${PIDS[$stage]}"; then
-        PASSED+=("$stage")
-    else
-        FAILED+=("$stage")
-    fi
+while [[ ${#PENDING[@]} -gt 0 ]]; do
+    wait -n "${WAIT_PIDS[@]}" || true
+
+    next_pending=()
+    for stage in "${PENDING[@]}"; do
+        wait_pid="${WAIT_PIDS[$stage]}"
+        if kill -0 "${wait_pid}" 2>/dev/null; then
+            next_pending+=("${stage}")
+            continue
+        fi
+
+        wait "${PIDS[$stage]}" || true
+        status="$(tr -d '\r\n' < "${STATUS_FILES[$stage]}")"
+        if [[ "${status}" == "0" ]]; then
+            PASSED+=("$stage")
+        else
+            FAILED+=("$stage")
+        fi
+        rebalance_cpus
+    done
+    PENDING=("${next_pending[@]}")
 done
 
 # ── Step 4: Report ────────────────────────────────────────────────────────────
@@ -89,7 +160,7 @@ for stage in "${STAGES[@]}"; do
     case "${stage}" in
         c1) label="C1 Rust (fmt / clippy / test)" ;;
         c2) label="C2 SBOM + Audit (cargo-deny / cargo-audit / syft)" ;;
-        c3) label="C3 GUI (tsc / vite / cargo check)" ;;
+        c3) label="C3 GUI (forge-gui + legacy Tauri build)" ;;
         c4) label="C4 Security (trivy / syft / grype)" ;;
         c5) label="C5 Integration (build + inject smoke)" ;;
         c6) label="C6 E2E Smoke (QEMU boot)" ;;
@@ -112,6 +183,7 @@ echo -e "${BOLD}═════════════════════�
 # ── Step 5: Cleanup temp logs ─────────────────────────────────────────────────
 for stage in "${STAGES[@]}"; do
     [[ -f "${LOG_FILES[$stage]}" ]] && rm -f "${LOG_FILES[$stage]}"
+    [[ -f "${STATUS_FILES[$stage]}" ]] && rm -f "${STATUS_FILES[$stage]}"
 done
 
 # ── Step 6: Exit code ─────────────────────────────────────────────────────────

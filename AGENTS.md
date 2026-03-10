@@ -49,7 +49,7 @@ deny.toml        — cargo-deny license + advisory policy
 
 ## Version
 
-Current workspace version: **0.2.0** (set in root `Cargo.toml`
+Current workspace version: **0.2.1** (set in root `Cargo.toml`
 `[workspace.package] version`; all crates inherit it with
 `version.workspace = true`).
 
@@ -104,8 +104,7 @@ cargo check --manifest-path gui/src-tauri/Cargo.toml
 ```bash
 make ci-local
 # or:
-docker compose -f docker-compose.ci.yml up --build \
-    --abort-on-container-exit --exit-code-from c1
+scripts/ci/run-parallel.sh
 ```
 
 ---
@@ -124,9 +123,15 @@ cargo clippy --workspace --all-targets -j 18 -- -D warnings
 export CARGO_BUILD_JOBS=18
 ```
 
-`CARGO_BUILD_JOBS=18` is already set inside every CI container via
-`docker-compose.ci.yml`. Apply the same when running any `cargo` command
-locally so builds are as fast as possible.
+`docker-compose.ci.yml` now assigns stage-sized `CARGO_BUILD_JOBS` values that
+sum to the same 18-core host budget. Apply `CARGO_BUILD_JOBS=18` when running
+`cargo` directly on the host so local single-workspace builds still use all
+available cores.
+
+For Docker CI, use `scripts/ci/run-parallel.sh`. It keeps the total CPU budget
+at 18 cores across all running containers and rebalances quotas/shares as
+stages finish. Override the budget with `FORGEISO_CI_TOTAL_CPUS` only when the
+host has a different core allocation target.
 
 ---
 

@@ -1,4 +1,4 @@
-# ForgeISO CI — 6 ephemeral containers, all in parallel
+# ForgeISO CI — 7 ephemeral containers, all in parallel
 #
 # Each service gets its own named volumes for Cargo target and cargo home so
 # that compilation in one container NEVER blocks another (no artifact locks).
@@ -8,6 +8,12 @@
 # Usage:
 #   docker compose -f docker-compose.ci.yml build --parallel   # build all images
 #   scripts/ci/run-parallel.sh                                  # run all, check all
+#
+# CPU scheduling:
+#   scripts/ci/run-parallel.sh enforces a shared 18-core budget across all
+#   running containers with `docker update --cpus/--cpu-shares`. As stages
+#   exit, their quota is redistributed to the remaining jobs so long-running
+#   Rust builds can consume the freed cores without restarting.
 #
 # Volumes are declared at the bottom and are ALL removed by:
 #   docker compose -f docker-compose.ci.yml down -v --remove-orphans
@@ -26,7 +32,9 @@ services:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
       - CARGO_HOME=/ci-cargo
-      - CARGO_BUILD_JOBS=18
+      - CARGO_BUILD_JOBS=5
+    cpus: 5
+    cpu_shares: 5120
 
   c2:
     build:
@@ -41,7 +49,9 @@ services:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
       - CARGO_HOME=/ci-cargo
-      - CARGO_BUILD_JOBS=18
+      - CARGO_BUILD_JOBS=1
+    cpus: 1
+    cpu_shares: 1024
 
   c3:
     build:
@@ -57,7 +67,9 @@ services:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
       - CARGO_HOME=/ci-cargo
-      - CARGO_BUILD_JOBS=18
+      - CARGO_BUILD_JOBS=3
+    cpus: 3
+    cpu_shares: 3072
 
   c4:
     build:
@@ -68,6 +80,8 @@ services:
       - .:/workspace
     environment:
       - CI=true
+    cpus: 1
+    cpu_shares: 1024
 
   c5:
     build:
@@ -82,7 +96,9 @@ services:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
       - CARGO_HOME=/ci-cargo
-      - CARGO_BUILD_JOBS=18
+      - CARGO_BUILD_JOBS=4
+    cpus: 4
+    cpu_shares: 4096
 
   c6:
     build:
@@ -97,7 +113,9 @@ services:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
       - CARGO_HOME=/ci-cargo
-      - CARGO_BUILD_JOBS=18
+      - CARGO_BUILD_JOBS=3
+    cpus: 3
+    cpu_shares: 3072
 
   c7:
     build:
@@ -112,7 +130,9 @@ services:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
       - CARGO_HOME=/ci-cargo
-      - CARGO_BUILD_JOBS=18
+      - CARGO_BUILD_JOBS=1
+    cpus: 1
+    cpu_shares: 1024
 
 # ── Ephemeral volumes ─────────────────────────────────────────────────────────
 # Removed on: docker compose -f docker-compose.ci.yml down -v --remove-orphans
