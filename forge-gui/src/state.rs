@@ -63,11 +63,6 @@ pub enum PickTarget {
     InjectOutputDir,
     InjectWallpaper,
     VerifySource,
-    DiffBase,
-    DiffTarget,
-    BuildSource,
-    BuildOutputDir,
-    BuildOverlay,
 }
 
 // ── Inject form state ──────────────────────────────────────────────────────────
@@ -222,7 +217,7 @@ impl Default for InjectState {
             grub_cmdline: String::new(),
             grub_default: String::new(),
             sysctl_pairs: String::new(),
-            no_user_interaction: true,
+            no_user_interaction: false, // safe default — user must opt in to unattended wipe
             wallpaper_path: String::new(),
             expected_sha256: String::new(),
         }
@@ -235,53 +230,6 @@ impl Default for InjectState {
 pub struct VerifyState {
     pub source: String,
     pub sums_url: String,
-}
-
-// ── Diff form state ────────────────────────────────────────────────────────────
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct DiffState {
-    pub base: String,
-    pub target: String,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum DiffFilter {
-    #[default]
-    All,
-    Added,
-    Removed,
-    Modified,
-}
-
-// ── Build form state ───────────────────────────────────────────────────────────
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(default)]
-pub struct BuildState {
-    pub source: String,
-    pub source_preset: String, // preset ID, "" = none
-    pub output_dir: String,
-    pub build_name: String,
-    pub overlay_dir: String,
-    pub output_label: String,
-    pub profile: String,
-    pub expected_sha256: String, // hex SHA-256; empty = skip check
-}
-
-impl Default for BuildState {
-    fn default() -> Self {
-        Self {
-            source: String::new(),
-            source_preset: String::new(),
-            output_dir: "./artifacts".into(),
-            build_name: "forgeiso-local".into(),
-            overlay_dir: String::new(),
-            output_label: String::new(),
-            profile: "minimal".into(),
-            expected_sha256: String::new(),
-        }
-    }
 }
 
 // ── Log entry ──────────────────────────────────────────────────────────────────
@@ -350,7 +298,6 @@ pub type BuildResult = forgeiso_engine::BuildResult;
 pub type DoctorReport = forgeiso_engine::DoctorReport;
 pub type VerifyResult = forgeiso_engine::VerifyResult;
 pub type Iso9660Compliance = forgeiso_engine::Iso9660Compliance;
-pub type IsoDiff = forgeiso_engine::IsoDiff;
 pub type IsoMetadata = forgeiso_engine::IsoMetadata;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
