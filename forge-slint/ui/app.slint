@@ -40,8 +40,8 @@ export component AppWindow inherits Window {
 
     // ── Step done flags ─────────────────────────────────────────────────
     in property <bool>  step1-done: false;
-    in property <bool>  step2-done: false;   // inject done
-    in property <bool>  step3-done: false;   // verify done
+    in property <bool>  step2-done: false;   // configure complete
+    in property <bool>  step3-done: false;   // build complete
 
     // ── Presets ─────────────────────────────────────────────────────────
     in property <[PresetCard]> presets;
@@ -49,6 +49,7 @@ export component AppWindow inherits Window {
     // ── Source step ─────────────────────────────────────────────────────
     in-out property <string>  source-path;
     in-out property <string>  selected-preset;
+    in-out property <string>  selected-preset-name;
     in-out property <string>  detected-distro;
 
     // ── Configure step ──────────────────────────────────────────────────
@@ -118,6 +119,9 @@ export component AppWindow inherits Window {
     in property <bool>    iso9660-boot-uefi: false;
     in property <string>  iso9660-volume-id;
 
+    // ── Defaults ─────────────────────────────────────────────────────────
+    in property <string>  defaults-summary;
+
     // ── Callbacks ───────────────────────────────────────────────────────
     // Header
     callback cancel-job();
@@ -134,12 +138,16 @@ export component AppWindow inherits Window {
     callback browse-output-dir();
     callback configure-continue();
     callback configure-back();
+    callback apply-defaults();
+    callback reset-defaults();
+    callback field-edited(string);
     // Build
     callback build-back();
     callback build-run();
     callback build-view-results();
-    // Check
+    // Optional checks
     callback browse-verify-source();
+    callback check-back();
     callback run-verify();
     callback run-iso9660();
     callback copy-sha256();
@@ -150,10 +158,10 @@ export component AppWindow inherits Window {
     callback log-filter-toggle();
 
     // ── Derived helper: distro display label ─────────────────────────────
-    property <string> distro-display: distro == "fedora" ? "Fedora / RHEL (Kickstart)"
-                                    : distro == "arch"   ? "Arch Linux (archinstall)"
-                                    : distro == "mint"   ? "Linux Mint (preseed)"
-                                    : "Ubuntu / Debian (cloud-init)";
+    property <string> distro-display: distro == "fedora" ? "Fedora / RHEL — Kickstart"
+                                    : distro == "arch"   ? "Arch Linux — archinstall"
+                                    : distro == "mint"   ? "Linux Mint — preseed"
+                                    : "Ubuntu / Debian — cloud-init";
 
     // ── Layout ──────────────────────────────────────────────────────────
     VerticalLayout {
@@ -172,8 +180,8 @@ export component AppWindow inherits Window {
             current-step: root.current-step;
             step1-done: root.step1-done;
             step2-done: root.step2-done;
-            step3-done: root.step2-done;   // Build done = inject done
-            step4-done: root.step3-done;
+            step3-done: root.step3-done;
+            step4-done: root.verify-done || root.iso9660-done;
             step-clicked(s) => { root.step-bar-clicked(s); }
         }
 
@@ -197,6 +205,9 @@ export component AppWindow inherits Window {
             if current-step == 2: StepConfigure {
                 source-display: root.source-path;
                 distro: root.distro;
+                selected-preset-name: root.selected-preset-name;
+                distro-display: root.distro-display;
+                defaults-summary: root.defaults-summary;
                 hostname <=> root.hostname;
                 username <=> root.username;
                 password <=> root.password;
@@ -254,6 +265,9 @@ export component AppWindow inherits Window {
                 back-clicked => { root.configure-back(); }
                 distro-changed(d) => { root.distro = d; }
                 clear-source => { root.clear-source(); }
+                apply-defaults => { root.apply-defaults(); }
+                reset-defaults => { root.reset-defaults(); }
+                field-edited(name) => { root.field-edited(name); }
             }
 
             if current-step == 3: StepBuild {
@@ -267,12 +281,26 @@ export component AppWindow inherits Window {
                 out-name: root.out-name;
                 output-label: root.output-label;
                 unattended: root.no-user-interaction;
+                ssh-server: root.ssh-install-server;
+                packages: root.packages;
+                firewall-on: root.firewall-enabled;
+                docker-on: root.docker;
+                podman-on: root.podman;
+                encrypt-on: root.encrypt;
+                storage-layout: root.storage-layout;
                 running: root.job-running;
                 artifact-path: root.artifact-path;
                 artifact-sha256: root.artifact-sha256;
+                verify-summary: root.step3-done
+                    ? (root.verify-done || root.iso9660-done
+                        ? "Optional checks complete"
+                        : "Optional checks skipped for now")
+                    : "";
                 back-clicked => { root.build-back(); }
                 run-clicked => { root.build-run(); }
                 view-results => { root.build-view-results(); }
+                open-folder => { root.open-folder(); }
+                start-over => { root.clear-forms(); }
             }
 
             if current-step == 4: StepCheck {
@@ -289,6 +317,7 @@ export component AppWindow inherits Window {
                 iso9660-boot-uefi: root.iso9660-boot-uefi;
                 iso9660-volume-id: root.iso9660-volume-id;
                 running: root.job-running;
+                back-clicked => { root.check-back(); }
                 browse-verify-source => { root.browse-verify-source(); }
                 run-verify => { root.run-verify(); }
                 run-iso9660 => { root.run-iso9660(); }

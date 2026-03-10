@@ -12,12 +12,12 @@ on:
 permissions:
   contents: read
 
-# ── CI: 6 stages, all run in parallel ephemeral containers ───────────────────
+# ── CI: 7 stages, all run in parallel ephemeral containers ───────────────────
 #
 # Each matrix entry spins up its own GitHub-hosted runner (ubuntu-latest).
 # Every runner is a fresh, ephemeral VM — no state leaks between stages.
-# All 6 stages start simultaneously (max-parallel: 6, fail-fast: false).
-# All 6 must pass before the release job is allowed to proceed.
+# All 7 stages start simultaneously (max-parallel: 7, fail-fast: false).
+# All 7 must pass before the release job is allowed to proceed.
 #
 # Cache keys are per-stage (matrix.id) so Cargo artifacts never cross-contaminate.
 # The container itself is ephemeral: --rm on docker run destroys it after the stage.
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false       # all stages run even if one fails — full report always
-      max-parallel: 6        # spin up all 6 simultaneously
+      max-parallel: 7        # spin up all 7 simultaneously
       matrix:
         include:
           - id: c1
@@ -44,7 +44,7 @@ jobs:
             cache: rust
 
           - id: c3
-            label: "C3 GUI (fmt · clippy · build forge-gui)"
+            label: "C3 GUI (forge-gui + legacy Tauri build)"
             dockerfile: containers/C3.gui.Dockerfile
             script: scripts/ci/c3-gui.sh
             cache: rust
@@ -65,6 +65,12 @@ jobs:
             label: "C6 E2E Smoke (QEMU boot)"
             dockerfile: containers/C6.e2e.Dockerfile
             script: scripts/ci/c6-e2e.sh
+            cache: rust
+
+          - id: c7
+            label: "C7 Lint (fmt · clippy)"
+            dockerfile: containers/C7.lint.Dockerfile
+            script: scripts/ci/c7-lint.sh
             cache: rust
 
     steps:
@@ -146,7 +152,70 @@ jobs:
             **/sbom.spdx.json
           if-no-files-found: ignore
 
-# ── Release: fires only after all 6 CI stages pass ───────────────────────────
+  package-verify:
+    if: "!startsWith(github.ref, 'refs/tags/v')"
+    needs: ci-stage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libssl-dev \
+            ruby \
+            ruby-dev \
+            rpm \
+            squashfs-tools \
+            mtools \
+            xorriso \
+            libarchive-tools
+          sudo gem install fpm --no-document
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo (package verify)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-package-verify-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-package-verify-
+
+      - name: Install GTK3 (required for forge-gui)
+        run: |
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwayland-dev \
+            libegl-dev \
+            libgl-dev \
+            libfontconfig1-dev \
+            libdbus-1-dev \
+            libx11-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev
+
+      - name: Build Rust binaries
+        run: |
+          cargo build --release -p forgeiso-cli
+          cargo build --release -p forgeiso-tui
+          cargo build --release -p forge-slint
+          cargo build --release -p forge-gui
+
+      - name: Build and verify release packages
+        run: |
+          VERSION="$(sed -n 's/^version = \"\\([^\"]*\\)\"$/\\1/p' Cargo.toml | head -n1)"
+          bash scripts/release/make-packages.sh "${VERSION}"
+          bash scripts/release/verify-release.sh "${VERSION}"
+
+# ── Release: fires only after all 7 CI stages pass ───────────────────────────
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: ci-stage
@@ -194,6 +263,12 @@ jobs:
         run: |
           sudo apt-get install -y \
             libgtk-3-dev \
+            libwayland-dev \
+            libegl-dev \
+            libgl-dev \
+            libfontconfig1-dev \
+            libdbus-1-dev \
+            libx11-dev \
             libxcb-render0-dev \
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
@@ -203,6 +278,7 @@ jobs:
         run: |
           cargo build --release -p forgeiso-cli
           cargo build --release -p forgeiso-tui
+          cargo build --release -p forge-slint
           cargo build --release -p forge-gui
 
       - name: Build all release packages
@@ -212,19 +288,8 @@ jobs:
 
       - name: Verify packages
         run: |
-          cd dist/release
-          echo "Verifying SHA-256 checksums..."
-          sha256sum -c checksums.txt
-          if ls forgeiso-*.rpm 1>/dev/null 2>&1; then
-            rpm -qip forgeiso-*.rpm | grep -E "Name|Version|Arch"
-          else
-            echo "WARNING: no RPM packages found"
-          fi
-          if ls forgeiso_*.deb 1>/dev/null 2>&1; then
-            dpkg-deb --info forgeiso_*.deb | grep -E "Package|Version|Arch"
-          else
-            echo "WARNING: no DEB packages found"
-          fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          bash scripts/release/verify-release.sh "${VERSION}"
 
       - name: Generate SBOM
         run: |

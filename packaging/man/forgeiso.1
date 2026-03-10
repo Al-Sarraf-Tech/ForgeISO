@@ -1,14 +1,14 @@
 .TH FORGEISO 1 "2025" "ForgeISO" "User Commands"
 .SH NAME
-forgeiso \- Linux ISO builder and autoinstall injection tool
+forgeiso \- advanced CLI for local Linux ISO build, inject, verify, and test workflows
 .SH SYNOPSIS
 .B forgeiso
 .I COMMAND
 [\fIOPTIONS\fP]
 .SH DESCRIPTION
 .B forgeiso
-builds custom Linux ISOs locally on bare metal with no cloud agents or endpoints.
-It supports autoinstall injection with cloud-init configuration, SHA-256 verification,
+is the advanced ForgeISO interface for local Linux ISO automation.
+It supports unattended installer injection, SHA-256 verification,
 ISO filesystem diffing, SBOM scanning, and QEMU-based smoke testing.
 .SH COMMANDS
 .TP
@@ -26,22 +26,28 @@ Auto-detects the Ubuntu SHA256SUMS URL from ISO metadata.
 Build a customised ISO from a base source ISO and optional overlay directory.
 .TP
 .B inject \fI\-\-source\fP \fISOURCE\fP \fI\-\-out\fP \fIDIR\fP [\fIOPTIONS\fP]
-Embed a cloud-init autoinstall configuration into an Ubuntu ISO for fully
-unattended installation. Supports 60+ configuration flags covering identity,
-SSH, networking, firewall, storage, encryption, services, containers, and more.
+Embed a distro-appropriate unattended install configuration into an ISO.
+ForgeISO emits cloud-init for Ubuntu, Kickstart for Fedora/RHEL-family,
+preseed.cfg for Linux Mint, and archinstall JSON for Arch Linux.
 .TP
 .B diff \fI\-\-base\fP \fIISO\fP \fI\-\-target\fP \fIISO\fP
 Compare two ISOs and list added, removed, modified, and unchanged files.
 .TP
-.B scan \fI\-\-source\fP \fIISO\fP [\fIOPTIONS\fP]
+.B scan \fI\-\-artifact\fP \fIISO\fP [\fIOPTIONS\fP]
 Run security scans (SBOM generation, vulnerability scanning, secrets detection)
 against a built ISO artifact.
 .TP
-.B test \fI\-\-source\fP \fIISO\fP [\fIOPTIONS\fP]
+.B test \fI\-\-iso\fP \fIISO\fP [\fIOPTIONS\fP]
 Run BIOS and UEFI boot smoke tests against an ISO using QEMU.
 .TP
 .B report \fI\-\-build\fP \fIDIR\fP [\fI\-\-format\fP html|json]
 Render a build report in HTML or JSON format.
+.TP
+.B sources \fIlist|show|resolve\fP
+List built-in presets, show preset details, or resolve a preset to its source URL.
+.TP
+.B vm \fIemit\fP \fI\-\-iso\fP \fIPATH\fP [\fIOPTIONS\fP]
+Generate local hypervisor launch commands for QEMU, VirtualBox, VMware, Hyper-V, or Proxmox.
 .SH INJECT OPTIONS (selected)
 .TP
 \fB\-\-hostname\fP \fINAME\fP

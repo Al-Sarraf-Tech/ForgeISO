@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/jalsarraf0/ForgeISO)](https://github.com/jalsarraf0/ForgeISO/releases/latest)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-**Current version: v0.2.0** — early-access baseline. The GUI and engine are functional but not production-hardened.
+**Current version: v0.2.1** — early-access baseline. The GUI and engine are functional but not production-hardened.
 
 ForgeISO injects fully automated installation configs into Linux ISOs (Ubuntu, Linux Mint, Fedora, Arch Linux, Rocky, AlmaLinux, CentOS Stream, and more) and produces bootable ISOs that install hands-free. It also inspects, verifies, diffs, scans, and smoke-tests ISOs — all from a single binary on your Linux host.
 
@@ -16,13 +16,19 @@ ForgeISO injects fully automated installation configs into Linux ISOs (Ubuntu, L
 
 | Component | State |
 |---|---|
-| CLI (`forgeiso`) | Stable for Ubuntu and Fedora; Mint/Arch are best-effort |
+| CLI (`forgeiso`) | Advanced and automation-focused; stable for Ubuntu and Fedora |
 | GUI (`forge-slint`) | Primary desktop GUI — Slint 1.15 wizard interface |
 | GUI (`forge-gui`) | Alternate desktop GUI — egui/eframe 0.33 |
-| TUI (`forgeiso-tui`) | Basic progress view only |
-| CI | 6-stage Docker pipeline (Rust, SBOM, GUI, Security, Integration, E2E) |
+| TUI (`forgeiso-tui`) | Guided terminal workflow aligned with the desktop wizard |
+| CI | 7-stage Docker pipeline (Rust, SBOM, GUI, Security, Integration, E2E, Lint) |
 
 > Ubuntu and Fedora unattended installs are CI-tested and reliable. Mint and Arch are best-effort.
+
+## Product Surfaces
+
+- `forgeiso-desktop` is the guided desktop workflow for most users.
+- `forgeiso-tui` mirrors the same guided flow in a keyboard-first terminal UI.
+- `forgeiso` is the explicit interface for scripting, CI, and advanced operators.
 
 ---
 
@@ -57,24 +63,31 @@ Download the latest release from the **[Releases page](https://github.com/jalsar
 
 ### Fedora · RHEL · openSUSE
 ```bash
-sudo rpm -ivh forgeiso-0.2.0-1.x86_64.rpm
+sudo rpm -ivh forgeiso-0.2.1-1.x86_64.rpm
 ```
 
 ### Debian · Ubuntu · Linux Mint
 ```bash
-sudo dpkg -i forgeiso_0.2.0-1_amd64.deb
+sudo dpkg -i forgeiso_0.2.1-1_amd64.deb
 sudo apt-get install -f        # pull in xorriso, squashfs-tools, mtools if missing
 ```
 
 ### Any x86-64 Linux (tarball)
 ```bash
-tar -xzf forgeiso-0.2.0-linux-x86_64.tar.gz
-sudo install -m755 forgeiso-0.2.0-linux-x86_64/bin/forgeiso /usr/local/bin/
-sudo install -m755 forgeiso-0.2.0-linux-x86_64/bin/forge-slint /usr/local/bin/
+tar -xzf forgeiso-0.2.1-linux-x86_64.tar.gz
+sudo install -m755 forgeiso-0.2.1-linux-x86_64/bin/forgeiso /usr/local/bin/
+sudo install -m755 forgeiso-0.2.1-linux-x86_64/bin/forgeiso-tui /usr/local/bin/
+sudo install -m755 forgeiso-0.2.1-linux-x86_64/bin/forgeiso-desktop /usr/local/bin/
+sudo install -m755 forgeiso-0.2.1-linux-x86_64/bin/forge-slint /usr/local/bin/
 ```
 
 > **Required tools:** `xorriso` · `squashfs-tools` · `mtools`
+> **GUI helpers:** `zenity` or `kdialog` for file picking, `wl-clipboard` or `xclip`/`xsel` for copy, `xdg-utils` for “Open Folder”
 > **Optional (smoke testing):** `qemu-system-x86_64` · `ovmf`
+
+For the safest desktop experience, launch `forgeiso-desktop` from packages or tarballs. It prefers `forge-slint`, falls back to `forge-gui`, then falls back to TUI/CLI when no graphical session is available.
+
+If you switch from a tarball install in `/usr/local/bin` to an RPM/DEB/pacman package, remove old `/usr/local/bin/forgeiso*`, `/usr/local/bin/forge-slint`, `/usr/local/bin/forge-gui`, and `/usr/local/bin/forgeiso-desktop` first. `/usr/local/bin` shadows `/usr/bin`, so stale tarball binaries can mask packaged upgrades.
 
 Verify your download:
 ```bash
@@ -92,12 +105,23 @@ forgeiso doctor
 
 ### GUI (recommended for new users)
 ```bash
-forge-slint
+forgeiso-desktop
 ```
 
-The wizard walks through: **Choose ISO** → **Configure** → **Build** → **Verify**.
+The wizard walks through: **Choose ISO** → **Configure** → **Build** → **Optional Checks**.
+
+Build completes the flow. The final check screen is optional and can be skipped entirely.
 
 > On Intel integrated GPUs, set `MESA_GL_VERSION_OVERRIDE=3.3` if you see rendering issues.
+> On headless or SSH-only systems, `forgeiso-desktop` falls back to `forgeiso-tui` or `forgeiso`.
+
+### TUI (guided terminal workflow)
+```bash
+forgeiso-tui
+```
+
+The TUI uses the same flow as the desktop wizard: **Choose ISO** → **Configure** → **Build** → **Optional Checks**.
+Build is the completion point; optional checks are extra assurance only.
 
 ### Ubuntu (fully unattended)
 ```bash
@@ -332,7 +356,7 @@ forgeiso diff --base original.iso --target custom.iso
 ## scan
 
 ```bash
-forgeiso scan --source custom.iso
+forgeiso scan --artifact custom.iso
 ```
 
 ---
@@ -408,14 +432,18 @@ cargo build --release
 Install binaries:
 ```bash
 sudo install -m755 target/release/forgeiso /usr/local/bin/
+sudo install -m755 target/release/forgeiso-tui /usr/local/bin/
+sudo install -m755 scripts/release/forgeiso-desktop /usr/local/bin/
 sudo install -m755 target/release/forge-slint /usr/local/bin/
 sudo install -m755 target/release/forge-gui /usr/local/bin/
-sudo install -m755 target/release/forgeiso-tui /usr/local/bin/
 ```
+
+If you later switch to an RPM/DEB/pacman package, remove stale `/usr/local/bin`
+ForgeISO binaries first so they do not shadow the packaged copies in `/usr/bin`.
 
 Run tests:
 ```bash
-cargo test --workspace        # 614 tests
+cargo test --workspace        # 627 tests
 cargo deny check              # license + advisory gate
 ```
 
@@ -423,7 +451,7 @@ cargo deny check              # license + advisory gate
 
 ## CI
 
-Six ephemeral Docker containers run in parallel on every push.
+Seven ephemeral Docker containers run in parallel on every push.
 
 | Stage | What it checks |
 |---|---|

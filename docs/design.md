@@ -5,9 +5,9 @@
 ForgeISO is a Linux-only, bare-metal ISO remastering tool.
 
 All product workflows run locally through the Rust engine:
-- CLI for automation
-- TUI for terminal operators
-- GUI for desktop users
+- GUI for guided desktop use
+- TUI for guided terminal use
+- CLI for automation and advanced operators
 
 There is no product-side server process, remote agent, or container runtime dependency.
 

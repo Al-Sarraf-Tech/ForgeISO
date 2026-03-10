@@ -70,6 +70,7 @@ export component StepCheck inherits Rectangle {
 
     in property <bool>    running;
 
+    callback back-clicked();
     callback browse-verify-source();
     callback run-verify();
     callback run-iso9660();
@@ -84,80 +85,166 @@ export component StepCheck inherits Rectangle {
         spacing: 28px;
         alignment: start;
 
-        // Title
-        VerticalLayout {
-            spacing: 4px;
-            Text {
-                text: "Verify & Inspect";
-                font-size: Sizes.font-2xl;
-                font-weight: 700;
-                color: Palette.text;
+        // ── Title ─────────────────────────────────────────────────────────
+        HorizontalLayout {
+            spacing: 12px;
+            alignment: space-between;
+            VerticalLayout {
+                spacing: 4px;
+                Text {
+                    text: "Optional Checks";
+                    font-size: Sizes.font-2xl;
+                    font-weight: 700;
+                    color: Palette.text;
+                }
+                Text {
+                    text: "Your ISO is already ready to use. Run checksum or ISO-9660 checks only if you want extra validation.";
+                    font-size: Sizes.font-sm;
+                    color: Palette.muted;
+                }
             }
-            Text {
-                text: "Check your output ISO's integrity and boot compliance.";
-                font-size: Sizes.font-sm;
-                color: Palette.muted;
+            HorizontalLayout {
+                spacing: 8px;
+
+                Rectangle {
+                    width: 148px;
+                    height: 32px;
+                    border-radius: 16px;
+                    background: Palette.elevated;
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    Text {
+                        text: "← Back to Build";
+                        font-size: Sizes.font-sm;
+                        font-weight: 600;
+                        color: Palette.text;
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
+                    TouchArea {
+                        enabled: !running;
+                        clicked => { back-clicked(); }
+                    }
+                }
+
+                Rectangle {
+                    width: 82px;
+                    height: 24px;
+                    border-radius: 12px;
+                    background: rgba(139, 148, 158, 0.15);
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    Text {
+                        text: "Optional";
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: Palette.muted;
+                        letter-spacing: 0.5px;
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
+                }
             }
         }
 
-        // Artifact card (if build was done)
+        // ── Build success banner ──────────────────────────────────────────
         if artifact-path != "": Rectangle {
             border-radius: Sizes.radius-lg;
-            background: rgba(47, 129, 247, 0.06);
+            background: rgba(63, 185, 80, 0.06);
             border-width: 1px;
-            border-color: rgba(47, 129, 247, 0.3);
+            border-color: rgba(63, 185, 80, 0.35);
 
             VerticalLayout {
-                padding: 18px;
-                spacing: 10px;
-                Text {
-                    text: "OUTPUT ISO";
-                    font-size: 10px;
-                    font-weight: 700;
-                    color: Palette.subtle;
-                    letter-spacing: 1.5px;
+                padding: 20px;
+                spacing: 12px;
+
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: start;
+                    Text {
+                        text: "✓";
+                        font-size: 22px;
+                        color: Palette.green;
+                        vertical-alignment: center;
+                    }
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text {
+                            text: "Build complete — verification optional";
+                            font-size: Sizes.font-lg;
+                            font-weight: 700;
+                            color: Palette.green;
+                        }
+                        Text {
+                            text: artifact-path;
+                            font-size: Sizes.font-sm;
+                            color: Palette.muted;
+                            overflow: elide;
+                        }
+                    }
                 }
-                Text {
-                    text: artifact-path;
-                    font-size: Sizes.font-sm;
-                    color: Palette.text;
-                    overflow: elide;
-                }
+
                 if artifact-sha256 != "": Text {
                     text: "SHA-256: " + artifact-sha256;
                     font-size: 11px;
                     color: Palette.muted;
                 }
+
                 HorizontalLayout {
                     spacing: 8px;
                     alignment: start;
+
+                    // Start New Build (primary)
                     Rectangle {
-                        width: 130px;
-                        height: 32px;
+                        width: 160px;
+                        height: 36px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.accent;
+                        animate background { duration: 150ms; }
+                        Text {
+                            text: "＋ Start New Build";
+                            font-size: Sizes.font-sm;
+                            font-weight: 600;
+                            color: Palette.on-accent;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        TouchArea {
+                            enabled: !running;
+                            clicked => { clear-forms(); }
+                        }
+                    }
+
+                    // Copy SHA-256 (secondary)
+                    Rectangle {
+                        width: 140px;
+                        height: 36px;
+                        border-radius: Sizes.radius-sm;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
                         Text {
                             text: "📋 Copy SHA-256";
                             font-size: Sizes.font-xs;
-                            color: Palette.muted;
+                            color: Palette.text;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
                         TouchArea { clicked => { copy-sha256(); } }
                     }
+
+                    // Open Folder (secondary)
                     Rectangle {
                         width: 120px;
-                        height: 32px;
+                        height: 36px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
                         Text {
                             text: "📂 Open Folder";
                             font-size: Sizes.font-xs;
-                            color: Palette.muted;
+                            color: Palette.text;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -167,7 +254,7 @@ export component StepCheck inherits Rectangle {
             }
         }
 
-        // ── Verify ────────────────────────────────────────────────────────
+        // ── Checksum Verification ─────────────────────────────────────────
         Rectangle {
             border-radius: Sizes.radius-lg;
             background: Palette.surface;
@@ -177,13 +264,34 @@ export component StepCheck inherits Rectangle {
             VerticalLayout {
                 padding: 20px;
                 spacing: 14px;
-                Text {
-                    text: "CHECKSUM VERIFICATION";
-                    font-size: 10px;
-                    font-weight: 700;
-                    color: Palette.subtle;
-                    letter-spacing: 1.5px;
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Text {
+                        text: "CHECKSUM VERIFICATION";
+                        font-size: 10px;
+                        font-weight: 700;
+                        color: Palette.subtle;
+                        letter-spacing: 1.5px;
+                    }
+                    Rectangle {
+                        width: 70px;
+                        height: 18px;
+                        border-radius: 9px;
+                        background: rgba(139, 148, 158, 0.12);
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        Text {
+                            text: "Optional";
+                            font-size: 10px;
+                            color: Palette.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                    }
                 }
+
                 HorizontalLayout {
                     spacing: 8px;
                     Rectangle {
@@ -224,6 +332,7 @@ export component StepCheck inherits Rectangle {
                         }
                     }
                 }
+
                 HorizontalLayout {
                     spacing: 8px;
                     Rectangle {
@@ -253,14 +362,14 @@ export component StepCheck inherits Rectangle {
                         width: 170px;
                         height: 38px;
                         border-radius: Sizes.radius-sm;
-                        background: verify-source != "" && !running ? Palette.accent : Palette.surface;
-                        opacity: verify-source != "" && !running ? 1.0 : 0.45;
+                        background: verify-source != "" && !running ? Palette.accent : Palette.elevated;
+                        opacity: verify-source != "" && !running ? 1.0 : 0.6;
                         animate background { duration: 180ms; }
                         Text {
                             text: "🔍 Check File Integrity";
                             font-size: Sizes.font-sm;
                             font-weight: 600;
-                            color: verify-source != "" && !running ? Palette.on-accent : Palette.muted;
+                            color: verify-source != "" && !running ? Palette.on-accent : Palette.subtle;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -273,14 +382,14 @@ export component StepCheck inherits Rectangle {
                         width: 170px;
                         height: 38px;
                         border-radius: Sizes.radius-sm;
-                        background: verify-source != "" && !running ? Palette.surface : Palette.surface;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: verify-source != "" && !running ? Palette.accent : Palette.border;
-                        opacity: verify-source != "" && !running ? 1.0 : 0.45;
+                        opacity: verify-source != "" && !running ? 1.0 : 0.6;
                         Text {
-                            text: "📋 ISO-9660 Compliance";
+                            text: "📋 ISO-9660 Layout";
                             font-size: Sizes.font-sm;
-                            color: verify-source != "" && !running ? Palette.text : Palette.muted;
+                            color: verify-source != "" && !running ? Palette.text : Palette.subtle;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -292,6 +401,28 @@ export component StepCheck inherits Rectangle {
                 }
 
                 // Results
+                if !verify-done && !iso9660-done: Rectangle {
+                    border-radius: Sizes.radius-lg;
+                    background: Palette.elevated;
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 6px;
+                        Text {
+                            text: "Build complete — checks skipped for now";
+                            font-size: Sizes.font-md;
+                            font-weight: 700;
+                            color: Palette.text;
+                        }
+                        Text {
+                            text: "You can stop here, ship the ISO, or come back later to run checksum and ISO layout checks.";
+                            font-size: Sizes.font-sm;
+                            color: Palette.muted;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
                 if verify-done: ResultCard {
                     has-result: true;
                     passed: verify-matched;
@@ -309,18 +440,18 @@ export component StepCheck inherits Rectangle {
             }
         }
 
-        // Clear forms button
-        Rectangle {
-            width: 140px;
+        // ── Danger zone (reset) ───────────────────────────────────────────
+        if artifact-path == "": Rectangle {
+            width: 150px;
             height: 36px;
             border-radius: Sizes.radius-sm;
-            background: Palette.surface;
+            background: Palette.elevated;
             border-width: 1px;
             border-color: Palette.border;
             Text {
-                text: "🗑 Clear All Forms";
+                text: "🗑 Reset All Forms";
                 font-size: Sizes.font-xs;
-                color: Palette.muted;
+                color: Palette.text;
                 vertical-alignment: center;
                 horizontal-alignment: center;
             }

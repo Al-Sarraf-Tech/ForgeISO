@@ -9,14 +9,20 @@ forgeiso_root_dir() {
 forgeiso_release_version() {
   local root_dir="$1"
   local explicit_version="${2:-}"
+  local cargo_version=""
 
   if [[ -n "${explicit_version}" ]]; then
     echo "${explicit_version}"
     return
   fi
 
-  git -C "${root_dir}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || \
-    grep '^version' "${root_dir}/Cargo.toml" | head -1 | cut -d'"' -f2
+  cargo_version="$(grep '^version' "${root_dir}/Cargo.toml" | head -1 | cut -d'"' -f2 || true)"
+  if [[ -n "${cargo_version}" ]]; then
+    echo "${cargo_version}"
+    return
+  fi
+
+  git -C "${root_dir}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//'
 }
 
 forgeiso_bin_dir() {
@@ -52,7 +58,11 @@ forgeiso_build_staging() {
 
   install -Dm755 "${bin_dir}/forgeiso"     "${staging}/usr/bin/forgeiso"
   install -Dm755 "${bin_dir}/forgeiso-tui" "${staging}/usr/bin/forgeiso-tui"
-  # egui GUI — optional, only staged if built
+  # Slint GUI (primary) — optional, only staged if built
+  if [[ -f "${bin_dir}/forge-slint" ]]; then
+    install -Dm755 "${bin_dir}/forge-slint" "${staging}/usr/bin/forge-slint"
+  fi
+  # egui GUI (alternate) — optional, only staged if built
   if [[ -f "${bin_dir}/forge-gui" ]]; then
     install -Dm755 "${bin_dir}/forge-gui" "${staging}/usr/bin/forge-gui"
   fi
@@ -68,11 +78,38 @@ Type=Application
 Name=ForgeISO
 Comment=Cross-distro ISO customization platform
 Exec=forgeiso-desktop
+TryExec=forgeiso-desktop
 Icon=forgeiso
 Terminal=false
-Categories=System;Utility;Development;
+Categories=Utility;
 StartupNotify=true
 DESKTOP
+
+  local pixmap_src=""
+  local size icon_src
+  for size in 32 128 256 512; do
+    icon_src=""
+    for candidate in \
+      "${root_dir}/forge-gui/assets/icon_${size}.png" \
+      "${root_dir}/gui/src-tauri/icons/${size}x${size}.png"; do
+      if [[ -f "${candidate}" ]]; then
+        icon_src="${candidate}"
+        break
+      fi
+    done
+
+    if [[ -n "${icon_src}" ]]; then
+      install -Dm644 "${icon_src}" \
+        "${staging}/usr/share/icons/hicolor/${size}x${size}/apps/forgeiso.png"
+      if [[ "${size}" == "256" ]]; then
+        pixmap_src="${icon_src}"
+      fi
+    fi
+  done
+
+  if [[ -n "${pixmap_src}" ]]; then
+    install -Dm644 "${pixmap_src}" "${staging}/usr/share/pixmaps/forgeiso.png"
+  fi
 
   install -Dm644 "${root_dir}/README.md" \
     "${staging}/usr/share/doc/forgeiso/README.md"
@@ -96,7 +133,7 @@ DESKTOP
 _forgeiso() {
   local cur prev
   _init_completion || return
-  local commands="doctor inspect verify build inject diff scan test report"
+  local commands="doctor inspect verify build inject diff scan test report sources vm"
   case "${prev}" in
     forgeiso) COMPREPLY=($(compgen -W "${commands}" -- "${cur}")) ;;
     --source|--out|--base|--target|--build|--autoinstall|--wallpaper)

@@ -18,8 +18,14 @@ Both GUIs implement the same 4-step wizard:
 
 1. **Choose ISO** — select a distro preset or paste a path/URL
 2. **Configure** — set hostname, user, network, firewall, packages, etc.
-3. **Build** — review settings and start the inject + ISO repack
-4. **Verify** — check SHA-256 integrity and ISO-9660 compliance
+3. **Build** — review settings and create the final ISO
+4. **Optional Checks** — checksum and ISO-9660 validation if you want extra assurance
+
+Step 4 is intentionally optional. A successful Build means the wizard is complete.
+
+`forgeiso-tui` mirrors the same guided flow for terminal-first operators. The
+desktop and terminal guided interfaces should describe the same steps and
+completion semantics.
 
 ---
 
@@ -50,7 +56,7 @@ sudo apt-get install qemu-system-x86 ovmf
 
 ### For the file picker (forge-slint)
 
-`forge-slint` uses `zenity` for file/folder dialogs:
+`forge-slint` uses `zenity` first and falls back to `kdialog` on KDE-based systems:
 
 ```bash
 # Fedora
@@ -61,6 +67,16 @@ sudo apt-get install zenity
 
 # Arch
 sudo pacman -S zenity
+```
+
+`kdialog` is an acceptable alternative when `zenity` is not installed:
+
+```bash
+# Debian / Ubuntu
+sudo apt-get install kdialog
+
+# Fedora
+sudo dnf install kdialog
 ```
 
 ---
@@ -95,10 +111,17 @@ cargo build -p forge-gui -j 18
 
 ## Running
 
+Prefer the launcher first. It selects the best available frontend and falls
+back cleanly when you are on a minimal desktop or a non-graphical shell:
+
+```bash
+forgeiso-desktop
+```
+
 ### forge-slint (primary)
 
 ```bash
-# Standard launch
+# Direct launch for troubleshooting
 ./target/release/forge-slint
 
 # From PATH after install
@@ -132,15 +155,29 @@ WAYLAND_DISPLAY=wayland-0 DISPLAY="" forge-slint
 
 #### Clipboard
 
-The `Copy SHA-256` button uses `xclip` (preferred) or `xsel` as fallback:
+The `Copy SHA-256` button uses `wl-copy` on Wayland when available, then
+falls back to `xclip` and `xsel`:
 
 ```bash
 # Fedora
-sudo dnf install xclip
+sudo dnf install wl-clipboard xclip
 
 # Debian / Ubuntu
-sudo apt-get install xclip
+sudo apt-get install wl-clipboard xclip
 ```
+
+#### Headless and minimal systems
+
+`forge-slint` still requires a graphical session. On headless hosts, use:
+
+```bash
+forgeiso-tui
+# or
+forgeiso
+```
+
+The packaged launcher `forgeiso-desktop` auto-detects this and falls back to
+TUI/CLI when no display server is available.
 
 ### forge-gui (egui/eframe)
 
@@ -187,11 +224,22 @@ in `forge-gui/src/app.rs`.
 After building:
 
 ```bash
+sudo install -m755 target/release/forgeiso /usr/local/bin/
+sudo install -m755 target/release/forgeiso-tui /usr/local/bin/
 sudo install -m755 target/release/forge-slint /usr/local/bin/
 sudo install -m755 target/release/forge-gui   /usr/local/bin/
+sudo install -m755 scripts/release/forgeiso-desktop /usr/local/bin/
 ```
 
 From the RPM/DEB package, binaries are placed in `/usr/bin/` automatically.
+Prefer launching `forgeiso-desktop` so the best available frontend is selected.
+Install `zenity` or `kdialog`, `wl-clipboard` or `xclip`/`xsel`, and
+`xdg-utils` explicitly on minimal desktop systems when your package manager
+does not pull them in automatically.
+
+If you later install an RPM/DEB/pacman package, remove stale `/usr/local/bin`
+ForgeISO binaries first. `/usr/local/bin` shadows `/usr/bin`, so manual
+tarball installs can mask packaged upgrades.
 
 ---
 
@@ -220,11 +268,11 @@ The C3 CI container validates `forge-gui`. `forge-slint` is covered by C1
 Release packages are built by `scripts/release/make-packages.sh`:
 
 ```bash
-bash scripts/release/make-packages.sh 0.2.0
+bash scripts/release/make-packages.sh 0.2.1
 ```
 
 This produces RPM, DEB, pacman `.pkg.tar.zst`, tarball, and checksums
-under `dist/release/`. All three GUI binaries are included.
+under `dist/release/`. Both GUI binaries are included when they are built.
 
 ---
 
@@ -244,16 +292,16 @@ npm run build          # Vite + Tauri bundle (Linux)
 
 Requires Node.js 20+ and Rust (for the Tauri backend).
 
-### Key versions (as of v0.2.0)
+### Key versions (as of v0.2.1)
 
 | Package | Version |
 |---|---|
-| `@tauri-apps/api` | ^2.2.0 |
+| `@tauri-apps/api` | 2.10.1 |
 | `react` | ^18.3.1 |
-| `@tauri-apps/cli` | ^2.2.5 |
+| `@tauri-apps/cli` | 2.10.1 |
 | TypeScript | ^5.8.3 |
 | Vite | ^6.3.5 |
-| `tauri` (Rust) | 2.1.1 |
+| `tauri` (Rust) | 2.10.3 |
 
 To check the Rust backend only (no npm required):
 
@@ -269,8 +317,10 @@ cargo check --manifest-path gui/src-tauri/Cargo.toml
 |---|---|---|
 | Black window / no rendering | Mesa/GPU driver issue | `MESA_GL_VERSION_OVERRIDE=3.3 forge-slint` |
 | `wgpu` crash on launch | Vulkan not available for forge-gui | `WGPU_BACKEND=gl forge-gui` |
-| File picker does nothing | `zenity` not installed | `sudo dnf install zenity` |
-| Clipboard copy silently fails | Neither `xclip` nor `xsel` installed | `sudo dnf install xclip` |
+| File picker shows a status-bar error | Neither `zenity` nor `kdialog` is installed | `sudo dnf install zenity` |
+| Clipboard copy fails | No `wl-copy`, `xclip`, or `xsel` helper is installed | `sudo dnf install wl-clipboard xclip` |
+| Open Folder shows a status-bar error | `xdg-open`/`gio` helper missing or failed | `sudo dnf install xdg-utils` |
+| GUI will not launch over SSH | No graphical session is available | Use `forgeiso-desktop`, `forgeiso-tui`, or `forgeiso` |
 | Build fails: missing libs | Slint system deps not installed | See Prerequisites above |
 | `SLINT_BACKEND` env ignored | Slint build compiled without that backend | Rebuild without `--no-default-features` |
 | State not persisted | Write error on `~/.local/share/forgeiso/` | Check directory permissions |

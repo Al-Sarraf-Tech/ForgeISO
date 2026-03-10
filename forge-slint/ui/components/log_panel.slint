@@ -73,14 +73,14 @@ export component LogPanel inherits Rectangle {
                         width: 64px;
                         height: 24px;
                         border-radius: 12px;
-                        background: errors-only ? Palette.red : Palette.surface;
+                        background: errors-only ? Palette.red : Palette.elevated;
                         border-width: 1px;
                         border-color: errors-only ? Palette.red : Palette.border;
                         animate background { duration: 150ms; }
                         Text {
                             text: "Errors";
                             font-size: 10px;
-                            color: errors-only ? #ffffff : Palette.muted;
+                            color: errors-only ? #ffffff : Palette.text;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -91,11 +91,11 @@ export component LogPanel inherits Rectangle {
                         width: 24px;
                         height: 24px;
                         border-radius: 12px;
-                        background: Palette.surface;
+                        background: Palette.elevated;
                         Text {
                             text: "×";
                             font-size: 14px;
-                            color: Palette.muted;
+                            color: Palette.text;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }

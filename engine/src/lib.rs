@@ -6,6 +6,7 @@ pub mod iso;
 pub mod kickstart;
 pub mod mint_preseed;
 pub mod orchestrator;
+pub mod product;
 pub mod report;
 pub mod scanner;
 pub mod sources;
@@ -29,6 +30,7 @@ pub use orchestrator::{
     BuildResult, DiffEntry, DoctorReport, ForgeIsoEngine, Iso9660Compliance, IsoDiff, ScanResult,
     TestResult, VerifyResult,
 };
+pub use product::{GuidedWorkflowProgress, GuidedWorkflowStep};
 pub use sources::{
     all_presets, find_preset, find_preset_by_str, resolve_url, AcquisitionStrategy, IsoPreset,
     PresetId,

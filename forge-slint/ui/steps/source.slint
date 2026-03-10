@@ -17,25 +17,33 @@ component DistroCard inherits Rectangle {
     width: 160px;
     height: 120px;
     border-radius: Sizes.radius-md;
-    background: selected ? #1a2d4a : Palette.surface;
+    background: selected ? rgba(63, 185, 80, 0.12)
+              : hovered && !running ? Palette.elevated
+              : Palette.surface;
     border-width: 1.5px;
-    border-color: selected ? Palette.accent : Palette.border;
+    border-color: selected ? Palette.green
+               : hovered && !running ? Palette.border-focus
+               : Palette.border;
+    opacity: running ? 0.76 : 1.0;
     clip: true;
     animate background { duration: 180ms; }
     animate border-color { duration: 180ms; }
+    animate opacity { duration: 180ms; }
 
     property <bool> hovered: touch.has-hover;
 
     // Hover overlay
     Rectangle {
-        background: hovered && !running ? rgba(255, 255, 255, 0.03) : transparent;
+        background: hovered && !running && selected ? rgba(86, 216, 128, 0.06)
+                  : hovered && !running ? rgba(255, 255, 255, 0.03)
+                  : transparent;
         animate background { duration: 150ms; }
     }
 
     // Selected accent bar at top
     if selected: Rectangle {
         height: 3px;
-        background: @linear-gradient(90deg, Palette.accent, #56a0f5);
+        background: @linear-gradient(90deg, Palette.green, #56d880);
         border-radius: 0px;
     }
 
@@ -66,7 +74,7 @@ component DistroCard inherits Rectangle {
         if selected: Text {
             text: "✓ Selected";
             font-size: 10px;
-            color: Palette.accent;
+            color: Palette.green;
             font-weight: 600;
             horizontal-alignment: center;
         }
@@ -204,9 +212,11 @@ export component StepSource inherits Rectangle {
                         width: 90px;
                         height: 42px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
+                        opacity: running ? 0.5 : 1.0;
+                        animate opacity { duration: 150ms; }
                         Text {
                             text: "Browse…";
                             font-size: Sizes.font-sm;
@@ -225,13 +235,13 @@ export component StepSource inherits Rectangle {
                         width: 42px;
                         height: 42px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
                         Text {
                             text: "✕";
                             font-size: 16px;
-                            color: Palette.muted;
+                            color: Palette.text;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -272,8 +282,8 @@ export component StepSource inherits Rectangle {
                     width: 260px;
                     height: 44px;
                     border-radius: Sizes.radius-sm;
-                    background: can-continue ? Palette.accent : Palette.surface;
-                    opacity: can-continue ? 1.0 : 0.45;
+                    background: can-continue ? Palette.accent : Palette.elevated;
+                    opacity: can-continue ? 1.0 : 0.6;
                     animate background { duration: 180ms; }
                     animate opacity  { duration: 180ms; }
 
@@ -284,7 +294,7 @@ export component StepSource inherits Rectangle {
                             text: "Continue: Configure Installer  →";
                             font-size: Sizes.font-sm;
                             font-weight: 600;
-                            color: can-continue ? Palette.on-accent : Palette.muted;
+                            color: can-continue ? Palette.on-accent : Palette.subtle;
                         }
                     }
                     TouchArea {

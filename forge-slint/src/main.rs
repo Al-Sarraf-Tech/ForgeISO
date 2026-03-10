@@ -1,6 +1,7 @@
 slint::include_modules!();
 
 mod app;
+mod defaults;
 mod persist;
 mod state;
 mod worker;
@@ -11,8 +12,11 @@ use std::sync::Arc;
 
 use slint::ComponentHandle;
 
-use app::{handle_preset_clicked, make_preset_cards, with_app, with_app_result, ForgeApp, APP};
-use forgeiso_engine::ForgeIsoEngine;
+use app::{
+    handle_preset_clicked, make_preset_cards, preset_display_name, with_app, with_app_result,
+    ForgeApp, APP,
+};
+use forgeiso_engine::{ForgeIsoEngine, GuidedWorkflowProgress, GuidedWorkflowStep};
 use persist::{load_state, save_state};
 use state::{InjectState, PersistedState, VerifyState};
 
@@ -20,6 +24,15 @@ use state::{InjectState, PersistedState, VerifyState};
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
+
+    if !has_display_env(
+        std::env::var_os("DISPLAY").as_deref(),
+        std::env::var_os("WAYLAND_DISPLAY").as_deref(),
+    ) {
+        anyhow::bail!(
+            "No graphical display detected. Use `forgeiso-desktop` from a desktop session, or run `forgeiso-tui` / `forgeiso` on headless systems."
+        );
+    }
 
     // Multi-threaded tokio runtime for engine async work.
     let rt = Arc::new(
@@ -86,16 +99,14 @@ fn main() -> anyhow::Result<()> {
                 if w.get_job_running() {
                     return;
                 }
-                let current = w.get_current_step();
-                let can = match step {
-                    1 => true,
-                    2 => w.get_step1_done() || current >= 2,
-                    3 => w.get_step2_done() || current >= 3,
-                    4 => w.get_step3_done() || current >= 4,
-                    _ => false,
+                let Some(current) = guided_step_from_ui(w.get_current_step()) else {
+                    return;
                 };
-                if can {
-                    w.set_current_step(step);
+                let Some(target) = guided_step_from_ui(step) else {
+                    return;
+                };
+                if window_progress(&w).can_open_step(current, target) {
+                    w.set_current_step(target.one_based());
                 }
             }
         });
@@ -121,9 +132,18 @@ fn main() -> anyhow::Result<()> {
                 // thread (inside invoke_from_event_loop in handle_zenity).
                 |w, path| {
                     w.set_source_path(path.clone().into());
+                    w.set_selected_preset("".into());
+                    w.set_selected_preset_name("".into());
+                    w.set_detected_distro("".into());
+                    w.set_defaults_summary("".into());
                     w.set_step1_done(true);
+                    w.set_step2_done(false);
+                    clear_build_results(&w);
                     // Access ForgeApp via thread-local — no Rc captured.
-                    with_app(|a| a.spawn_detect_iso(path));
+                    with_app(|a| {
+                        a.clear_defaults_state();
+                        a.spawn_detect_iso(path);
+                    });
                 },
             );
         });
@@ -136,8 +156,15 @@ fn main() -> anyhow::Result<()> {
             let t: String = text.into();
             let not_empty = !t.trim().is_empty();
             if let Some(w) = weak.upgrade() {
+                w.set_selected_preset("".into());
+                w.set_selected_preset_name("".into());
+                w.set_detected_distro("".into());
+                w.set_defaults_summary("".into());
                 w.set_step1_done(not_empty);
+                w.set_step2_done(false);
+                clear_build_results(&w);
             }
+            with_app(|a| a.clear_defaults_state());
             if not_empty {
                 with_app(|a| a.spawn_detect_iso(t));
             }
@@ -164,20 +191,12 @@ fn main() -> anyhow::Result<()> {
             if let Some(w) = weak.upgrade() {
                 w.set_source_path("".into());
                 w.set_selected_preset("".into());
+                w.set_selected_preset_name("".into());
                 w.set_detected_distro("".into());
+                w.set_defaults_summary("".into());
                 w.set_step1_done(false);
                 w.set_step2_done(false);
-                w.set_step3_done(false);
-                w.set_artifact_path("".into());
-                w.set_artifact_sha256("".into());
-                w.set_verify_done(false);
-                w.set_iso9660_done(false);
-                w.set_verify_matched(false);
-                w.set_verify_hash_display("".into());
-                w.set_iso9660_compliant(false);
-                w.set_iso9660_boot_bios(false);
-                w.set_iso9660_boot_uefi(false);
-                w.set_iso9660_volume_id("".into());
+                clear_build_results(&w);
                 w.set_current_step(1);
                 w.set_status_text("".into());
                 w.set_status_is_error(false);
@@ -193,6 +212,7 @@ fn main() -> anyhow::Result<()> {
                 if let Some(h) = a.sha256_task.take() {
                     h.abort();
                 }
+                a.clear_defaults_state();
                 a.finish_job();
             });
         });
@@ -247,6 +267,7 @@ fn main() -> anyhow::Result<()> {
 
                 w.set_status_text("".into());
                 w.set_status_is_error(false);
+                w.set_step2_done(true);
                 w.set_current_step(3);
             }
         });
@@ -262,12 +283,39 @@ fn main() -> anyhow::Result<()> {
         });
     }
 
+    // apply-defaults  — apply distro defaults to unedited fields
+    {
+        let weak = win.as_weak();
+        win.on_apply_defaults(move || {
+            if let Some(w) = weak.upgrade() {
+                with_app(|a| a.apply_distro_defaults(&w));
+            }
+        });
+    }
+
+    // reset-defaults  — clear edit tracking and reapply defaults
+    {
+        let weak = win.as_weak();
+        win.on_reset_defaults(move || {
+            if let Some(w) = weak.upgrade() {
+                with_app(|a| a.reset_and_apply_defaults(&w));
+            }
+        });
+    }
+
+    // field-edited  — track which default-managed fields the user has touched
+    win.on_field_edited(move |name| {
+        let field: String = name.into();
+        with_app(|a| a.mark_edited(&field));
+    });
+
     // build-back  — navigate to step 2
     {
         let weak = win.as_weak();
         win.on_build_back(move || {
             if let Some(w) = weak.upgrade() {
                 if !w.get_job_running() {
+                    clear_build_results(&w);
                     w.set_current_step(2);
                 }
             }
@@ -284,7 +332,21 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_build_view_results(move || {
             if let Some(w) = weak.upgrade() {
-                w.set_current_step(4);
+                if w.get_step3_done() {
+                    w.set_current_step(4);
+                }
+            }
+        });
+    }
+
+    // check-back  — return to build summary
+    {
+        let weak = win.as_weak();
+        win.on_check_back(move || {
+            if let Some(w) = weak.upgrade() {
+                if !w.get_job_running() && w.get_step3_done() {
+                    w.set_current_step(3);
+                }
             }
         });
     }
@@ -302,8 +364,7 @@ fn main() -> anyhow::Result<()> {
             });
             worker::pick_iso(weak.clone(), |w, path| {
                 w.set_verify_source(path.into());
-                w.set_verify_done(false);
-                w.set_iso9660_done(false);
+                clear_optional_checks(&w);
             });
         });
     }
@@ -318,16 +379,23 @@ fn main() -> anyhow::Result<()> {
         with_app(|a| a.spawn_iso9660());
     });
 
-    // copy-sha256  — write artifact hash to clipboard via xclip/xsel
+    // copy-sha256  — write artifact hash to clipboard via wl-copy/xclip/xsel
     {
         let weak = win.as_weak();
         win.on_copy_sha256(move || {
             if let Some(w) = weak.upgrade() {
                 let hash: String = w.get_artifact_sha256().into();
                 if !hash.is_empty() {
-                    copy_to_clipboard(&hash);
-                    w.set_status_text("SHA-256 copied to clipboard".into());
-                    w.set_status_is_error(false);
+                    match copy_to_clipboard(&hash) {
+                        Ok(()) => {
+                            w.set_status_text("SHA-256 copied to clipboard".into());
+                            w.set_status_is_error(false);
+                        }
+                        Err(msg) => {
+                            w.set_status_text(msg.into());
+                            w.set_status_is_error(true);
+                        }
+                    }
                 }
             }
         });
@@ -344,10 +412,16 @@ fn main() -> anyhow::Result<()> {
                         .parent()
                         .map(|p| p.to_string_lossy().into_owned())
                         .unwrap_or(path);
-                    std::process::Command::new("xdg-open")
-                        .arg(&dir)
-                        .spawn()
-                        .ok();
+                    match open_in_file_manager(&dir) {
+                        Ok(()) => {
+                            w.set_status_text("Opened artifact folder".into());
+                            w.set_status_is_error(false);
+                        }
+                        Err(msg) => {
+                            w.set_status_text(msg.into());
+                            w.set_status_is_error(true);
+                        }
+                    }
                 }
             }
         });
@@ -367,18 +441,16 @@ fn main() -> anyhow::Result<()> {
                 if let Some(h) = a.sha256_task.take() {
                     h.abort();
                 }
+                a.edited_fields.clear();
                 a.finish_job();
             });
             if let Some(w) = weak.upgrade() {
                 restore_inject(&w, &InjectState::default());
                 restore_verify(&w, &VerifyState::default());
+                w.set_defaults_summary("".into());
                 w.set_step1_done(false);
                 w.set_step2_done(false);
-                w.set_step3_done(false);
-                w.set_artifact_path("".into());
-                w.set_artifact_sha256("".into());
-                w.set_verify_done(false);
-                w.set_iso9660_done(false);
+                clear_build_results(&w);
                 w.set_current_step(1);
                 w.set_status_text("".into());
                 w.set_status_is_error(false);
@@ -441,6 +513,11 @@ fn main() -> anyhow::Result<()> {
 fn restore_inject(w: &AppWindow, s: &InjectState) {
     w.set_source_path(s.source.clone().into());
     w.set_selected_preset(s.source_preset.clone().into());
+    w.set_selected_preset_name(
+        preset_display_name(&s.source_preset)
+            .unwrap_or_default()
+            .into(),
+    );
     w.set_output_dir(s.output_dir.clone().into());
     w.set_out_name(s.out_name.clone().into());
     w.set_output_label(s.output_label.clone().into());
@@ -493,6 +570,12 @@ fn restore_inject(w: &AppWindow, s: &InjectState) {
     w.set_sysctl_pairs(s.sysctl_pairs.clone().into());
     w.set_no_user_interaction(s.no_user_interaction);
     w.set_expected_sha256(s.expected_sha256.clone().into());
+    let defaults_summary = if s.source_preset.is_empty() {
+        String::new()
+    } else {
+        defaults::summary_for(&defaults::defaults_for(&s.distro, &s.source_preset))
+    };
+    w.set_defaults_summary(defaults_summary.into());
 
     // Mark step 1 done if source path was restored.
     w.set_step1_done(!s.source.is_empty());
@@ -504,32 +587,208 @@ fn restore_verify(w: &AppWindow, s: &VerifyState) {
     w.set_sums_url(s.sums_url.clone().into());
 }
 
+fn guided_step_from_ui(step: i32) -> Option<GuidedWorkflowStep> {
+    let index = usize::try_from(step).ok()?.checked_sub(1)?;
+    GuidedWorkflowStep::from_index(index)
+}
+
+fn window_progress(w: &AppWindow) -> GuidedWorkflowProgress {
+    GuidedWorkflowProgress {
+        source_ready: w.get_step1_done(),
+        configure_done: w.get_step2_done(),
+        build_done: w.get_step3_done(),
+        verify_done: w.get_verify_done(),
+        iso9660_done: w.get_iso9660_done(),
+    }
+}
+
+pub(crate) fn clear_optional_checks(w: &AppWindow) {
+    w.set_verify_done(false);
+    w.set_verify_matched(false);
+    w.set_verify_hash_display("".into());
+    w.set_iso9660_done(false);
+    w.set_iso9660_compliant(false);
+    w.set_iso9660_boot_bios(false);
+    w.set_iso9660_boot_uefi(false);
+    w.set_iso9660_volume_id("".into());
+}
+
+pub(crate) fn clear_build_results(w: &AppWindow) {
+    let artifact: String = w.get_artifact_path().into();
+    let verify_source: String = w.get_verify_source().into();
+    if !artifact.is_empty() && verify_source == artifact {
+        w.set_verify_source("".into());
+    }
+    w.set_step3_done(false);
+    w.set_artifact_path("".into());
+    w.set_artifact_sha256("".into());
+    clear_optional_checks(w);
+}
+
 // ── Clipboard helper ──────────────────────────────────────────────────────────
 
-fn copy_to_clipboard(text: &str) {
-    // Try xclip first, fall back to xsel.
-    let ok = std::process::Command::new("xclip")
-        .args(["-selection", "clipboard"])
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .and_then(|mut c| {
-            use std::io::Write;
-            c.stdin.as_mut().map(|s| s.write_all(text.as_bytes()));
-            c.wait()
-        })
-        .map(|s| s.success())
-        .unwrap_or(false);
+fn copy_to_clipboard(text: &str) -> Result<(), &'static str> {
+    if let Some(message) = clipboard_unavailable_message(has_graphical_session()) {
+        return Err(message);
+    }
+    for (program, args) in clipboard_programs(has_wayland_session()) {
+        if try_write_command(program, args, text)? {
+            return Ok(());
+        }
+    }
 
-    if !ok {
-        std::process::Command::new("xsel")
-            .args(["--clipboard", "--input"])
-            .stdin(std::process::Stdio::piped())
-            .spawn()
-            .and_then(|mut c| {
+    Err("Clipboard helper not found — install wl-clipboard, xclip, or xsel")
+}
+
+fn open_in_file_manager(path: &str) -> Result<(), &'static str> {
+    if !has_graphical_session() {
+        return Err(
+            "Open Folder requires a graphical session — open the output directory manually",
+        );
+    }
+
+    for (program, args) in file_manager_programs() {
+        let result = std::process::Command::new(program)
+            .args(args)
+            .arg(path)
+            .output();
+
+        match result {
+            Ok(output) if output.status.success() => return Ok(()),
+            Ok(_) => {
+                return Err("File manager launcher failed — open the output directory manually");
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(_) => return Err("Failed to launch a file manager for the artifact directory"),
+        }
+    }
+
+    Err("No file manager launcher found — install xdg-utils or gio")
+}
+
+fn has_graphical_session() -> bool {
+    has_display_env(
+        std::env::var_os("DISPLAY").as_deref(),
+        std::env::var_os("WAYLAND_DISPLAY").as_deref(),
+    )
+}
+
+fn has_display_env(
+    display: Option<&std::ffi::OsStr>,
+    wayland_display: Option<&std::ffi::OsStr>,
+) -> bool {
+    display.is_some_and(|value| !value.is_empty())
+        || wayland_display.is_some_and(|value| !value.is_empty())
+}
+
+fn has_wayland_session() -> bool {
+    has_wayland_session_from(
+        std::env::var_os("WAYLAND_DISPLAY").is_some(),
+        std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+    )
+}
+
+fn has_wayland_session_from(wayland_display: bool, session_type: Option<&str>) -> bool {
+    wayland_display || session_type.is_some_and(|value| value.eq_ignore_ascii_case("wayland"))
+}
+
+fn clipboard_unavailable_message(has_graphical_session: bool) -> Option<&'static str> {
+    (!has_graphical_session).then_some(
+        "Clipboard copy requires a graphical session — copy the SHA-256 manually from the field",
+    )
+}
+
+fn try_write_command(program: &str, args: &[&str], text: &str) -> Result<bool, &'static str> {
+    let spawned = std::process::Command::new(program)
+        .args(args)
+        .stdin(std::process::Stdio::piped())
+        .spawn();
+
+    match spawned {
+        Ok(mut child) => {
+            if let Some(stdin) = child.stdin.as_mut() {
                 use std::io::Write;
-                c.stdin.as_mut().map(|s| s.write_all(text.as_bytes()));
-                c.wait()
-            })
-            .ok();
+                if stdin.write_all(text.as_bytes()).is_err() {
+                    return Err("Failed to write to the clipboard helper");
+                }
+            }
+            match child.wait() {
+                Ok(status) => Ok(status.success()),
+                Err(_) => Err("Failed to wait for the clipboard helper"),
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(_) => Err("Failed to launch the clipboard helper"),
+    }
+}
+
+fn clipboard_programs(has_wayland: bool) -> Vec<(&'static str, &'static [&'static str])> {
+    let mut programs = Vec::new();
+    if has_wayland {
+        programs.push(("wl-copy", &[][..]));
+    }
+    programs.push(("xclip", &["-selection", "clipboard"][..]));
+    programs.push(("xsel", &["--clipboard", "--input"][..]));
+    programs
+}
+
+fn file_manager_programs() -> [(&'static str, &'static [&'static str]); 2] {
+    [("xdg-open", &[]), ("gio", &["open"])]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        clipboard_programs, clipboard_unavailable_message, file_manager_programs, has_display_env,
+        has_wayland_session_from,
+    };
+    use std::ffi::OsStr;
+
+    #[test]
+    fn wayland_clipboard_prefers_wl_copy() {
+        let programs = clipboard_programs(true);
+        assert_eq!(programs[0].0, "wl-copy");
+        assert_eq!(programs[1].0, "xclip");
+        assert_eq!(programs[2].0, "xsel");
+    }
+
+    #[test]
+    fn x11_clipboard_fallback_skips_wl_copy() {
+        let programs = clipboard_programs(false);
+        assert_eq!(programs[0].0, "xclip");
+        assert_eq!(programs[1].0, "xsel");
+    }
+
+    #[test]
+    fn wayland_detection_accepts_wayland_display_or_session_type() {
+        assert!(has_wayland_session_from(true, None));
+        assert!(has_wayland_session_from(false, Some("wayland")));
+        assert!(!has_wayland_session_from(false, Some("x11")));
+    }
+
+    #[test]
+    fn display_env_accepts_x11_or_wayland() {
+        assert!(has_display_env(Some(OsStr::new(":0")), None));
+        assert!(has_display_env(None, Some(OsStr::new("wayland-0"))));
+    }
+
+    #[test]
+    fn display_env_rejects_missing_or_empty_values() {
+        assert!(!has_display_env(None, None));
+        assert!(!has_display_env(Some(OsStr::new("")), Some(OsStr::new(""))));
+    }
+
+    #[test]
+    fn headless_clipboard_returns_helpful_error() {
+        let err = clipboard_unavailable_message(false)
+            .expect("headless copy should report a user-facing error");
+        assert!(err.contains("graphical session"));
+    }
+
+    #[test]
+    fn file_manager_prefers_xdg_open_then_gio() {
+        let programs = file_manager_programs();
+        assert_eq!(programs[0].0, "xdg-open");
+        assert_eq!(programs[1].0, "gio");
     }
 }

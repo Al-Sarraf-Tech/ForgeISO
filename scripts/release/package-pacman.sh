@@ -40,6 +40,12 @@ fpm \
   --depends     "xorriso" \
   --depends     "squashfs-tools" \
   --depends     "mtools" \
+  --pacman-optional-depends "zenity: file and folder picker support for forge-slint" \
+  --pacman-optional-depends "kdialog: KDE file and folder picker fallback for forge-slint" \
+  --pacman-optional-depends "wl-clipboard: Wayland clipboard copy support for forge-slint" \
+  --pacman-optional-depends "xclip: clipboard copy support for forge-slint" \
+  --pacman-optional-depends "xsel: fallback clipboard support for forge-slint" \
+  --pacman-optional-depends "xdg-utils: Open Folder support from forge-slint" \
   --package     "${PKG_OUT}" \
   --chdir       "${STAGING}" \
   usr

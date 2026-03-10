@@ -13,10 +13,11 @@ use slint::{ComponentHandle, Model, ModelRc, VecModel, Weak};
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 
+use std::collections::HashSet;
+
+use crate::defaults;
 use crate::state::{lines, opt, InjectState, VerifyState};
-use crate::AppWindow;
-use crate::LogEntry;
-use crate::PresetCard;
+use crate::{clear_build_results, AppWindow, LogEntry, PresetCard};
 
 // ── Thread-local app handle ───────────────────────────────────────────────────
 //
@@ -100,6 +101,10 @@ pub fn make_preset_cards() -> ModelRc<PresetCard> {
     ModelRc::new(VecModel::from(cards))
 }
 
+pub fn preset_display_name(id: &str) -> Option<&'static str> {
+    find_preset_by_str(id).map(|preset| preset.name)
+}
+
 // ── Log helpers ───────────────────────────────────────────────────────────────
 
 const MAX_LOG: usize = 5_000;
@@ -123,6 +128,8 @@ pub struct ForgeApp {
     pub log_model: ModelRc<LogEntry>,
     // Download progress tracking (phase → log index for in-place update)
     pub download_idx: std::collections::HashMap<String, usize>,
+    // Tracks which default-managed fields the user has manually edited.
+    pub edited_fields: HashSet<String>,
 }
 
 impl ForgeApp {
@@ -139,6 +146,7 @@ impl ForgeApp {
             log_vec,
             log_model,
             download_idx: std::collections::HashMap::new(),
+            edited_fields: HashSet::new(),
         }
     }
 
@@ -269,9 +277,6 @@ impl ForgeApp {
         }
         self.finish_job();
         self.set_status_ok("Cancelled");
-        if let Some(w) = self.win.upgrade() {
-            w.set_step2_done(false);
-        }
     }
 
     // ── Snapshot current form state from Slint ────────────────────────────────
@@ -365,8 +370,10 @@ impl ForgeApp {
         if output_dir.trim().is_empty() {
             return Err("Output directory is required".to_string());
         }
-        if !std::path::Path::new(output_dir.trim()).exists() {
-            return Err("Output directory does not exist — create it first".to_string());
+        let output_path = std::path::Path::new(output_dir.trim());
+        if !output_path.exists() {
+            std::fs::create_dir_all(output_path)
+                .map_err(|e| format!("Failed to create output directory: {e}"))?;
         }
 
         let password: String = w.get_password().into();
@@ -391,6 +398,53 @@ impl ForgeApp {
 
     pub fn validate_inject_form(&self) -> Result<(), String> {
         self.collect_inject_config().map(|_| ())
+    }
+
+    // ── Distro defaults ─────────────────────────────────────────────────
+
+    /// Apply distro defaults to unedited fields and update the summary.
+    pub fn apply_distro_defaults(&mut self, w: &AppWindow) {
+        let distro: String = w.get_distro().into();
+        let preset: String = w.get_selected_preset().into();
+        let defs = defaults::defaults_for(&distro, &preset);
+
+        let username: String = w.get_username().into();
+        let docker_enabled = w.get_docker();
+        let changes =
+            defaults::apply_defaults(&defs, &self.edited_fields, &username, docker_enabled);
+
+        for (field, value) in &changes {
+            match *field {
+                "packages" => w.set_packages(value.clone().into()),
+                "user_groups" => w.set_user_groups(value.clone().into()),
+                "user_shell" => w.set_user_shell(value.clone().into()),
+                "enable_services" => w.set_enable_services(value.clone().into()),
+                "disable_services" => w.set_disable_services(value.clone().into()),
+                "firewall_policy" => w.set_firewall_policy(value.clone().into()),
+                "allow_ports" => w.set_allow_ports(value.clone().into()),
+                "docker_users" => w.set_docker_users(value.clone().into()),
+                _ => {}
+            }
+        }
+
+        // Update summary display
+        let summary = defaults::summary_for(&defs);
+        w.set_defaults_summary(summary.into());
+    }
+
+    /// Reset edit tracking and reapply all defaults.
+    pub fn reset_and_apply_defaults(&mut self, w: &AppWindow) {
+        self.edited_fields.clear();
+        self.apply_distro_defaults(w);
+    }
+
+    /// Mark a field as user-edited so defaults won't overwrite it.
+    pub fn mark_edited(&mut self, field: &str) {
+        self.edited_fields.insert(field.to_string());
+    }
+
+    pub fn clear_defaults_state(&mut self) {
+        self.edited_fields.clear();
     }
 
     // ── spawn_inject ──────────────────────────────────────────────────────────
@@ -421,13 +475,8 @@ impl ForgeApp {
             h.abort();
         }
 
-        // Reset done flags
-        w.set_step2_done(false);
-        w.set_step3_done(false);
-        w.set_artifact_path("".into());
-        w.set_artifact_sha256("".into());
-        w.set_verify_done(false);
-        w.set_iso9660_done(false);
+        // Reset build/check state while preserving completed configuration.
+        clear_build_results(&w);
 
         self.start_job("Injecting…");
 
@@ -450,11 +499,13 @@ impl ForgeApp {
                         if let Some(w) = win2.upgrade() {
                             w.set_job_running(false);
                             w.set_job_phase("".into());
-                            w.set_step2_done(true);
+                            w.set_step3_done(true);
                             w.set_artifact_path(artifact.clone().into());
                             w.set_verify_source(artifact.into());
-                            w.set_current_step(4);
-                            w.set_status_text("Build complete".into());
+                            w.set_current_step(3);
+                            w.set_status_text(
+                                "ISO ready — optional checks are available if you want them".into(),
+                            );
                             w.set_status_is_error(false);
                         }
                     });
@@ -509,6 +560,8 @@ impl ForgeApp {
         let sums_opt = opt(&sums);
 
         w.set_verify_done(false);
+        w.set_verify_matched(false);
+        w.set_verify_hash_display("".into());
         self.start_job("Verifying checksum…");
 
         let engine = Arc::clone(&self.engine);
@@ -535,7 +588,7 @@ impl ForgeApp {
                             w.set_verify_done(true);
                             w.set_verify_matched(matched);
                             w.set_verify_hash_display(display.into());
-                            w.set_step3_done(matched);
+                            w.set_step3_done(true);
                             w.set_status_text(
                                 if matched {
                                     "Integrity verified ✓"
@@ -585,6 +638,10 @@ impl ForgeApp {
             return;
         }
         w.set_iso9660_done(false);
+        w.set_iso9660_compliant(false);
+        w.set_iso9660_boot_bios(false);
+        w.set_iso9660_boot_uefi(false);
+        w.set_iso9660_volume_id("".into());
         self.start_job("Validating ISO-9660…");
 
         let engine = Arc::clone(&self.engine);
@@ -758,13 +815,11 @@ fn compute_sha256(path: &str) -> String {
 pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut ForgeApp) {
     if let Some(p) = find_preset_by_str(id) {
         w.set_selected_preset(p.id.as_str().into());
+        w.set_selected_preset_name(p.name.into());
         w.set_distro(p.distro.into());
         // Clear stale build state
         w.set_step2_done(false);
-        w.set_artifact_path("".into());
-        w.set_artifact_sha256("".into());
-        w.set_verify_done(false);
-        w.set_iso9660_done(false);
+        clear_build_results(w);
 
         if p.strategy == AcquisitionStrategy::DirectUrl {
             if let Ok(Some(url)) = resolve_url(p) {
@@ -773,6 +828,10 @@ pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut ForgeApp) {
                 app.spawn_detect_iso(w.get_source_path().into());
             }
         }
+
+        // Apply distro-aware defaults for this preset.
+        app.apply_distro_defaults(w);
+
         w.set_current_step(2);
     }
 }
@@ -928,5 +987,24 @@ pub fn build_inject_config(s: &InjectState) -> InjectConfig {
         mounts: lines(&s.mounts),
         run_commands: lines(&s.run_commands),
         distro,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::preset_display_name;
+
+    #[test]
+    fn preset_display_name_uses_engine_metadata() {
+        assert_eq!(
+            preset_display_name("ubuntu-server-lts"),
+            Some("Ubuntu 24.04.4 LTS Server")
+        );
+        assert_eq!(preset_display_name("arch-linux"), Some("Arch Linux"));
+    }
+
+    #[test]
+    fn preset_display_name_rejects_unknown_ids() {
+        assert_eq!(preset_display_name("unknown-preset"), None);
     }
 }
