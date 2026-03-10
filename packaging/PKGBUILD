@@ -47,6 +47,12 @@ package() {
     install -Dm644 "share/pixmaps/forgeiso.png" \
       "${pkgdir}/usr/share/pixmaps/forgeiso.png"
   fi
+  for size in 32 128 256 512; do
+    if [[ -f "share/icons/hicolor/${size}x${size}/apps/forgeiso.png" ]]; then
+      install -Dm644 "share/icons/hicolor/${size}x${size}/apps/forgeiso.png" \
+        "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/forgeiso.png"
+    fi
+  done
   if [[ -f "share/man/man1/forgeiso.1.gz" ]]; then
     install -Dm644 "share/man/man1/forgeiso.1.gz" \
       "${pkgdir}/usr/share/man/man1/forgeiso.1.gz"

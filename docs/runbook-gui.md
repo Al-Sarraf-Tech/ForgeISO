@@ -18,8 +18,10 @@ Both GUIs implement the same 4-step wizard:
 
 1. **Choose ISO** — select a distro preset or paste a path/URL
 2. **Configure** — set hostname, user, network, firewall, packages, etc.
-3. **Build** — review settings and start the inject + ISO repack
-4. **Verify** — check SHA-256 integrity and ISO-9660 compliance
+3. **Build** — review settings and create the final ISO
+4. **Optional Checks** — checksum and ISO-9660 validation if you want extra assurance
+
+Step 4 is intentionally optional. A successful Build means the wizard is complete.
 
 ---
 

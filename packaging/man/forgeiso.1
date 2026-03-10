@@ -33,7 +33,7 @@ preseed.cfg for Linux Mint, and archinstall JSON for Arch Linux.
 .B diff \fI\-\-base\fP \fIISO\fP \fI\-\-target\fP \fIISO\fP
 Compare two ISOs and list added, removed, modified, and unchanged files.
 .TP
-.B scan \fI\-\-source\fP \fIISO\fP [\fIOPTIONS\fP]
+.B scan \fI\-\-artifact\fP \fIISO\fP [\fIOPTIONS\fP]
 Run security scans (SBOM generation, vulnerability scanning, secrets detection)
 against a built ISO artifact.
 .TP
@@ -42,6 +42,12 @@ Run BIOS and UEFI boot smoke tests against an ISO using QEMU.
 .TP
 .B report \fI\-\-build\fP \fIDIR\fP [\fI\-\-format\fP html|json]
 Render a build report in HTML or JSON format.
+.TP
+.B sources \fIlist|show|resolve\fP
+List built-in presets, show preset details, or resolve a preset to its source URL.
+.TP
+.B vm \fIemit\fP \fI\-\-iso\fP \fIPATH\fP [\fIOPTIONS\fP]
+Generate local hypervisor launch commands for QEMU, VirtualBox, VMware, Hyper-V, or Proxmox.
 .SH INJECT OPTIONS (selected)
 .TP
 \fB\-\-hostname\fP \fINAME\fP

@@ -9,19 +9,24 @@ component StepBadge inherits Rectangle {
     in property <bool>   clickable: false;
     callback clicked();
 
-    width: 160px;
-    height: 60px;
+    width: 174px;
+    height: 64px;
+    border-radius: Sizes.radius-lg;
+    background: current ? rgba(47, 129, 247, 0.08) : transparent;
+    border-width: current ? 1px : 0px;
+    border-color: current ? rgba(47, 129, 247, 0.25) : transparent;
 
     HorizontalLayout {
         spacing: 10px;
         alignment: start;
-        padding-left: 8px;
+        padding-left: 12px;
+        padding-right: 12px;
 
         // Badge circle
         Rectangle {
-            width: 28px;
-            height: 28px;
-            border-radius: 14px;
+            width: 30px;
+            height: 30px;
+            border-radius: 15px;
             background: done ? Palette.green : current ? Palette.accent : Palette.surface;
             border-width: 1.5px;
             border-color: done ? Palette.green : current ? Palette.accent : Palette.border;
@@ -70,7 +75,7 @@ export component StepBar inherits Rectangle {
     in property <bool> step4-done: false;
     callback step-clicked(int);
 
-    height: 72px;
+    height: 84px;
     background: Palette.panel;
 
     // Bottom separator
@@ -104,7 +109,7 @@ export component StepBar inherits Rectangle {
         }
 
         StepBadge {
-            num: "2"; label: "Configure"; sublabel: "Autoinstall options";
+            num: "2"; label: "Configure"; sublabel: "Required settings";
             done: step2-done; current: current-step == 2;
             clickable: current-step > 2 || step2-done || step1-done;
             clicked => {
@@ -123,7 +128,7 @@ export component StepBar inherits Rectangle {
         }
 
         StepBadge {
-            num: "3"; label: "Build"; sublabel: "Build My ISO";
+            num: "3"; label: "Build"; sublabel: "Create the ISO";
             done: step3-done; current: current-step == 3;
             clickable: step2-done || current-step >= 3;
             clicked => {
@@ -142,11 +147,11 @@ export component StepBar inherits Rectangle {
         }
 
         StepBadge {
-            num: "4"; label: "Check"; sublabel: "Verify (optional)";
+            num: "4"; label: "Check"; sublabel: "Optional validation";
             done: step4-done; current: current-step == 4;
-            clickable: step3-done || current-step == 4;
+            clickable: step3-done || current-step >= 4;
             clicked => {
-                if step3-done || current-step == 4 { step-clicked(4); }
+                if step3-done || current-step >= 4 { step-clicked(4); }
             }
         }
     }

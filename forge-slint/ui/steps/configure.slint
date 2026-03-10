@@ -10,6 +10,12 @@ component FieldLabel inherits Text {
     letter-spacing: 0.5px;
 }
 
+component FieldHelp inherits Text {
+    font-size: Sizes.font-xs;
+    color: Palette.subtle;
+    wrap: word-wrap;
+}
+
 component FieldInput inherits Rectangle {
     in-out property <string> value;
     in property <string>     hint: "";
@@ -17,11 +23,11 @@ component FieldInput inherits Rectangle {
     in property <bool>       enabled: true;
     callback changed(string);
 
-    height: 38px;
+    height: 42px;
     border-radius: Sizes.radius-sm;
-    background: Palette.surface;
+    background: Palette.elevated;
     border-width: 1px;
-    border-color: field.has-focus ? Palette.accent : Palette.border;
+    border-color: field.has-focus ? Palette.border-focus : Palette.border;
     animate border-color { duration: 150ms; }
 
     field := LineEdit {
@@ -44,13 +50,14 @@ component FieldTextarea inherits Rectangle {
     in property <bool>       enabled: true;
     callback changed(string);
 
-    height: 80px;
+    height: 104px;
     border-radius: Sizes.radius-sm;
-    background: Palette.surface;
+    background: Palette.elevated;
     border-width: 1px;
-    border-color: Palette.border;
+    border-color: editor.has-focus ? Palette.border-focus : Palette.border;
+    animate border-color { duration: 150ms; }
 
-    TextEdit {
+    editor := TextEdit {
         x: 10px;
         y: 6px;
         width: parent.width - 20px;
@@ -67,37 +74,49 @@ component SectionHeader inherits Rectangle {
     in property <bool>   open: true;
     callback toggle();
 
-    height: 40px;
+    height: 44px;
     background: transparent;
 
     HorizontalLayout {
-        padding-left: 2px;
-        spacing: 8px;
-        alignment: start;
+        padding-left: 6px;
+        padding-right: 6px;
+        spacing: 10px;
+        alignment: space-between;
 
-        // Accent bar
+        HorizontalLayout {
+            spacing: 10px;
+            alignment: start;
+            Rectangle {
+                width: 3px;
+                height: 18px;
+                border-radius: 1.5px;
+                background: Palette.accent;
+                y: (parent.height - self.height) / 2;
+            }
+            Text {
+                text: title;
+                font-size: 11px;
+                font-weight: 700;
+                color: Palette.muted;
+                letter-spacing: 1px;
+                vertical-alignment: center;
+            }
+        }
+
         Rectangle {
-            width: 3px;
-            height: 16px;
-            border-radius: 1.5px;
-            background: Palette.accent;
-            y: (parent.height - self.height) / 2;
-        }
-
-        Text {
-            text: title;
-            font-size: 11px;
-            font-weight: 700;
-            color: Palette.muted;
-            letter-spacing: 1px;
-            vertical-alignment: center;
-        }
-
-        Text {
-            text: open ? "▾" : "▸";
-            font-size: 11px;
-            color: Palette.subtle;
-            vertical-alignment: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            background: Palette.surface;
+            border-width: 1px;
+            border-color: Palette.border;
+            Text {
+                text: open ? "▾" : "▸";
+                font-size: 11px;
+                color: Palette.subtle;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
         }
     }
 
@@ -252,7 +271,7 @@ export component StepConfigure inherits Rectangle {
                             color: Palette.text;
                         }
                         Text {
-                            text: "Fill in the options below — only hostname and username are required.";
+                            text: "Start with identity and output. The rest is optional and grouped below by task.";
                             font-size: Sizes.font-sm;
                             color: Palette.muted;
                         }
@@ -297,6 +316,34 @@ export component StepConfigure inherits Rectangle {
                             color: Palette.text;
                             vertical-alignment: center;
                             overflow: elide;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    border-radius: Sizes.radius-lg;
+                    background: Palette.surface;
+                    border-width: 1px;
+                    border-color: Palette.border;
+
+                    VerticalLayout {
+                        padding: 18px;
+                        spacing: 8px;
+                        Text {
+                            text: "QUICK START";
+                            font-size: 10px;
+                            font-weight: 700;
+                            color: Palette.subtle;
+                            letter-spacing: 1.4px;
+                        }
+                        Text {
+                            text: "Required now: hostname, username, output directory, and output filename.";
+                            font-size: Sizes.font-sm;
+                            color: Palette.text;
+                            wrap: word-wrap;
+                        }
+                        FieldHelp {
+                            text: "You can leave SSH keys, packages, commands, networking, and verification for later. Build completes the wizard; checks are optional.";
                         }
                     }
                 }
@@ -367,6 +414,9 @@ export component StepConfigure inherits Rectangle {
                     spacing: 10px;
                     FieldLabel { text: "AUTHORIZED SSH KEYS  (one per line)"; }
                     FieldTextarea { value <=> ssh-keys; hint: "ssh-ed25519 AAAA… user@host"; enabled: !running; }
+                    FieldHelp {
+                        text: "Paste one public key per line. Leave blank if you plan to log in another way.";
+                    }
                     HorizontalLayout {
                         spacing: 24px;
                         CheckBox { text: "Install SSH server"; checked <=> ssh-install-server; enabled: !running; }
@@ -479,6 +529,7 @@ export component StepConfigure inherits Rectangle {
                     spacing: 10px;
                     FieldLabel { text: "PACKAGES  (space-separated)"; }
                     FieldTextarea { value <=> packages; hint: "curl git vim htop"; enabled: !running; }
+                    FieldHelp { text: "Use a short list of must-have packages. You can add more later in the installed system."; }
                     FieldLabel { text: "EXTRA APT / DNF / PACMAN REPOS  (one per line)"; }
                     FieldTextarea { value <=> apt-repos; hint: "ppa:ondrej/php\ndeb https://…"; enabled: !running; }
                 }
@@ -493,6 +544,7 @@ export component StepConfigure inherits Rectangle {
                     spacing: 10px;
                     FieldLabel { text: "RUN COMMANDS  (before install)"; }
                     FieldTextarea { value <=> run-commands; hint: "echo 'setup starting'"; enabled: !running; }
+                    FieldHelp { text: "Use for simple pre-install tasks. Leave blank unless you need custom behavior."; }
                     FieldLabel { text: "LATE COMMANDS  (after install, in chroot)"; }
                     FieldTextarea { value <=> late-commands; hint: "curtin in-target -- apt-get install -y vim"; enabled: !running; }
                 }
@@ -709,6 +761,9 @@ export component StepConfigure inherits Rectangle {
                             }
                         }
                     }
+                    FieldHelp {
+                        text: "ForgeISO writes the finished ISO here. Verification is optional and can be run after the build succeeds.";
+                    }
                     HorizontalLayout {
                         spacing: 16px;
                         VerticalLayout {
@@ -738,8 +793,8 @@ export component StepConfigure inherits Rectangle {
                 HorizontalLayout {
                     alignment: start;
                     Rectangle {
-                        width: 260px;
-                        height: 44px;
+                        width: 280px;
+                        height: 46px;
                         border-radius: Sizes.radius-sm;
                         property <bool> btn-active: can-continue && !pw-live-mismatch;
                         background: btn-active ? Palette.accent : Palette.surface;
@@ -747,9 +802,9 @@ export component StepConfigure inherits Rectangle {
                         animate background { duration: 180ms; }
                         animate opacity  { duration: 180ms; }
                         Text {
-                            text: "Continue: Build My ISO  →";
+                            text: "Continue to Build Summary →";
                             font-size: Sizes.font-sm;
-                            font-weight: 600;
+                            font-weight: 700;
                             color: btn-active ? Palette.on-accent : Palette.muted;
                             vertical-alignment: center;
                             horizontal-alignment: center;

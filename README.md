@@ -102,7 +102,9 @@ forgeiso doctor
 forgeiso-desktop
 ```
 
-The wizard walks through: **Choose ISO** → **Configure** → **Build** → **Verify**.
+The wizard walks through: **Choose ISO** → **Configure** → **Build** → **Optional Checks**.
+
+Build completes the flow. The final check screen is optional and can be skipped entirely.
 
 > On Intel integrated GPUs, set `MESA_GL_VERSION_OVERRIDE=3.3` if you see rendering issues.
 > On headless or SSH-only systems, `forgeiso-desktop` falls back to `forgeiso-tui` or `forgeiso`.

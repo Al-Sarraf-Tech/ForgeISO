@@ -183,3 +183,104 @@ pub fn opt(s: &str) -> Option<String> {
         Some(t.to_string())
     }
 }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WizardProgress {
+    pub source_ready: bool,
+    pub configure_done: bool,
+    pub build_done: bool,
+    pub verify_done: bool,
+    pub iso9660_done: bool,
+}
+
+#[allow(dead_code)]
+impl WizardProgress {
+    pub fn can_open_step(self, current_step: i32, target_step: i32) -> bool {
+        match target_step {
+            1 => true,
+            2 => self.source_ready || current_step >= 2,
+            3 => self.configure_done || current_step >= 3,
+            4 => self.build_done || current_step >= 4,
+            _ => false,
+        }
+    }
+
+    pub fn checks_run(self) -> bool {
+        self.verify_done || self.iso9660_done
+    }
+
+    pub fn flow_complete(self) -> bool {
+        self.build_done
+    }
+
+    pub fn verify_summary(self) -> &'static str {
+        if !self.build_done {
+            "Build not finished"
+        } else if self.checks_run() {
+            "Optional checks complete"
+        } else {
+            "Optional checks skipped"
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WizardProgress;
+
+    #[test]
+    fn verify_can_be_skipped_after_successful_build() {
+        let progress = WizardProgress {
+            source_ready: true,
+            configure_done: true,
+            build_done: true,
+            verify_done: false,
+            iso9660_done: false,
+        };
+
+        assert!(progress.flow_complete());
+        assert!(!progress.checks_run());
+        assert_eq!(progress.verify_summary(), "Optional checks skipped");
+    }
+
+    #[test]
+    fn check_step_unlocks_after_build_even_without_verify() {
+        let progress = WizardProgress {
+            source_ready: true,
+            configure_done: true,
+            build_done: true,
+            verify_done: false,
+            iso9660_done: false,
+        };
+
+        assert!(progress.can_open_step(3, 4));
+    }
+
+    #[test]
+    fn build_step_stays_locked_until_configuration_is_complete() {
+        let progress = WizardProgress {
+            source_ready: true,
+            configure_done: false,
+            build_done: false,
+            verify_done: false,
+            iso9660_done: false,
+        };
+
+        assert!(!progress.can_open_step(2, 3));
+        assert!(!progress.can_open_step(2, 4));
+    }
+
+    #[test]
+    fn verify_summary_reflects_completed_checks() {
+        let progress = WizardProgress {
+            source_ready: true,
+            configure_done: true,
+            build_done: true,
+            verify_done: true,
+            iso9660_done: false,
+        };
+
+        assert!(progress.checks_run());
+        assert_eq!(progress.verify_summary(), "Optional checks complete");
+    }
+}

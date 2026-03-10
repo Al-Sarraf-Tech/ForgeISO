@@ -70,6 +70,7 @@ export component StepCheck inherits Rectangle {
 
     in property <bool>    running;
 
+    callback back-clicked();
     callback browse-verify-source();
     callback run-verify();
     callback run-iso9660();
@@ -87,37 +88,61 @@ export component StepCheck inherits Rectangle {
         // ── Title ─────────────────────────────────────────────────────────
         HorizontalLayout {
             spacing: 12px;
-            alignment: start;
+            alignment: space-between;
             VerticalLayout {
                 spacing: 4px;
                 Text {
-                    text: "Verify & Inspect";
+                    text: "Optional Checks";
                     font-size: Sizes.font-2xl;
                     font-weight: 700;
                     color: Palette.text;
                 }
                 Text {
-                    text: "Check your output ISO's integrity and boot compliance. This step is optional.";
+                    text: "Your ISO is already ready to use. Run checksum or ISO-9660 checks only if you want extra validation.";
                     font-size: Sizes.font-sm;
                     color: Palette.muted;
                 }
             }
-            // Optional badge
-            Rectangle {
-                width: 82px;
-                height: 24px;
-                border-radius: 12px;
-                background: rgba(139, 148, 158, 0.15);
-                border-width: 1px;
-                border-color: Palette.border;
-                Text {
-                    text: "Optional";
-                    font-size: 11px;
-                    font-weight: 600;
-                    color: Palette.muted;
-                    letter-spacing: 0.5px;
-                    vertical-alignment: center;
-                    horizontal-alignment: center;
+            HorizontalLayout {
+                spacing: 8px;
+
+                Rectangle {
+                    width: 148px;
+                    height: 32px;
+                    border-radius: 16px;
+                    background: Palette.surface;
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    Text {
+                        text: "← Back to Build";
+                        font-size: Sizes.font-sm;
+                        font-weight: 600;
+                        color: Palette.text;
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
+                    TouchArea {
+                        enabled: !running;
+                        clicked => { back-clicked(); }
+                    }
+                }
+
+                Rectangle {
+                    width: 82px;
+                    height: 24px;
+                    border-radius: 12px;
+                    background: rgba(139, 148, 158, 0.15);
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    Text {
+                        text: "Optional";
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: Palette.muted;
+                        letter-spacing: 0.5px;
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
                 }
             }
         }
@@ -145,7 +170,7 @@ export component StepCheck inherits Rectangle {
                     VerticalLayout {
                         spacing: 2px;
                         Text {
-                            text: "ISO built successfully";
+                            text: "Build complete — verification optional";
                             font-size: Sizes.font-lg;
                             font-weight: 700;
                             color: Palette.green;
@@ -362,7 +387,7 @@ export component StepCheck inherits Rectangle {
                         border-color: verify-source != "" && !running ? Palette.accent : Palette.border;
                         opacity: verify-source != "" && !running ? 1.0 : 0.45;
                         Text {
-                            text: "📋 ISO-9660 Compliance";
+                            text: "📋 ISO-9660 Layout";
                             font-size: Sizes.font-sm;
                             color: verify-source != "" && !running ? Palette.text : Palette.muted;
                             vertical-alignment: center;
@@ -376,6 +401,28 @@ export component StepCheck inherits Rectangle {
                 }
 
                 // Results
+                if !verify-done && !iso9660-done: Rectangle {
+                    border-radius: Sizes.radius-lg;
+                    background: Palette.elevated;
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 6px;
+                        Text {
+                            text: "Build complete — checks skipped for now";
+                            font-size: Sizes.font-md;
+                            font-weight: 700;
+                            color: Palette.text;
+                        }
+                        Text {
+                            text: "You can stop here, ship the ISO, or come back later to run checksum and ISO layout checks.";
+                            font-size: Sizes.font-sm;
+                            color: Palette.muted;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
                 if verify-done: ResultCard {
                     has-result: true;
                     passed: verify-matched;

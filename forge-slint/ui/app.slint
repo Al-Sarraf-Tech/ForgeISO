@@ -40,8 +40,8 @@ export component AppWindow inherits Window {
 
     // ── Step done flags ─────────────────────────────────────────────────
     in property <bool>  step1-done: false;
-    in property <bool>  step2-done: false;   // inject done
-    in property <bool>  step3-done: false;   // verify done
+    in property <bool>  step2-done: false;   // configure complete
+    in property <bool>  step3-done: false;   // build complete
 
     // ── Presets ─────────────────────────────────────────────────────────
     in property <[PresetCard]> presets;
@@ -140,6 +140,7 @@ export component AppWindow inherits Window {
     callback build-view-results();
     // Check
     callback browse-verify-source();
+    callback check-back();
     callback run-verify();
     callback run-iso9660();
     callback copy-sha256();
@@ -172,8 +173,8 @@ export component AppWindow inherits Window {
             current-step: root.current-step;
             step1-done: root.step1-done;
             step2-done: root.step2-done;
-            step3-done: root.step2-done;   // Build done = inject done
-            step4-done: root.step2-done;   // Verify optional — badge ✓ once build is done
+            step3-done: root.step3-done;
+            step4-done: root.verify-done || root.iso9660-done;
             step-clicked(s) => { root.step-bar-clicked(s); }
         }
 
@@ -270,9 +271,16 @@ export component AppWindow inherits Window {
                 running: root.job-running;
                 artifact-path: root.artifact-path;
                 artifact-sha256: root.artifact-sha256;
+                verify-summary: root.step3-done
+                    ? (root.verify-done || root.iso9660-done
+                        ? "Optional checks complete"
+                        : "Optional checks skipped for now")
+                    : "";
                 back-clicked => { root.build-back(); }
                 run-clicked => { root.build-run(); }
                 view-results => { root.build-view-results(); }
+                open-folder => { root.open-folder(); }
+                start-over => { root.clear-forms(); }
             }
 
             if current-step == 4: StepCheck {
@@ -289,6 +297,7 @@ export component AppWindow inherits Window {
                 iso9660-boot-uefi: root.iso9660-boot-uefi;
                 iso9660-volume-id: root.iso9660-volume-id;
                 running: root.job-running;
+                back-clicked => { root.check-back(); }
                 browse-verify-source => { root.browse-verify-source(); }
                 run-verify => { root.run-verify(); }
                 run-iso9660 => { root.run-iso9660(); }

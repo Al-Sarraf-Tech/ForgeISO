@@ -174,6 +174,7 @@ if [[ -f "${TARBALL}" ]]; then
   check_tar_member "${TARBALL}" '.*/bin/forgeiso-desktop$' "Tarball includes launcher"
   check_tar_member "${TARBALL}" '.*/share/applications/forgeiso.desktop$' "Tarball includes desktop file"
   check_tar_member "${TARBALL}" '.*/share/pixmaps/forgeiso.png$' "Tarball includes icon"
+  check_tar_member "${TARBALL}" '.*/share/icons/hicolor/256x256/apps/forgeiso.png$' "Tarball includes themed app icon"
   check_tar_member "${TARBALL}" '.*/share/man/man1/forgeiso.1.gz$' "Tarball includes man page"
   check_tar_member "${TARBALL}" '.*/share/bash-completion/completions/forgeiso$' "Tarball includes bash completion"
 fi
@@ -182,6 +183,7 @@ if [[ -f "${RPM}" ]]; then
   check_rpm_member "${RPM}" "/usr/bin/forgeiso-desktop" "RPM includes launcher"
   check_rpm_member "${RPM}" "/usr/share/applications/forgeiso.desktop" "RPM includes desktop file"
   check_rpm_member "${RPM}" "/usr/share/pixmaps/forgeiso.png" "RPM includes icon"
+  check_rpm_member "${RPM}" "/usr/share/icons/hicolor/256x256/apps/forgeiso.png" "RPM includes themed app icon"
   check_rpm_member "${RPM}" "/usr/share/man/man1/forgeiso.1.gz" "RPM includes man page"
   check_rpm_member "${RPM}" "/usr/share/bash-completion/completions/forgeiso" "RPM includes bash completion"
 fi
@@ -190,6 +192,7 @@ if [[ -f "${DEB}" ]]; then
   check_deb_member "${DEB}" './usr/bin/forgeiso-desktop' "DEB includes launcher"
   check_deb_member "${DEB}" './usr/share/applications/forgeiso.desktop' "DEB includes desktop file"
   check_deb_member "${DEB}" './usr/share/pixmaps/forgeiso.png' "DEB includes icon"
+  check_deb_member "${DEB}" './usr/share/icons/hicolor/256x256/apps/forgeiso.png' "DEB includes themed app icon"
   check_deb_member "${DEB}" './usr/share/man/man1/forgeiso.1.gz' "DEB includes man page"
   check_deb_member "${DEB}" './usr/share/bash-completion/completions/forgeiso' "DEB includes bash completion"
 fi
@@ -198,6 +201,7 @@ if [[ -f "${PACMAN}" ]]; then
   check_pacman_member "${PACMAN}" "usr/bin/forgeiso-desktop" "Pacman package includes launcher"
   check_pacman_member "${PACMAN}" "usr/share/applications/forgeiso.desktop" "Pacman package includes desktop file"
   check_pacman_member "${PACMAN}" "usr/share/pixmaps/forgeiso.png" "Pacman package includes icon"
+  check_pacman_member "${PACMAN}" "usr/share/icons/hicolor/256x256/apps/forgeiso.png" "Pacman package includes themed app icon"
   check_pacman_member "${PACMAN}" "usr/share/man/man1/forgeiso.1.gz" "Pacman package includes man page"
   check_pacman_member "${PACMAN}" "usr/share/bash-completion/completions/forgeiso" "Pacman package includes bash completion"
 fi

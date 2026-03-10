@@ -51,7 +51,7 @@ Late commands (`--late-command`) are intentionally **not** validated — they ar
 
 - Top-level workflow `permissions: contents: read` restricts the default `GITHUB_TOKEN`
 - Only the `release` job escalates to `contents: write`
-- All 6 CI stages must pass before the release job runs
+- All 7 CI stages must pass before the release job runs
 - Ephemeral Docker volumes are destroyed after each stage
 
 ## CI/CD containers

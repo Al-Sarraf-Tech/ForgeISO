@@ -269,9 +269,6 @@ impl ForgeApp {
         }
         self.finish_job();
         self.set_status_ok("Cancelled");
-        if let Some(w) = self.win.upgrade() {
-            w.set_step2_done(false);
-        }
     }
 
     // ── Snapshot current form state from Slint ────────────────────────────────
@@ -423,8 +420,7 @@ impl ForgeApp {
             h.abort();
         }
 
-        // Reset done flags
-        w.set_step2_done(false);
+        // Reset build/check state while preserving completed configuration.
         w.set_step3_done(false);
         w.set_artifact_path("".into());
         w.set_artifact_sha256("".into());
@@ -452,11 +448,13 @@ impl ForgeApp {
                         if let Some(w) = win2.upgrade() {
                             w.set_job_running(false);
                             w.set_job_phase("".into());
-                            w.set_step2_done(true);
+                            w.set_step3_done(true);
                             w.set_artifact_path(artifact.clone().into());
                             w.set_verify_source(artifact.into());
-                            w.set_current_step(4);
-                            w.set_status_text("Build complete".into());
+                            w.set_current_step(3);
+                            w.set_status_text(
+                                "ISO ready — optional checks are available if you want them".into(),
+                            );
                             w.set_status_is_error(false);
                         }
                     });
@@ -763,6 +761,7 @@ pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut ForgeApp) {
         w.set_distro(p.distro.into());
         // Clear stale build state
         w.set_step2_done(false);
+        w.set_step3_done(false);
         w.set_artifact_path("".into());
         w.set_artifact_sha256("".into());
         w.set_verify_done(false);

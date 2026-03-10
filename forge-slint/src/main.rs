@@ -14,7 +14,7 @@ use slint::ComponentHandle;
 use app::{handle_preset_clicked, make_preset_cards, with_app, with_app_result, ForgeApp, APP};
 use forgeiso_engine::ForgeIsoEngine;
 use persist::{load_state, save_state};
-use state::{InjectState, PersistedState, VerifyState};
+use state::{InjectState, PersistedState, VerifyState, WizardProgress};
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -96,13 +96,14 @@ fn main() -> anyhow::Result<()> {
                     return;
                 }
                 let current = w.get_current_step();
-                let can = match step {
-                    1 => true,
-                    2 => w.get_step1_done() || current >= 2,
-                    3 => w.get_step2_done() || current >= 3,
-                    4 => w.get_step2_done() || current >= 4,
-                    _ => false,
+                let progress = WizardProgress {
+                    source_ready: w.get_step1_done(),
+                    configure_done: w.get_step2_done(),
+                    build_done: w.get_step3_done(),
+                    verify_done: w.get_verify_done(),
+                    iso9660_done: w.get_iso9660_done(),
                 };
+                let can = progress.can_open_step(current, step);
                 if can {
                     w.set_current_step(step);
                 }
@@ -131,6 +132,12 @@ fn main() -> anyhow::Result<()> {
                 |w, path| {
                     w.set_source_path(path.clone().into());
                     w.set_step1_done(true);
+                    w.set_step2_done(false);
+                    w.set_step3_done(false);
+                    w.set_artifact_path("".into());
+                    w.set_artifact_sha256("".into());
+                    w.set_verify_done(false);
+                    w.set_iso9660_done(false);
                     // Access ForgeApp via thread-local — no Rc captured.
                     with_app(|a| a.spawn_detect_iso(path));
                 },
@@ -146,6 +153,12 @@ fn main() -> anyhow::Result<()> {
             let not_empty = !t.trim().is_empty();
             if let Some(w) = weak.upgrade() {
                 w.set_step1_done(not_empty);
+                w.set_step2_done(false);
+                w.set_step3_done(false);
+                w.set_artifact_path("".into());
+                w.set_artifact_sha256("".into());
+                w.set_verify_done(false);
+                w.set_iso9660_done(false);
             }
             if not_empty {
                 with_app(|a| a.spawn_detect_iso(t));
@@ -256,6 +269,7 @@ fn main() -> anyhow::Result<()> {
 
                 w.set_status_text("".into());
                 w.set_status_is_error(false);
+                w.set_step2_done(true);
                 w.set_current_step(3);
             }
         });
@@ -277,6 +291,11 @@ fn main() -> anyhow::Result<()> {
         win.on_build_back(move || {
             if let Some(w) = weak.upgrade() {
                 if !w.get_job_running() {
+                    w.set_step3_done(false);
+                    w.set_artifact_path("".into());
+                    w.set_artifact_sha256("".into());
+                    w.set_verify_done(false);
+                    w.set_iso9660_done(false);
                     w.set_current_step(2);
                 }
             }
@@ -293,7 +312,21 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_build_view_results(move || {
             if let Some(w) = weak.upgrade() {
-                w.set_current_step(4);
+                if w.get_step3_done() {
+                    w.set_current_step(4);
+                }
+            }
+        });
+    }
+
+    // check-back  — return to build summary
+    {
+        let weak = win.as_weak();
+        win.on_check_back(move || {
+            if let Some(w) = weak.upgrade() {
+                if !w.get_job_running() && w.get_step3_done() {
+                    w.set_current_step(3);
+                }
             }
         });
     }

@@ -78,23 +78,37 @@ Type=Application
 Name=ForgeISO
 Comment=Cross-distro ISO customization platform
 Exec=forgeiso-desktop
+TryExec=forgeiso-desktop
 Icon=forgeiso
 Terminal=false
-Categories=System;Utility;Development;
+Categories=Utility;
 StartupNotify=true
 DESKTOP
 
-  local icon_src=""
-  for candidate in \
-    "${root_dir}/forge-gui/assets/icon_256.png" \
-    "${root_dir}/gui/src-tauri/icons/icon.png"; do
-    if [[ -f "${candidate}" ]]; then
-      icon_src="${candidate}"
-      break
+  local pixmap_src=""
+  local size icon_src
+  for size in 32 128 256 512; do
+    icon_src=""
+    for candidate in \
+      "${root_dir}/forge-gui/assets/icon_${size}.png" \
+      "${root_dir}/gui/src-tauri/icons/${size}x${size}.png"; do
+      if [[ -f "${candidate}" ]]; then
+        icon_src="${candidate}"
+        break
+      fi
+    done
+
+    if [[ -n "${icon_src}" ]]; then
+      install -Dm644 "${icon_src}" \
+        "${staging}/usr/share/icons/hicolor/${size}x${size}/apps/forgeiso.png"
+      if [[ "${size}" == "256" ]]; then
+        pixmap_src="${icon_src}"
+      fi
     fi
   done
-  if [[ -n "${icon_src}" ]]; then
-    install -Dm644 "${icon_src}" "${staging}/usr/share/pixmaps/forgeiso.png"
+
+  if [[ -n "${pixmap_src}" ]]; then
+    install -Dm644 "${pixmap_src}" "${staging}/usr/share/pixmaps/forgeiso.png"
   fi
 
   install -Dm644 "${root_dir}/README.md" \
