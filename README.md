@@ -10,8 +10,6 @@
 
 ForgeISO injects fully automated installation configs into Linux ISOs (Ubuntu, Linux Mint, Fedora, Arch Linux, Rocky, AlmaLinux, CentOS Stream, and more) and produces bootable ISOs that install hands-free. It also inspects, verifies, diffs, scans, and smoke-tests ISOs — all from a single binary on your Linux host.
 
-A pure-Rust egui/eframe desktop GUI (`forge-gui`) provides a wizard interface alongside the CLI.
-
 ---
 
 ## Status
@@ -19,11 +17,12 @@ A pure-Rust egui/eframe desktop GUI (`forge-gui`) provides a wizard interface al
 | Component | State |
 |---|---|
 | CLI (`forgeiso`) | Stable for Ubuntu and Fedora; Mint/Arch are best-effort |
-| GUI (`forge-gui`) | Functional — 3-step inject wizard, 35 ISO presets, Doctor panel |
+| GUI (`forge-slint`) | Primary desktop GUI — Slint 1.15 wizard interface |
+| GUI (`forge-gui`) | Alternate desktop GUI — egui/eframe 0.33 |
 | TUI (`forgeiso-tui`) | Basic progress view only |
 | CI | 6-stage Docker pipeline (Rust, SBOM, GUI, Security, Integration, E2E) |
 
-> This is v0.2.0. Expect rough edges, especially on Mint and Arch. Ubuntu and Fedora unattended installs are CI-tested and reliable.
+> Ubuntu and Fedora unattended installs are CI-tested and reliable. Mint and Arch are best-effort.
 
 ---
 
@@ -34,33 +33,27 @@ A pure-Rust egui/eframe desktop GUI (`forge-gui`) provides a wizard interface al
 | Ubuntu | cloud-init autoinstall | Full | CI-tested; fully supported |
 | Fedora | Kickstart (ks.cfg) | Full | CI-tested; fully supported |
 | Linux Mint | preseed.cfg | Full | Not CI-tested with real ISO |
-| Arch Linux | archinstall JSON config | Partial | Boot-time trigger; not CI-tested with real ISO |
-| Rocky Linux | Kickstart | Full | Preset picker only; same Kickstart path as Fedora |
-| AlmaLinux | Kickstart | Full | Preset picker only |
-| CentOS Stream | Kickstart | Full | Preset picker only |
-
-See [docs/distro-support.md](docs/distro-support.md) for details.
+| Arch Linux | archinstall JSON | Partial | Boot-time trigger; not CI-tested with real ISO |
+| Rocky Linux | Kickstart | Full | Preset picker; same path as Fedora |
+| AlmaLinux | Kickstart | Full | Preset picker |
+| CentOS Stream | Kickstart | Full | Preset picker |
 
 ---
 
-## ISO Presets (35 total)
+## ISO Presets
 
-The GUI preset picker and `--preset` CLI flag provide direct download URLs for:
+The GUI preset picker and `--preset` CLI flag provide direct download URLs for 35 ISOs across Ubuntu, Fedora, Linux Mint, Rocky Linux, AlmaLinux, CentOS Stream, and Arch Linux. Selecting a preset auto-fills the source URL; ForgeISO downloads and caches the ISO automatically.
 
-- **Ubuntu** — Server LTS, Desktop LTS, Mini, Server 22.04, Server 24.10, and more (10 presets)
-- **Fedora** — Server, Workstation, KDE, Minimal, Net Install (5 presets)
-- **Linux Mint** — Cinnamon, MATE, XFCE (3 presets)
-- **Rocky Linux** — Boot, Minimal, DVD (3 presets)
-- **AlmaLinux** — Boot, Minimal, DVD (3 presets)
-- **CentOS Stream** — Boot, DVD (2 presets)
-- **Arch Linux** — x86_64 current (1 preset)
-- **RHEL** — Customer portal URL placeholder (1 preset)
+```bash
+forgeiso sources list
+forgeiso sources show ubuntu-server-lts
+```
 
 ---
 
 ## Install
 
-Download the latest release from the **[Releases page](https://github.com/jalsarraf0/ForgeISO/releases/latest)**, then:
+Download the latest release from the **[Releases page](https://github.com/jalsarraf0/ForgeISO/releases/latest)**:
 
 ### Fedora · RHEL · openSUSE
 ```bash
@@ -70,44 +63,43 @@ sudo rpm -ivh forgeiso-0.2.0-1.x86_64.rpm
 ### Debian · Ubuntu · Linux Mint
 ```bash
 sudo dpkg -i forgeiso_0.2.0-1_amd64.deb
-sudo apt-get install -f        # resolve xorriso, squashfs-tools, mtools if missing
+sudo apt-get install -f        # pull in xorriso, squashfs-tools, mtools if missing
 ```
 
 ### Any x86-64 Linux (tarball)
 ```bash
 tar -xzf forgeiso-0.2.0-linux-x86_64.tar.gz
 sudo install -m755 forgeiso-0.2.0-linux-x86_64/bin/forgeiso /usr/local/bin/
-sudo install -m755 forgeiso-0.2.0-linux-x86_64/bin/forgeiso-tui /usr/local/bin/
-sudo install -m755 forgeiso-0.2.0-linux-x86_64/bin/forge-gui /usr/local/bin/
+sudo install -m755 forgeiso-0.2.0-linux-x86_64/bin/forge-slint /usr/local/bin/
 ```
 
-> **Dependencies:** `xorriso` · `squashfs-tools` · `mtools`
-> Optional for smoke testing: `qemu-system-x86_64` · `ovmf`
+> **Required tools:** `xorriso` · `squashfs-tools` · `mtools`
+> **Optional (smoke testing):** `qemu-system-x86_64` · `ovmf`
 
 Verify your download:
 ```bash
 sha256sum -c checksums.txt
 ```
 
-Check what's available on your host:
+Check host prerequisites:
 ```bash
 forgeiso doctor
 ```
 
 ---
 
-## Quick start
+## Quick Start
 
 ### GUI (recommended for new users)
 ```bash
-WGPU_BACKEND=gl forge-gui
+forge-slint
 ```
 
-The wizard walks through: **Get ISO** → **Configure** → **Run**. Select a preset from the dropdown to auto-fill the source URL.
+The wizard walks through: **Choose ISO** → **Configure** → **Build** → **Verify**.
 
-> On Intel Arc and other integrated GPUs, `WGPU_BACKEND=gl` avoids Vulkan stability issues.
+> On Intel integrated GPUs, set `MESA_GL_VERSION_OVERRIDE=3.3` if you see rendering issues.
 
-### Ubuntu (fully unattended cloud-init autoinstall)
+### Ubuntu (fully unattended)
 ```bash
 forgeiso inject \
   --source ubuntu-24.04-server-amd64.iso \
@@ -129,7 +121,7 @@ forgeiso inject \
   --no-user-interaction
 ```
 
-### Use a built-in preset instead of a local ISO
+### Use a built-in preset (no local ISO needed)
 ```bash
 forgeiso inject \
   --preset ubuntu-server-lts \
@@ -138,7 +130,7 @@ forgeiso inject \
   --username admin --password secret
 ```
 
-Boot the output ISO. It installs your configuration hands-free (Ubuntu and Fedora) or triggers the configured installer at boot (Mint and Arch).
+Boot the output ISO. It installs hands-free.
 
 ---
 
@@ -146,9 +138,9 @@ Boot the output ISO. It installs your configuration hands-free (Ubuntu and Fedor
 
 | Command | What it does |
 |---|---|
-| [`inject`](#inject) | Inject install config into an ISO (Ubuntu/Fedora/Mint/Arch) |
+| [`inject`](#inject) | Inject install config into an ISO |
 | [`verify`](#verify) | Check ISO SHA-256 against official checksums |
-| [`inspect`](#inspect) | Read distro/release/arch/hash from an ISO or URL |
+| [`inspect`](#inspect) | Read distro / release / arch / hash from an ISO or URL |
 | [`build`](#build) | Repack an ISO with a local overlay directory |
 | [`diff`](#diff) | Compare two ISOs — added, removed, modified files |
 | [`scan`](#scan) | SBOM + CVE + secrets scan on an ISO |
@@ -162,7 +154,7 @@ Boot the output ISO. It installs your configuration hands-free (Ubuntu and Fedor
 
 ## inject
 
-Generates a distro-appropriate install config and embeds it into the ISO. Use `--distro` to specify the target distro (defaults to Ubuntu). Use `--preset` to download and use a known ISO automatically.
+Generates a distro-appropriate install config and embeds it into the ISO.
 
 ```bash
 forgeiso inject \
@@ -179,9 +171,9 @@ Pass `--autoinstall user-data.yaml` (Ubuntu only) to merge flags into an existin
 | Flag | Description |
 |---|---|
 | `--distro ubuntu` | Ubuntu cloud-init autoinstall (default) |
-| `--distro fedora` | Fedora Kickstart (ks.cfg) |
-| `--distro mint` | Linux Mint preseed.cfg via Calamares |
-| `--distro arch` | Arch Linux archinstall JSON config |
+| `--distro fedora` | Fedora Kickstart |
+| `--distro mint` | Linux Mint preseed.cfg |
+| `--distro arch` | Arch Linux archinstall JSON |
 | `--preset NAME` | Use a built-in ISO preset (conflicts with `--source`) |
 
 ### Identity
@@ -190,7 +182,7 @@ Pass `--autoinstall user-data.yaml` (Ubuntu only) to merge flags into an existin
 |---|---|
 | `--hostname NAME` | System hostname |
 | `--username NAME` | Primary user login |
-| `--password PASS` | Password (auto-hashed to SHA-512-crypt) |
+| `--password PASS` | Password (hashed to SHA-512-crypt) |
 | `--password-file FILE` | Read password from file |
 | `--password-stdin` | Read password from stdin |
 | `--realname NAME` | User display name |
@@ -202,7 +194,7 @@ Pass `--autoinstall user-data.yaml` (Ubuntu only) to merge flags into an existin
 | `--ssh-key KEY` | Authorized public key (repeatable) |
 | `--ssh-key-file FILE` | Read public key from file (repeatable) |
 | `--ssh-password-auth` | Enable SSH password authentication |
-| `--no-ssh-password-auth` | Explicitly disable SSH password authentication |
+| `--no-ssh-password-auth` | Disable SSH password authentication |
 
 ### Networking
 
@@ -222,14 +214,14 @@ Pass `--autoinstall user-data.yaml` (Ubuntu only) to merge flags into an existin
 |---|---|
 | `--group NAME` | Add user to group, e.g. `sudo`, `docker` (repeatable) |
 | `--shell PATH` | Login shell, e.g. `/bin/zsh` |
-| `--sudo-nopasswd` | Grant passwordless sudo (`NOPASSWD:ALL`) |
+| `--sudo-nopasswd` | Grant passwordless sudo |
 | `--sudo-command CMD` | Restrict sudo to specific command (repeatable) |
 
 ### Firewall
 
 | Flag | Description |
 |---|---|
-| `--firewall` | Enable firewall (UFW for Ubuntu/Mint, firewalld for Fedora) |
+| `--firewall` | Enable firewall (UFW / firewalld) |
 | `--firewall-policy POLICY` | Default incoming policy: `allow` \| `deny` \| `reject` |
 | `--allow-port PORT` | Open port, e.g. `22/tcp`, `443` (repeatable) |
 | `--deny-port PORT` | Block port (repeatable) |
@@ -299,24 +291,15 @@ Pass `--autoinstall user-data.yaml` (Ubuntu only) to merge flags into an existin
 
 ## verify
 
-Computes the SHA-256 of a local ISO and checks it against the official checksums file. Auto-detects the checksums URL from the ISO metadata for Ubuntu ISOs.
-
 ```bash
 forgeiso verify --source ubuntu-24.04-server-amd64.iso
-```
-
-Override the checksums URL:
-```bash
-forgeiso verify \
-  --source ubuntu-24.04-server-amd64.iso \
+forgeiso verify --source ubuntu-24.04-server-amd64.iso \
   --sums-url https://releases.ubuntu.com/24.04/SHA256SUMS
 ```
 
 ---
 
 ## inspect
-
-Reads distro, release, architecture, and SHA-256 from a local ISO or a URL (ForgeISO downloads to `~/.cache/forgeiso` first).
 
 ```bash
 forgeiso inspect --source ubuntu-24.04-server-amd64.iso
@@ -327,8 +310,6 @@ forgeiso inspect --source https://releases.ubuntu.com/24.04/ubuntu-24.04-server-
 
 ## build
 
-Repacks an ISO with a local overlay directory merged into the root.
-
 ```bash
 forgeiso build \
   --source ubuntu-24.04-server-amd64.iso \
@@ -338,13 +319,9 @@ forgeiso build \
   --profile minimal
 ```
 
-`--profile` is `minimal` (default) or `desktop`.
-
 ---
 
 ## diff
-
-Compares two ISOs and lists files that were added, removed, or modified, with size deltas.
 
 ```bash
 forgeiso diff --base original.iso --target custom.iso
@@ -354,8 +331,6 @@ forgeiso diff --base original.iso --target custom.iso
 
 ## scan
 
-Runs SBOM generation, CVE scanning, and secrets detection against ISO contents. Uses whichever of `syft`, `trivy`, `grype` are installed.
-
 ```bash
 forgeiso scan --source custom.iso
 ```
@@ -364,8 +339,6 @@ forgeiso scan --source custom.iso
 
 ## test
 
-Boots the ISO in QEMU and verifies it reaches the boot menu. Requires `qemu-system-x86_64` and `ovmf`.
-
 ```bash
 forgeiso test --iso custom.iso --bios --uefi
 ```
@@ -373,8 +346,6 @@ forgeiso test --iso custom.iso --bios --uefi
 ---
 
 ## report
-
-Renders the build report for an output directory.
 
 ```bash
 forgeiso report --build ./artifacts --format html
@@ -389,13 +360,12 @@ forgeiso report --build ./artifacts --format json
 forgeiso doctor
 ```
 
-Reports availability of `xorriso`, `mtools`, `unsquashfs`, `mksquashfs`, `qemu-system-x86_64`, `trivy`, `syft`, `grype`, and `oscap`. Also shows per-distro inject readiness.
+Reports availability of `xorriso`, `mtools`, `unsquashfs`, `mksquashfs`,
+`qemu-system-x86_64`, `trivy`, `syft`, `grype`, and `oscap`.
 
 ---
 
 ## sources
-
-List and resolve built-in ISO presets.
 
 ```bash
 forgeiso sources list
@@ -407,18 +377,9 @@ forgeiso sources resolve fedora-server
 
 ## vm
 
-Emit hypervisor-specific launch scripts for a built ISO.
-
 ```bash
-forgeiso vm emit \
-  --iso /tmp/out/custom.iso \
-  --hypervisor qemu \
-  --firmware uefi
-
-forgeiso vm emit \
-  --iso /tmp/out/custom.iso \
-  --hypervisor virtualbox \
-  --json
+forgeiso vm emit --iso /tmp/out/custom.iso --hypervisor qemu --firmware uefi
+forgeiso vm emit --iso /tmp/out/custom.iso --hypervisor virtualbox --json
 ```
 
 Supported hypervisors: `qemu`, `virtualbox`, `vmware`, `hyperv`, `proxmox`.
@@ -428,57 +389,58 @@ Supported hypervisors: `qemu`, `virtualbox`, `vmware`, `hyperv`, `proxmox`.
 ## Logging
 
 ```bash
-RUST_LOG=debug forgeiso inject --source ubuntu.iso --out /tmp/out --username admin --password secret
+RUST_LOG=debug forgeiso inject --source ubuntu.iso --out /tmp/out \
+    --username admin --password secret
 ```
-
-Valid levels: `error` · `warn` · `info` · `debug` · `trace`
 
 ---
 
-## Build from source
+## Build from Source
 
-Requires Rust 1.75+ and the system tools listed above.
+Requires Rust 1.75+ and `xorriso`, `squashfs-tools`, `mtools`.
 
 ```bash
 git clone https://github.com/jalsarraf0/ForgeISO
 cd ForgeISO
-cargo build --release -p forgeiso-cli
+cargo build --release
+```
+
+Install binaries:
+```bash
 sudo install -m755 target/release/forgeiso /usr/local/bin/
+sudo install -m755 target/release/forge-slint /usr/local/bin/
+sudo install -m755 target/release/forge-gui /usr/local/bin/
+sudo install -m755 target/release/forgeiso-tui /usr/local/bin/
 ```
 
 Run tests:
 ```bash
-cargo test --workspace
-```
-
-GUI (egui/eframe desktop app):
-```bash
-cargo build --release -p forge-gui
-sudo install -m755 target/release/forge-gui /usr/local/bin/
-# Launch (use WGPU_BACKEND=gl on Intel/AMD integrated GPUs)
-WGPU_BACKEND=gl forge-gui
-```
-
-TUI (ratatui terminal UI):
-```bash
-cargo build --release -p forgeiso-tui
-sudo install -m755 target/release/forgeiso-tui /usr/local/bin/
+cargo test --workspace        # 614 tests
+cargo deny check              # license + advisory gate
 ```
 
 ---
 
 ## CI
 
-Six ephemeral Docker containers run in parallel on every push. All containers are removed after the job completes.
+Six ephemeral Docker containers run in parallel on every push.
 
-| Stage | What it tests |
+| Stage | What it checks |
 |---|---|
 | C1 Rust | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test --workspace` |
-| C2 SBOM + Audit | `cargo-deny`, `cargo-audit`, `syft` license/CVE check |
-| C3 GUI | GUI crate `cargo check` |
+| C2 SBOM + Audit | `cargo-deny`, `cargo-audit`, `syft` — license / CVE gate |
+| C3 GUI | legacy Tauri GUI `cargo check` + `npm run build` |
 | C4 Security | `trivy`, `syft`, `grype` against workspace |
 | C5 Integration | Smoke ISO build with xorriso + grub |
 | C6 E2E | QEMU BIOS/UEFI boot test (skipped if no `/dev/kvm`) |
+
+---
+
+## For Contributors and AI Agents
+
+See [`AGENTS.md`](AGENTS.md) — the single source of truth for project
+architecture, conventions, and rules. Claude Code and OpenAI Codex both read
+this file automatically.
 
 ---
 
