@@ -43,6 +43,8 @@ allow = [
     "OFL-1.1",
     # Ubuntu Font Licence — used by epaint_default_fonts (egui)
     "Ubuntu-font-1.0",
+    # Slint Royalty-free license — forge-slint GUI crate
+    "LicenseRef-Slint-Royalty-free-2.0",
 ]
 
 # ring uses a compound OpenSSL + ISC + MIT license in its source tree

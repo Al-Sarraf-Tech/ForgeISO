@@ -1,0 +1,747 @@
+import { Palette, Sizes } from "../theme.slint";
+import { ScrollView, LineEdit, CheckBox, ComboBox, TextEdit } from "std-widgets.slint";
+
+// ── Reusable field components ────────────────────────────────────────────────
+
+component FieldLabel inherits Text {
+    font-size: Sizes.font-xs;
+    font-weight: 600;
+    color: Palette.muted;
+    letter-spacing: 0.5px;
+}
+
+component FieldInput inherits Rectangle {
+    in-out property <string> value;
+    in property <string>     hint: "";
+    in property <bool>       password: false;
+    in property <bool>       enabled: true;
+    callback changed(string);
+
+    height: 38px;
+    border-radius: Sizes.radius-sm;
+    background: Palette.surface;
+    border-width: 1px;
+    border-color: field.has-focus ? Palette.accent : Palette.border;
+    animate border-color { duration: 150ms; }
+
+    field := LineEdit {
+        x: 10px;
+        y: 0;
+        width: parent.width - 20px;
+        height: parent.height;
+        text: value;
+        placeholder-text: hint;
+        font-size: Sizes.font-sm;
+        enabled: parent.enabled;
+        input-type: password ? InputType.password : InputType.text;
+        edited(t) => { value = t; changed(t); }
+    }
+}
+
+component FieldTextarea inherits Rectangle {
+    in-out property <string> value;
+    in property <string>     hint: "";
+    in property <bool>       enabled: true;
+    callback changed(string);
+
+    height: 80px;
+    border-radius: Sizes.radius-sm;
+    background: Palette.surface;
+    border-width: 1px;
+    border-color: Palette.border;
+
+    TextEdit {
+        x: 10px;
+        y: 6px;
+        width: parent.width - 20px;
+        height: parent.height - 12px;
+        text: value;
+        font-size: Sizes.font-sm;
+        enabled: parent.enabled;
+        edited(t) => { value = t; changed(t); }
+    }
+}
+
+component SectionHeader inherits Rectangle {
+    in property <string> title;
+    in property <bool>   open: true;
+    callback toggle();
+
+    height: 40px;
+    background: transparent;
+
+    HorizontalLayout {
+        padding-left: 2px;
+        spacing: 8px;
+        alignment: start;
+
+        // Accent bar
+        Rectangle {
+            width: 3px;
+            height: 16px;
+            border-radius: 1.5px;
+            background: Palette.accent;
+            y: (parent.height - self.height) / 2;
+        }
+
+        Text {
+            text: title;
+            font-size: 11px;
+            font-weight: 700;
+            color: Palette.muted;
+            letter-spacing: 1px;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: open ? "▾" : "▸";
+            font-size: 11px;
+            color: Palette.subtle;
+            vertical-alignment: center;
+        }
+    }
+
+    // Hairline below
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Palette.border;
+        opacity: 0.5;
+    }
+
+    TouchArea { clicked => { toggle(); } }
+}
+
+// ── Main configure step ──────────────────────────────────────────────────────
+
+export component StepConfigure inherits Rectangle {
+    // Source row (read-only display + distro picker)
+    in property <string>  source-display;
+    in property <string>  distro;
+    callback distro-changed(string);
+    callback clear-source();
+
+    // Machine Identity
+    in-out property <string> hostname;
+    in-out property <string> username;
+    in-out property <string> password;
+    in-out property <string> password-confirm;
+    in-out property <string> realname;
+    in property <bool>       passwords-match: true;
+
+    // SSH
+    in-out property <string> ssh-keys;
+    in-out property <bool>   ssh-password-auth: false;
+    in-out property <bool>   ssh-install-server: true;
+
+    // Network
+    in-out property <string> dns-servers;
+    in-out property <string> ntp-servers;
+    in-out property <string> static-ip;
+    in-out property <string> gateway;
+    in-out property <string> http-proxy;
+    in-out property <string> https-proxy;
+    in-out property <string> no-proxy;
+
+    // System
+    in-out property <string> timezone;
+    in-out property <string> locale;
+    in-out property <string> keyboard-layout;
+    in-out property <string> storage-layout;
+    in-out property <string> apt-mirror;
+
+    // Packages
+    in-out property <string> packages;
+    in-out property <string> apt-repos;
+    in-out property <string> dnf-repos;
+    in-out property <string> run-commands;
+    in-out property <string> late-commands;
+
+    // Firewall
+    in-out property <bool>   firewall-enabled: false;
+    in-out property <string> firewall-policy;
+    in-out property <string> allow-ports;
+    in-out property <string> deny-ports;
+
+    // User & Access
+    in-out property <string> user-groups;
+    in-out property <string> user-shell;
+    in-out property <bool>   sudo-nopasswd: false;
+
+    // Services
+    in-out property <string> enable-services;
+    in-out property <string> disable-services;
+
+    // Containers
+    in-out property <bool>   docker: false;
+    in-out property <bool>   podman: false;
+    in-out property <string> docker-users;
+
+    // Storage
+    in-out property <string> swap-size-mb;
+    in-out property <bool>   encrypt: false;
+    in-out property <string> encrypt-passphrase;
+    in-out property <string> mounts;
+
+    // GRUB
+    in-out property <string> grub-timeout;
+    in-out property <string> grub-cmdline;
+
+    // Sysctl
+    in-out property <string> sysctl-pairs;
+
+    // Output
+    in-out property <string> output-dir;
+    in-out property <string> out-name;
+    in-out property <string> output-label;
+    in-out property <string> expected-sha256;
+
+    // Unattended
+    in-out property <bool>   no-user-interaction: false;
+
+    // Section open states
+    in-out property <bool> s-identity-open: true;
+    in-out property <bool> s-ssh-open: false;
+    in-out property <bool> s-network-open: false;
+    in-out property <bool> s-system-open: false;
+    in-out property <bool> s-packages-open: false;
+    in-out property <bool> s-commands-open: false;
+    in-out property <bool> s-firewall-open: false;
+    in-out property <bool> s-access-open: false;
+    in-out property <bool> s-services-open: false;
+    in-out property <bool> s-containers-open: false;
+    in-out property <bool> s-storage-open: false;
+    in-out property <bool> s-grub-open: false;
+    in-out property <bool> s-advanced-open: false;
+
+    in property <bool>    running: false;
+    in property <bool>    can-continue: false;
+    callback browse-output-dir();
+    callback configure-continue();
+    callback back-clicked();
+
+    background: Palette.bg;
+
+    HorizontalLayout {
+        // ── Form (main) ───────────────────────────────────────────────────
+        ScrollView {
+            VerticalLayout {
+                padding-left: 40px;
+                padding-right: 32px;
+                padding-top: 32px;
+                padding-bottom: 40px;
+                spacing: 20px;
+                alignment: start;
+
+                // Title row
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: space-between;
+                    VerticalLayout {
+                        spacing: 4px;
+                        Text {
+                            text: "Configure Installer";
+                            font-size: Sizes.font-xl;
+                            font-weight: 700;
+                            color: Palette.text;
+                        }
+                        Text {
+                            text: "Fill in the options below — only hostname and username are required.";
+                            font-size: Sizes.font-sm;
+                            color: Palette.muted;
+                        }
+                    }
+                    // Back link
+                    Rectangle {
+                        width: 100px;
+                        height: 32px;
+                        border-radius: Sizes.radius-sm;
+                        background: transparent;
+                        Text {
+                            text: "← Change ISO";
+                            font-size: Sizes.font-xs;
+                            color: Palette.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        TouchArea { clicked => { back-clicked(); } }
+                    }
+                }
+
+                // Source display
+                Rectangle {
+                    height: 44px;
+                    border-radius: Sizes.radius-sm;
+                    background: rgba(47, 129, 247, 0.08);
+                    border-width: 1px;
+                    border-color: rgba(47, 129, 247, 0.3);
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 14px;
+                        spacing: 8px;
+                        alignment: start;
+                        Text {
+                            text: "📀";
+                            font-size: 16px;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: source-display;
+                            font-size: Sizes.font-sm;
+                            color: Palette.text;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                }
+
+                // ── IDENTITY ──────────────────────────────────────────────
+                SectionHeader {
+                    title: "MACHINE IDENTITY  (required)";
+                    open: s-identity-open;
+                    toggle => { s-identity-open = !s-identity-open; }
+                }
+                if s-identity-open: VerticalLayout {
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "HOSTNAME"; }
+                            FieldInput { value <=> hostname; hint: "myserver"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "USERNAME"; }
+                            FieldInput { value <=> username; hint: "admin"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "FULL NAME"; }
+                            FieldInput { value <=> realname; hint: "Admin User"; enabled: !running; }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "PASSWORD"; }
+                            FieldInput { value <=> password; password: true; hint: "••••••••"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "CONFIRM PASSWORD"; }
+                            FieldInput { value <=> password-confirm; password: true; hint: "••••••••"; enabled: !running; }
+                        }
+                    }
+                    if !passwords-match: Rectangle {
+                        height: 28px;
+                        border-radius: Sizes.radius-sm;
+                        background: rgba(248, 81, 73, 0.1);
+                        border-width: 1px;
+                        border-color: rgba(248, 81, 73, 0.4);
+                        Text {
+                            text: "⚠ Passwords do not match";
+                            font-size: Sizes.font-xs;
+                            color: Palette.red;
+                            vertical-alignment: center;
+                            horizontal-alignment: left;
+                            x: 12px;
+                        }
+                    }
+                }
+
+                // ── SSH ───────────────────────────────────────────────────
+                SectionHeader {
+                    title: "SSH ACCESS";
+                    open: s-ssh-open;
+                    toggle => { s-ssh-open = !s-ssh-open; }
+                }
+                if s-ssh-open: VerticalLayout {
+                    spacing: 10px;
+                    FieldLabel { text: "AUTHORIZED SSH KEYS  (one per line)"; }
+                    FieldTextarea { value <=> ssh-keys; hint: "ssh-ed25519 AAAA… user@host"; enabled: !running; }
+                    HorizontalLayout {
+                        spacing: 24px;
+                        CheckBox { text: "Install SSH server"; checked <=> ssh-install-server; enabled: !running; }
+                        CheckBox { text: "Allow password authentication"; checked <=> ssh-password-auth; enabled: !running; }
+                    }
+                }
+
+                // ── NETWORK ───────────────────────────────────────────────
+                SectionHeader {
+                    title: "NETWORK";
+                    open: s-network-open;
+                    toggle => { s-network-open = !s-network-open; }
+                }
+                if s-network-open: VerticalLayout {
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "DNS SERVERS"; }
+                            FieldInput { value <=> dns-servers; hint: "1.1.1.1, 8.8.8.8"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "NTP SERVERS"; }
+                            FieldInput { value <=> ntp-servers; hint: "pool.ntp.org"; enabled: !running; }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "STATIC IP / CIDR"; }
+                            FieldInput { value <=> static-ip; hint: "192.168.1.100/24  (blank = DHCP)"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "GATEWAY"; }
+                            FieldInput { value <=> gateway; hint: "192.168.1.1"; enabled: !running; }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "HTTP PROXY"; }
+                            FieldInput { value <=> http-proxy; hint: "http://proxy:3128"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "HTTPS PROXY"; }
+                            FieldInput { value <=> https-proxy; hint: "http://proxy:3128"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "NO PROXY"; }
+                            FieldInput { value <=> no-proxy; hint: "localhost,127.0.0.1"; enabled: !running; }
+                        }
+                    }
+                }
+
+                // ── SYSTEM ────────────────────────────────────────────────
+                SectionHeader {
+                    title: "SYSTEM";
+                    open: s-system-open;
+                    toggle => { s-system-open = !s-system-open; }
+                }
+                if s-system-open: VerticalLayout {
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "TIMEZONE"; }
+                            FieldInput { value <=> timezone; hint: "America/New_York"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "LOCALE"; }
+                            FieldInput { value <=> locale; hint: "en_US.UTF-8"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "KEYBOARD LAYOUT"; }
+                            FieldInput { value <=> keyboard-layout; hint: "us"; enabled: !running; }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "STORAGE LAYOUT"; }
+                            FieldInput { value <=> storage-layout; hint: "lvm  /  direct"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "APT MIRROR"; }
+                            FieldInput { value <=> apt-mirror; hint: "https://mirror.example.com/ubuntu"; enabled: !running; }
+                        }
+                    }
+                }
+
+                // ── PACKAGES ──────────────────────────────────────────────
+                SectionHeader {
+                    title: "PACKAGES & REPOS";
+                    open: s-packages-open;
+                    toggle => { s-packages-open = !s-packages-open; }
+                }
+                if s-packages-open: VerticalLayout {
+                    spacing: 10px;
+                    FieldLabel { text: "PACKAGES  (space-separated)"; }
+                    FieldTextarea { value <=> packages; hint: "curl git vim htop"; enabled: !running; }
+                    FieldLabel { text: "EXTRA APT / DNF / PACMAN REPOS  (one per line)"; }
+                    FieldTextarea { value <=> apt-repos; hint: "ppa:ondrej/php\ndeb https://…"; enabled: !running; }
+                }
+
+                // ── COMMANDS ──────────────────────────────────────────────
+                SectionHeader {
+                    title: "CUSTOM COMMANDS";
+                    open: s-commands-open;
+                    toggle => { s-commands-open = !s-commands-open; }
+                }
+                if s-commands-open: VerticalLayout {
+                    spacing: 10px;
+                    FieldLabel { text: "RUN COMMANDS  (before install)"; }
+                    FieldTextarea { value <=> run-commands; hint: "echo 'setup starting'"; enabled: !running; }
+                    FieldLabel { text: "LATE COMMANDS  (after install, in chroot)"; }
+                    FieldTextarea { value <=> late-commands; hint: "curtin in-target -- apt-get install -y vim"; enabled: !running; }
+                }
+
+                // ── FIREWALL ──────────────────────────────────────────────
+                SectionHeader {
+                    title: "FIREWALL";
+                    open: s-firewall-open;
+                    toggle => { s-firewall-open = !s-firewall-open; }
+                }
+                if s-firewall-open: VerticalLayout {
+                    spacing: 10px;
+                    CheckBox { text: "Enable firewall"; checked <=> firewall-enabled; enabled: !running; }
+                    if firewall-enabled: HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "ALLOWED PORTS  (space-separated)"; }
+                            FieldInput { value <=> allow-ports; hint: "22 80 443"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "DENIED PORTS"; }
+                            FieldInput { value <=> deny-ports; hint: "23 21"; enabled: !running; }
+                        }
+                    }
+                }
+
+                // ── USER ACCESS ───────────────────────────────────────────
+                SectionHeader {
+                    title: "USER ACCESS";
+                    open: s-access-open;
+                    toggle => { s-access-open = !s-access-open; }
+                }
+                if s-access-open: VerticalLayout {
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "EXTRA GROUPS  (one per line)"; }
+                            FieldTextarea { value <=> user-groups; hint: "docker\nsudo"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "LOGIN SHELL"; }
+                            FieldInput { value <=> user-shell; hint: "/bin/bash"; enabled: !running; }
+                        }
+                    }
+                    CheckBox { text: "Grant passwordless sudo (NOPASSWD:ALL)"; checked <=> sudo-nopasswd; enabled: !running; }
+                }
+
+                // ── SERVICES ──────────────────────────────────────────────
+                SectionHeader {
+                    title: "SERVICES";
+                    open: s-services-open;
+                    toggle => { s-services-open = !s-services-open; }
+                }
+                if s-services-open: VerticalLayout {
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "ENABLE  (one per line)"; }
+                            FieldTextarea { value <=> enable-services; hint: "docker\nnginx"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "DISABLE  (one per line)"; }
+                            FieldTextarea { value <=> disable-services; hint: "snapd"; enabled: !running; }
+                        }
+                    }
+                }
+
+                // ── CONTAINERS ────────────────────────────────────────────
+                SectionHeader {
+                    title: "CONTAINERS";
+                    open: s-containers-open;
+                    toggle => { s-containers-open = !s-containers-open; }
+                }
+                if s-containers-open: VerticalLayout {
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 24px;
+                        CheckBox { text: "Install Docker"; checked <=> docker; enabled: !running; }
+                        CheckBox { text: "Install Podman"; checked <=> podman; enabled: !running; }
+                    }
+                    if docker: VerticalLayout {
+                        spacing: 4px;
+                        FieldLabel { text: "ADD USERS TO DOCKER GROUP  (one per line)"; }
+                        FieldInput { value <=> docker-users; hint: "admin"; enabled: !running; }
+                    }
+                }
+
+                // ── STORAGE ───────────────────────────────────────────────
+                SectionHeader {
+                    title: "STORAGE & ENCRYPTION";
+                    open: s-storage-open;
+                    toggle => { s-storage-open = !s-storage-open; }
+                }
+                if s-storage-open: VerticalLayout {
+                    spacing: 10px;
+                    FieldLabel { text: "SWAP SIZE  (MB, blank = no swap)"; }
+                    FieldInput { value <=> swap-size-mb; hint: "2048"; enabled: !running; }
+                    CheckBox { text: "Enable LUKS disk encryption"; checked <=> encrypt; enabled: !running; }
+                    if encrypt: VerticalLayout {
+                        spacing: 4px;
+                        FieldLabel { text: "LUKS PASSPHRASE"; }
+                        FieldInput { value <=> encrypt-passphrase; password: true; hint: "••••••••"; enabled: !running; }
+                    }
+                    VerticalLayout {
+                        spacing: 4px;
+                        FieldLabel { text: "CUSTOM MOUNTS  (one fstab entry per line)"; }
+                        FieldTextarea { value <=> mounts; hint: "/dev/sdb1  /data  ext4  defaults  0 2"; enabled: !running; }
+                    }
+                }
+
+                // ── GRUB ──────────────────────────────────────────────────
+                SectionHeader {
+                    title: "GRUB BOOTLOADER";
+                    open: s-grub-open;
+                    toggle => { s-grub-open = !s-grub-open; }
+                }
+                if s-grub-open: VerticalLayout {
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "TIMEOUT  (seconds)"; }
+                            FieldInput { value <=> grub-timeout; hint: "5"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "EXTRA KERNEL ARGS"; }
+                            FieldInput { value <=> grub-cmdline; hint: "quiet splash"; enabled: !running; }
+                        }
+                    }
+                }
+
+                // ── ADVANCED ──────────────────────────────────────────────
+                SectionHeader {
+                    title: "ADVANCED";
+                    open: s-advanced-open;
+                    toggle => { s-advanced-open = !s-advanced-open; }
+                }
+                if s-advanced-open: VerticalLayout {
+                    spacing: 10px;
+                    FieldLabel { text: "SYSCTL PAIRS  (key=value, one per line)"; }
+                    FieldTextarea { value <=> sysctl-pairs; hint: "vm.swappiness=10\nnet.ipv4.ip_forward=1"; enabled: !running; }
+                    CheckBox { text: "⚠ Unattended installation — NO user interaction at all"; checked <=> no-user-interaction; enabled: !running; }
+                }
+
+                // ── OUTPUT ────────────────────────────────────────────────
+                SectionHeader { title: "OUTPUT"; open: true; }
+                VerticalLayout {
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "OUTPUT DIRECTORY"; }
+                            Rectangle {
+                                height: 38px;
+                                border-radius: Sizes.radius-sm;
+                                background: Palette.surface;
+                                border-width: 1px;
+                                border-color: Palette.border;
+                                HorizontalLayout {
+                                    padding-left: 10px;
+                                    Text {
+                                        text: output-dir;
+                                        font-size: Sizes.font-sm;
+                                        color: Palette.text;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: end;
+                            Rectangle {
+                                width: 90px;
+                                height: 38px;
+                                border-radius: Sizes.radius-sm;
+                                background: Palette.surface;
+                                border-width: 1px;
+                                border-color: Palette.border;
+                                Text {
+                                    text: "Browse…";
+                                    font-size: Sizes.font-sm;
+                                    color: Palette.text;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: center;
+                                }
+                                TouchArea {
+                                    enabled: !running;
+                                    clicked => { browse-output-dir(); }
+                                }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 16px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "OUTPUT FILENAME"; }
+                            FieldInput { value <=> out-name; hint: "forgeiso-local.iso"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "VOLUME LABEL  (max 32 chars)"; }
+                            FieldInput { value <=> output-label; hint: "MYISO"; enabled: !running; }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            FieldLabel { text: "EXPECTED SHA-256  (optional)"; }
+                            FieldInput { value <=> expected-sha256; hint: "a1b2c3…"; enabled: !running; }
+                        }
+                    }
+                }
+
+                // ── Continue button ───────────────────────────────────────
+                Rectangle {
+                    height: 1px;
+                    background: Palette.border;
+                    opacity: 0.5;
+                }
+                HorizontalLayout {
+                    alignment: start;
+                    Rectangle {
+                        width: 260px;
+                        height: 44px;
+                        border-radius: Sizes.radius-sm;
+                        background: can-continue ? Palette.accent : Palette.surface;
+                        opacity: can-continue ? 1.0 : 0.45;
+                        animate background { duration: 180ms; }
+                        animate opacity  { duration: 180ms; }
+                        Text {
+                            text: "Continue: Build My ISO  →";
+                            font-size: Sizes.font-sm;
+                            font-weight: 600;
+                            color: can-continue ? Palette.on-accent : Palette.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        TouchArea {
+                            enabled: can-continue && !running;
+                            clicked => { configure-continue(); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

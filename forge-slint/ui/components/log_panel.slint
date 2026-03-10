@@ -1,0 +1,179 @@
+import { Palette, Sizes } from "../theme.slint";
+import { ScrollView } from "std-widgets.slint";
+
+export struct LogEntry {
+    phase: string,
+    message: string,
+    level: int,     // 0=info 1=warn 2=error
+    timestamp: string,
+}
+
+export component LogPanel inherits Rectangle {
+    in property <[LogEntry]> entries;
+    in property <bool>       errors-only: false;
+    in property <int>        error-count: 0;
+    callback filter-toggled();
+    callback close-clicked();
+
+    width: 340px;
+    background: Palette.panel;
+    border-width: 0px;
+
+    // Left separator
+    Rectangle {
+        x: 0;
+        width: 1px;
+        height: parent.height;
+        background: Palette.border;
+    }
+
+    VerticalLayout {
+        padding-left: 1px; // account for separator
+        // Header
+        Rectangle {
+            height: 44px;
+            background: Palette.panel;
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                spacing: 8px;
+                alignment: space-between;
+                VerticalLayout {
+                    alignment: center;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        alignment: start;
+                        Text {
+                            text: "Log";
+                            font-size: Sizes.font-sm;
+                            font-weight: 700;
+                            color: Palette.text;
+                        }
+                        if error-count > 0: Rectangle {
+                            width: 20px;
+                            height: 16px;
+                            border-radius: 8px;
+                            background: Palette.red;
+                            Text {
+                                text: error-count > 99 ? "99+" : error-count;
+                                font-size: 9px;
+                                font-weight: 700;
+                                color: #ffffff;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                            }
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    alignment: end;
+                    // Errors-only filter toggle
+                    Rectangle {
+                        width: 64px;
+                        height: 24px;
+                        border-radius: 12px;
+                        background: errors-only ? Palette.red : Palette.surface;
+                        border-width: 1px;
+                        border-color: errors-only ? Palette.red : Palette.border;
+                        animate background { duration: 150ms; }
+                        Text {
+                            text: "Errors";
+                            font-size: 10px;
+                            color: errors-only ? #ffffff : Palette.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        TouchArea { clicked => { filter-toggled(); } }
+                    }
+                    // Close button
+                    Rectangle {
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 12px;
+                        background: Palette.surface;
+                        Text {
+                            text: "×";
+                            font-size: 14px;
+                            color: Palette.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        TouchArea { clicked => { close-clicked(); } }
+                    }
+                }
+            }
+            // Bottom divider
+            Rectangle {
+                y: parent.height - 1px;
+                height: 1px;
+                background: Palette.border;
+            }
+        }
+
+        // Log entries
+        ScrollView {
+            for entry in entries: Rectangle {
+                visible: !errors-only || entry.level == 2;
+                height: errors-only && entry.level != 2 ? 0 : 52px;
+                background: Palette.panel;
+
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 8px;
+                    padding-top: 6px;
+                    padding-bottom: 6px;
+                    spacing: 8px;
+
+                    // Level indicator
+                    Rectangle {
+                        width: 3px;
+                        height: 40px;
+                        border-radius: 1.5px;
+                        background: entry.level == 2 ? Palette.red
+                                  : entry.level == 1 ? Palette.amber
+                                  : Palette.accent;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    VerticalLayout {
+                        alignment: start;
+                        spacing: 2px;
+                        HorizontalLayout {
+                            spacing: 6px;
+                            Text {
+                                text: entry.timestamp;
+                                font-size: 10px;
+                                color: Palette.subtle;
+                            }
+                            Text {
+                                text: entry.phase;
+                                font-size: 10px;
+                                font-weight: 600;
+                                color: entry.level == 2 ? Palette.red
+                                     : entry.level == 1 ? Palette.amber
+                                     : Palette.accent;
+                            }
+                        }
+                        Text {
+                            text: entry.message;
+                            font-size: 11px;
+                            color: entry.level == 2 ? Palette.red
+                                 : entry.level == 1 ? Palette.amber
+                                 : Palette.muted;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+
+                // Row divider
+                Rectangle {
+                    y: parent.height - 1px;
+                    height: 1px;
+                    background: Palette.border;
+                    opacity: 0.4;
+                }
+            }
+        }
+    }
+}

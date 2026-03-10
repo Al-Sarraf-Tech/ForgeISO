@@ -1,0 +1,153 @@
+import { Palette, Sizes } from "../theme.slint";
+
+component StepBadge inherits Rectangle {
+    in property <string> num;
+    in property <bool>   done: false;
+    in property <bool>   current: false;
+    in property <string> label;
+    in property <string> sublabel;
+    in property <bool>   clickable: false;
+    callback clicked();
+
+    width: 160px;
+    height: 60px;
+
+    HorizontalLayout {
+        spacing: 10px;
+        alignment: start;
+        padding-left: 8px;
+
+        // Badge circle
+        Rectangle {
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            background: done ? Palette.green : current ? Palette.accent : Palette.surface;
+            border-width: 1.5px;
+            border-color: done ? Palette.green : current ? Palette.accent : Palette.border;
+            y: (parent.height - self.height) / 2;
+            animate background { duration: 200ms; }
+            animate border-color { duration: 200ms; }
+
+            Text {
+                text: done ? "✓" : num;
+                font-size: 12px;
+                font-weight: 700;
+                color: done ? #0d1117 : current ? #ffffff : Palette.subtle;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: label;
+                font-size: Sizes.font-sm;
+                font-weight: current ? 700 : 400;
+                color: done ? Palette.green : current ? Palette.text : Palette.muted;
+                animate color { duration: 200ms; }
+            }
+            Text {
+                text: sublabel;
+                font-size: Sizes.font-xs;
+                color: current ? Palette.muted : Palette.subtle;
+            }
+        }
+    }
+
+    if clickable: TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component StepBar inherits Rectangle {
+    in property <int>  current-step: 1;
+    in property <bool> step1-done: false;
+    in property <bool> step2-done: false;
+    in property <bool> step3-done: false;
+    in property <bool> step4-done: false;
+    callback step-clicked(int);
+
+    height: 72px;
+    background: Palette.panel;
+
+    // Bottom separator
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Palette.border;
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: 0px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+
+        StepBadge {
+            num: "1"; label: "Source"; sublabel: "Pick your ISO";
+            done: step1-done; current: current-step == 1;
+            clickable: current-step > 1 || step1-done;
+            clicked => { step-clicked(1); }
+        }
+
+        // Connector 1→2
+        Rectangle {
+            width: 48px;
+            height: 2px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 1px;
+            background: step1-done ? Palette.accent : Palette.border;
+            animate background { duration: 300ms; }
+        }
+
+        StepBadge {
+            num: "2"; label: "Configure"; sublabel: "Autoinstall options";
+            done: step2-done; current: current-step == 2;
+            clickable: current-step > 2 || step2-done || step1-done;
+            clicked => {
+                if current-step > 2 || step2-done { step-clicked(2); }
+            }
+        }
+
+        // Connector 2→3
+        Rectangle {
+            width: 48px;
+            height: 2px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 1px;
+            background: step2-done ? Palette.accent : Palette.border;
+            animate background { duration: 300ms; }
+        }
+
+        StepBadge {
+            num: "3"; label: "Build"; sublabel: "Build My ISO";
+            done: step3-done; current: current-step == 3;
+            clickable: step2-done || current-step >= 3;
+            clicked => {
+                if step2-done || current-step >= 3 { step-clicked(3); }
+            }
+        }
+
+        // Connector 3→4
+        Rectangle {
+            width: 48px;
+            height: 2px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 1px;
+            background: step3-done ? Palette.accent : Palette.border;
+            animate background { duration: 300ms; }
+        }
+
+        StepBadge {
+            num: "4"; label: "Check"; sublabel: "Verify & inspect";
+            done: step4-done; current: current-step == 4;
+            clickable: step3-done || current-step == 4;
+            clicked => {
+                if step3-done || current-step == 4 { step-clicked(4); }
+            }
+        }
+    }
+}

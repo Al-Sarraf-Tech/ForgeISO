@@ -4,6 +4,7 @@ members = [
   "cli",
   "tui",
   "forge-gui",
+  "forge-slint",
 ]
 resolver = "2"
 

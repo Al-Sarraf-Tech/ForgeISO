@@ -1,0 +1,235 @@
+import { Palette, Sizes } from "../theme.slint";
+
+component SummaryRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+    in property <bool>   set: true;
+    spacing: 12px;
+    alignment: start;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    Text {
+        text: label + ":";
+        font-size: Sizes.font-sm;
+        color: Palette.muted;
+        min-width: 140px;
+    }
+    Text {
+        text: set ? value : "— not set";
+        font-size: Sizes.font-sm;
+        color: set ? Palette.text : Palette.subtle;
+        font-weight: set ? 600 : 400;
+        overflow: elide;
+    }
+}
+
+export component StepBuild inherits Rectangle {
+    in property <string>  distro-display;
+    in property <string>  source;
+    in property <string>  hostname;
+    in property <string>  username;
+    in property <bool>    password-set;
+    in property <string>  timezone;
+    in property <string>  output-dir;
+    in property <string>  out-name;
+    in property <string>  output-label;
+    in property <bool>    unattended;
+    in property <bool>    running;
+    // Result from previous run
+    in property <string>  artifact-path;
+    in property <string>  artifact-sha256;
+
+    callback back-clicked();
+    callback run-clicked();
+    callback view-results();
+
+    background: Palette.bg;
+
+    VerticalLayout {
+        padding: 40px;
+        spacing: 28px;
+        alignment: start;
+
+        // Title
+        HorizontalLayout {
+            alignment: space-between;
+            VerticalLayout {
+                spacing: 4px;
+                Text {
+                    text: "Build My ISO";
+                    font-size: Sizes.font-2xl;
+                    font-weight: 700;
+                    color: Palette.text;
+                }
+                Text {
+                    text: "Review your settings and click Build to generate the ISO.";
+                    font-size: Sizes.font-sm;
+                    color: Palette.muted;
+                }
+            }
+            Rectangle {
+                width: 120px;
+                height: 36px;
+                border-radius: Sizes.radius-sm;
+                background: transparent;
+                Text {
+                    text: "← Edit settings";
+                    font-size: Sizes.font-sm;
+                    color: Palette.muted;
+                    vertical-alignment: center;
+                    horizontal-alignment: center;
+                }
+                TouchArea { clicked => { back-clicked(); } }
+            }
+        }
+
+        // Summary card
+        Rectangle {
+            border-radius: Sizes.radius-lg;
+            background: Palette.surface;
+            border-width: 1px;
+            border-color: Palette.border;
+
+            VerticalLayout {
+                padding: 20px;
+                spacing: 6px;
+                Text {
+                    text: "CONFIGURATION SUMMARY";
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: Palette.subtle;
+                    letter-spacing: 1.5px;
+                }
+                Rectangle { height: 8px; }
+                SummaryRow { label: "Installer format"; value: distro-display; }
+                SummaryRow { label: "Source ISO"; value: source; }
+                SummaryRow { label: "Hostname"; value: hostname; set: hostname != ""; }
+                SummaryRow { label: "Username"; value: username; set: username != ""; }
+                SummaryRow { label: "Password"; value: password-set ? "••••••••" : "not set"; set: password-set; }
+                SummaryRow { label: "Timezone"; value: timezone; set: timezone != ""; }
+                SummaryRow { label: "Output file"; value: output-dir + "/" + out-name; }
+                if output-label != "": SummaryRow { label: "Volume label"; value: output-label; }
+            }
+        }
+
+        // Unattended warning
+        if unattended: Rectangle {
+            height: 44px;
+            border-radius: Sizes.radius-sm;
+            background: rgba(210, 153, 34, 0.1);
+            border-width: 1px;
+            border-color: rgba(210, 153, 34, 0.4);
+            HorizontalLayout {
+                padding-left: 14px;
+                spacing: 10px;
+                alignment: start;
+                Text {
+                    text: "⚠";
+                    font-size: 18px;
+                    vertical-alignment: center;
+                }
+                Text {
+                    text: "Unattended mode enabled — the installer will wipe the target disk without any prompts.";
+                    font-size: Sizes.font-sm;
+                    color: Palette.amber;
+                    vertical-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
+        // Build button
+        HorizontalLayout {
+            spacing: 16px;
+            alignment: start;
+
+            Rectangle {
+                width: 220px;
+                height: 50px;
+                border-radius: Sizes.radius-md;
+                background: running ? Palette.surface
+                          : @linear-gradient(135deg, Palette.accent 0%, #1a5cdb 100%);
+                border-width: running ? 1px : 0px;
+                border-color: Palette.border;
+                animate background { duration: 200ms; }
+
+                HorizontalLayout {
+                    alignment: center;
+                    spacing: 10px;
+                    if !running: Text {
+                        text: "🔨";
+                        font-size: 18px;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: running ? "Building…" : "Build My ISO";
+                        font-size: Sizes.font-md;
+                        font-weight: 700;
+                        color: running ? Palette.muted : Palette.on-accent;
+                        vertical-alignment: center;
+                    }
+                }
+                TouchArea {
+                    enabled: !running;
+                    clicked => { run-clicked(); }
+                }
+            }
+        }
+
+        // Previous result card
+        if artifact-path != "": Rectangle {
+            border-radius: Sizes.radius-lg;
+            background: rgba(63, 185, 80, 0.06);
+            border-width: 1px;
+            border-color: rgba(63, 185, 80, 0.3);
+
+            VerticalLayout {
+                padding: 20px;
+                spacing: 8px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    Text {
+                        text: "✓";
+                        font-size: 18px;
+                        color: Palette.green;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "Build complete";
+                        font-size: Sizes.font-lg;
+                        font-weight: 700;
+                        color: Palette.green;
+                        vertical-alignment: center;
+                    }
+                }
+                Text {
+                    text: artifact-path;
+                    font-size: Sizes.font-sm;
+                    color: Palette.muted;
+                    overflow: elide;
+                }
+                if artifact-sha256 != "": Text {
+                    text: "SHA-256: " + artifact-sha256;
+                    font-size: 11px;
+                    font-family: "monospace";
+                    color: Palette.subtle;
+                }
+                Rectangle {
+                    width: 200px;
+                    height: 36px;
+                    border-radius: Sizes.radius-sm;
+                    background: Palette.accent;
+                    Text {
+                        text: "→ View Results & Verify";
+                        font-size: Sizes.font-sm;
+                        font-weight: 600;
+                        color: Palette.on-accent;
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
+                    TouchArea { clicked => { view-results(); } }
+                }
+            }
+        }
+    }
+}

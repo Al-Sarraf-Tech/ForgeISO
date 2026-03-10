@@ -1,0 +1,333 @@
+import { Palette, Sizes } from "../theme.slint";
+import { LineEdit } from "std-widgets.slint";
+
+component ResultCard inherits Rectangle {
+    in property <bool>   passed;
+    in property <bool>   has-result;
+    in property <string> title;
+    in property <string> detail;
+    border-radius: Sizes.radius-lg;
+    background: !has-result ? Palette.surface
+              : passed ? rgba(63, 185, 80, 0.08)
+              : rgba(248, 81, 73, 0.08);
+    border-width: 1px;
+    border-color: !has-result ? Palette.border
+                : passed ? rgba(63, 185, 80, 0.4)
+                : rgba(248, 81, 73, 0.4);
+    animate background { duration: 250ms; }
+    VerticalLayout {
+        padding: 16px;
+        spacing: 6px;
+        HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: !has-result ? "○" : passed ? "✓" : "✗";
+                font-size: 18px;
+                color: !has-result ? Palette.subtle
+                     : passed ? Palette.green
+                     : Palette.red;
+                vertical-alignment: center;
+            }
+            Text {
+                text: title;
+                font-size: Sizes.font-md;
+                font-weight: 700;
+                color: !has-result ? Palette.muted
+                     : passed ? Palette.green
+                     : Palette.red;
+                vertical-alignment: center;
+            }
+        }
+        if detail != "": Text {
+            text: detail;
+            font-size: Sizes.font-sm;
+            color: Palette.muted;
+            wrap: word-wrap;
+        }
+    }
+}
+
+export component StepCheck inherits Rectangle {
+    // Source
+    in-out property <string> verify-source;
+    in-out property <string> sums-url;
+
+    // Inject artifact (auto-filled)
+    in property <string>  artifact-path;
+    in property <string>  artifact-sha256;
+
+    // Verify result
+    in property <bool>    verify-done;
+    in property <bool>    verify-matched;
+    in property <string>  verify-hash-display;
+
+    // ISO-9660 result
+    in property <bool>    iso9660-done;
+    in property <bool>    iso9660-compliant;
+    in property <bool>    iso9660-boot-bios;
+    in property <bool>    iso9660-boot-uefi;
+    in property <string>  iso9660-volume-id;
+
+    in property <bool>    running;
+
+    callback browse-verify-source();
+    callback run-verify();
+    callback run-iso9660();
+    callback copy-sha256();
+    callback open-folder();
+    callback clear-forms();
+
+    background: Palette.bg;
+
+    VerticalLayout {
+        padding: 40px;
+        spacing: 28px;
+        alignment: start;
+
+        // Title
+        VerticalLayout {
+            spacing: 4px;
+            Text {
+                text: "Verify & Inspect";
+                font-size: Sizes.font-2xl;
+                font-weight: 700;
+                color: Palette.text;
+            }
+            Text {
+                text: "Check your output ISO's integrity and boot compliance.";
+                font-size: Sizes.font-sm;
+                color: Palette.muted;
+            }
+        }
+
+        // Artifact card (if build was done)
+        if artifact-path != "": Rectangle {
+            border-radius: Sizes.radius-lg;
+            background: rgba(47, 129, 247, 0.06);
+            border-width: 1px;
+            border-color: rgba(47, 129, 247, 0.3);
+
+            VerticalLayout {
+                padding: 18px;
+                spacing: 10px;
+                Text {
+                    text: "OUTPUT ISO";
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: Palette.subtle;
+                    letter-spacing: 1.5px;
+                }
+                Text {
+                    text: artifact-path;
+                    font-size: Sizes.font-sm;
+                    color: Palette.text;
+                    overflow: elide;
+                }
+                if artifact-sha256 != "": Text {
+                    text: "SHA-256: " + artifact-sha256;
+                    font-size: 11px;
+                    color: Palette.muted;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Rectangle {
+                        width: 130px;
+                        height: 32px;
+                        border-radius: Sizes.radius-sm;
+                        background: Palette.surface;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        Text {
+                            text: "📋 Copy SHA-256";
+                            font-size: Sizes.font-xs;
+                            color: Palette.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        TouchArea { clicked => { copy-sha256(); } }
+                    }
+                    Rectangle {
+                        width: 120px;
+                        height: 32px;
+                        border-radius: Sizes.radius-sm;
+                        background: Palette.surface;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        Text {
+                            text: "📂 Open Folder";
+                            font-size: Sizes.font-xs;
+                            color: Palette.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        TouchArea { clicked => { open-folder(); } }
+                    }
+                }
+            }
+        }
+
+        // ── Verify ────────────────────────────────────────────────────────
+        Rectangle {
+            border-radius: Sizes.radius-lg;
+            background: Palette.surface;
+            border-width: 1px;
+            border-color: Palette.border;
+
+            VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+                Text {
+                    text: "CHECKSUM VERIFICATION";
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: Palette.subtle;
+                    letter-spacing: 1.5px;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    Rectangle {
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: Palette.elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        LineEdit {
+                            x: 10px;
+                            y: 0;
+                            width: parent.width - 20px;
+                            height: parent.height;
+                            placeholder-text: "/path/to/output.iso  or  https://…";
+                            text: verify-source;
+                            font-size: Sizes.font-sm;
+                            enabled: !running;
+                            edited(t) => { verify-source = t; }
+                        }
+                    }
+                    Rectangle {
+                        width: 90px;
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: Palette.elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        Text {
+                            text: "Browse…";
+                            font-size: Sizes.font-sm;
+                            color: Palette.text;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        TouchArea {
+                            enabled: !running;
+                            clicked => { browse-verify-source(); }
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    Rectangle {
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: Palette.elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        LineEdit {
+                            x: 10px;
+                            y: 0;
+                            width: parent.width - 20px;
+                            height: parent.height;
+                            placeholder-text: "Checksum sums URL (optional)";
+                            text: sums-url;
+                            font-size: Sizes.font-sm;
+                            enabled: !running;
+                            edited(t) => { sums-url = t; }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: start;
+                    Rectangle {
+                        width: 170px;
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: verify-source != "" && !running ? Palette.accent : Palette.surface;
+                        opacity: verify-source != "" && !running ? 1.0 : 0.45;
+                        animate background { duration: 180ms; }
+                        Text {
+                            text: "🔍 Check File Integrity";
+                            font-size: Sizes.font-sm;
+                            font-weight: 600;
+                            color: verify-source != "" && !running ? Palette.on-accent : Palette.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        TouchArea {
+                            enabled: verify-source != "" && !running;
+                            clicked => { run-verify(); }
+                        }
+                    }
+                    Rectangle {
+                        width: 170px;
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: verify-source != "" && !running ? Palette.surface : Palette.surface;
+                        border-width: 1px;
+                        border-color: verify-source != "" && !running ? Palette.accent : Palette.border;
+                        opacity: verify-source != "" && !running ? 1.0 : 0.45;
+                        Text {
+                            text: "📋 ISO-9660 Compliance";
+                            font-size: Sizes.font-sm;
+                            color: verify-source != "" && !running ? Palette.text : Palette.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        TouchArea {
+                            enabled: verify-source != "" && !running;
+                            clicked => { run-iso9660(); }
+                        }
+                    }
+                }
+
+                // Results
+                if verify-done: ResultCard {
+                    has-result: true;
+                    passed: verify-matched;
+                    title: verify-matched ? "Integrity verified" : "Checksum mismatch";
+                    detail: verify-hash-display;
+                }
+                if iso9660-done: ResultCard {
+                    has-result: true;
+                    passed: iso9660-compliant;
+                    title: iso9660-compliant ? "ISO-9660 compliant" : "ISO-9660 issues found";
+                    detail: (iso9660-boot-bios ? "BIOS boot ✓  " : "")
+                          + (iso9660-boot-uefi ? "UEFI boot ✓  " : "")
+                          + (iso9660-volume-id != "" ? "Label: " + iso9660-volume-id : "");
+                }
+            }
+        }
+
+        // Clear forms button
+        Rectangle {
+            width: 140px;
+            height: 36px;
+            border-radius: Sizes.radius-sm;
+            background: Palette.surface;
+            border-width: 1px;
+            border-color: Palette.border;
+            Text {
+                text: "🗑 Clear All Forms";
+                font-size: Sizes.font-xs;
+                color: Palette.muted;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+            TouchArea {
+                enabled: !running;
+                clicked => { clear-forms(); }
+            }
+        }
+    }
+}
