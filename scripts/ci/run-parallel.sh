@@ -20,6 +20,19 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="${REPO_ROOT}/docker-compose.ci.yml"
 VERBOSE="${FORGEISO_CI_VERBOSE:-0}"
 TOTAL_CPUS="${FORGEISO_CI_TOTAL_CPUS:-18}"
+CI_CACHE_ROOT="${CI_CACHE_ROOT:-/tmp/ci-cache}"
+CACHE_DIR="${CI_CACHE_ROOT}/forgeiso"
+
+# Stage → Dockerfile (for cache validity check)
+declare -A _STAGE_DF=(
+    [c1]="C1.rust.Dockerfile"
+    [c2]="C2.sbom.Dockerfile"
+    [c3]="C3.gui.Dockerfile"
+    [c4]="C4.security.Dockerfile"
+    [c5]="C5.integration.Dockerfile"
+    [c6]="C6.e2e.Dockerfile"
+    [c7]="C7.lint.Dockerfile"
+)
 
 declare -A CPU_WEIGHT=(
     [c1]=5
@@ -88,9 +101,57 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# ── Step 1: Build all images in parallel ─────────────────────────────────────
-info "Building CI images in parallel (${STAGES[*]})…"
-docker compose -f "${COMPOSE_FILE}" build --parallel "${STAGES[@]}"
+# ── Step 1: Load from /tmp cache; build only what's missing ──────────────────
+# Cache layout: /tmp/ci-cache/forgeiso/<stage>.tar + <stage>.sha
+# One tar per stage (no hash-versioned multi-file pile-up).
+# Writes are atomic (tmp → mv) so readers never see a partial file.
+mkdir -p "${CACHE_DIR}"
+
+_cache_valid() {
+    local stage="$1"
+    local df_name="${_STAGE_DF[$stage]:-}"
+    [[ -n "${df_name}" ]] || return 1
+    local df="${REPO_ROOT}/containers/${df_name}"
+    local tar="${CACHE_DIR}/${stage}.tar"
+    local sha="${CACHE_DIR}/${stage}.sha"
+    [[ -f "${tar}" && -f "${sha}" ]] || return 1
+    [[ "$(sha256sum "${df}" | awk '{print $1}')" == "$(cat "${sha}")" ]] || return 1
+    return 0
+}
+
+info "Resolving CI images — cache: ${CACHE_DIR}"
+declare -a _NEED_BUILD=()
+
+for stage in "${STAGES[@]}"; do
+    tar="${CACHE_DIR}/${stage}.tar"
+    if _cache_valid "${stage}" && [[ -f "${tar}" ]]; then
+        info "[${stage}] Loading from cache ($(du -sh "${tar}" | cut -f1))…"
+        docker load -i "${tar}" >/dev/null
+    else
+        _NEED_BUILD+=("${stage}")
+    fi
+done
+
+if [[ ${#_NEED_BUILD[@]} -gt 0 ]]; then
+    info "Building ${#_NEED_BUILD[@]} uncached stage(s) in parallel: ${_NEED_BUILD[*]}…"
+    docker compose -f "${COMPOSE_FILE}" build --parallel "${_NEED_BUILD[@]}"
+
+    # Atomic save to cache: write to .tmp then mv — no partial-read window
+    for stage in "${_NEED_BUILD[@]}"; do
+        df_name="${_STAGE_DF[$stage]:-}"
+        [[ -n "${df_name}" ]] || continue
+        df="${REPO_ROOT}/containers/${df_name}"
+        tar="${CACHE_DIR}/${stage}.tar"
+        sha="${CACHE_DIR}/${stage}.sha"
+        (
+            docker save "forgeiso-${stage}" -o "${tar}.tmp" 2>/dev/null \
+                && mv -f "${tar}.tmp" "${tar}" \
+                && sha256sum "${df}" | awk '{print $1}' > "${sha}" \
+                && echo "  [${stage}] Saved to cache ($(du -sh "${tar}" | cut -f1))"
+        ) &
+    done
+    wait  # all saves complete before containers start
+fi
 
 # ── Step 2: Launch all containers simultaneously ──────────────────────────────
 info "Launching ${#STAGES[@]} ephemeral containers in parallel with a ${TOTAL_CPUS}-core budget…"

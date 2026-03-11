@@ -5,8 +5,9 @@ set -euo pipefail
 # docker-runner: Ephemeral Docker container executor with caching & cleanup
 ##############################################################################
 
-CACHE_DIR="${DOCKER_RUNNER_CACHE:-/tmp/docker-runner}"
-IMAGE_CACHE_DIR="${CACHE_DIR}/images"
+CI_CACHE_ROOT="${CI_CACHE_ROOT:-/tmp/ci-cache}"
+CACHE_DIR="${DOCKER_RUNNER_CACHE:-${CI_CACHE_ROOT}/forgeiso}"
+IMAGE_CACHE_DIR="${CACHE_DIR}"
 CONTAINER_ID="docker-runner-$$-$(date +%s%N | tail -c 7)"
 
 # Ensure cache directory exists
@@ -49,19 +50,50 @@ COMMAND="$2"
 shift 2
 ARGS=("$@")
 
-# Pull/ensure image is available (with retry)
-echo ">>> Pulling image: ${IMAGE}" >&2
-for attempt in {1..3}; do
-    if docker pull "${IMAGE}"; then
-        break
-    elif [ $attempt -lt 3 ]; then
-        echo ">>> Retry $attempt/3 - image pull failed, retrying..." >&2
-        sleep 2
-    else
-        echo "Error: Failed to pull image after 3 attempts" >&2
-        exit 1
+# Check /tmp cache for a saved tar before pulling from the registry.
+# Cache tars are named <image-slug>-<hash>.tar and produced by cache-images.sh.
+# If the daemon already has the image (e.g. loaded by run-parallel.sh) this
+# block is skipped entirely via `docker image inspect`.
+ensure_image() {
+    local img="$1"
+    # 1. Already present in daemon — nothing to do.
+    if docker image inspect "${img}" >/dev/null 2>&1; then
+        echo ">>> Image already in daemon: ${img}" >&2
+        return 0
     fi
-done
+
+    # 2. Look for a single tar in the CI cache directory.
+    # Naming: /tmp/ci-cache/forgeiso/<stage>.tar  (one file per stage, no hash suffix).
+    local slug
+    slug="$(echo "${img}" | tr '/:' '--')"
+    # Try exact slug match, then strip project prefix (forgeiso-c1 → c1)
+    local stripped="${slug##forgeiso-}"
+    for tar in \
+        "${IMAGE_CACHE_DIR}/${slug}.tar" \
+        "${IMAGE_CACHE_DIR}/${stripped}.tar"; do
+        if [[ -f "${tar}" ]]; then
+            echo ">>> Loading from cache: ${tar}" >&2
+            docker load -i "${tar}" >/dev/null
+            return 0
+        fi
+    done
+
+    # 3. Fall back to registry pull (with retry).
+    echo ">>> Pulling image: ${img}" >&2
+    for attempt in {1..3}; do
+        if docker pull "${img}"; then
+            return 0
+        elif [[ $attempt -lt 3 ]]; then
+            echo ">>> Retry $attempt/3 — pull failed, retrying…" >&2
+            sleep 2
+        else
+            echo "Error: Failed to pull image after 3 attempts" >&2
+            return 1
+        fi
+    done
+}
+
+ensure_image "${IMAGE}"
 
 # Run ephemeral container
 echo ">>> Running ephemeral container: ${CONTAINER_ID}" >&2
