@@ -37,7 +37,7 @@ component StepBadge inherits Rectangle {
 
             Text {
                 text: done ? "✓" : locked ? "🔒" : num;
-                font-size: locked ? 10px : 12px;
+                font-size: locked ? Sizes.font-2xs : Sizes.font-sm;
                 font-weight: 700;
                 color: done ? #0d1117 : current ? #ffffff : Palette.muted;
                 vertical-alignment: center;
@@ -104,7 +104,7 @@ export component StepBar inherits Rectangle {
 
         // Connector 1→2
         Rectangle {
-            width: 48px;
+            width: 72px;
             height: 2px;
             y: (parent.height - self.height) / 2;
             border-radius: 1px;
@@ -122,7 +122,7 @@ export component StepBar inherits Rectangle {
 
         // Connector 2→3
         Rectangle {
-            width: 48px;
+            width: 72px;
             height: 2px;
             y: (parent.height - self.height) / 2;
             border-radius: 1px;
@@ -140,7 +140,7 @@ export component StepBar inherits Rectangle {
 
         // Connector 3→4
         Rectangle {
-            width: 48px;
+            width: 72px;
             height: 2px;
             y: (parent.height - self.height) / 2;
             border-radius: 1px;

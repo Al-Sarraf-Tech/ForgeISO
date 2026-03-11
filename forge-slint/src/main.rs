@@ -53,7 +53,9 @@ fn main() -> anyhow::Result<()> {
     // Populate window from persisted state.
     restore_inject(&win, &saved.inject);
     restore_verify(&win, &saved.verify);
-    win.set_presets(make_preset_cards());
+    let (presets_row1, presets_row2) = make_preset_cards();
+    win.set_presets_row1(presets_row1);
+    win.set_presets_row2(presets_row2);
 
     // Create app logic and register in thread-local.
     let app_rc = Rc::new(RefCell::new(ForgeApp::new(

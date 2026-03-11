@@ -31,3 +31,7 @@ coverage/
 artifacts/
 workdir/
 dist/
+
+# Runtime test/cache artifacts
+forgeiso-cache/
+forgeiso-regtest/

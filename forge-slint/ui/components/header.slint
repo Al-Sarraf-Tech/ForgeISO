@@ -34,7 +34,6 @@ export component Header inherits Rectangle {
             alignment: start;
             VerticalLayout {
                 alignment: center;
-                // Blue accent bar logo mark
                 Rectangle {
                     width: 6px;
                     height: 36px;
@@ -65,8 +64,9 @@ export component Header inherits Rectangle {
             spacing: 10px;
             VerticalLayout {
                 alignment: center;
+
+                // Determinate progress bar
                 if job-running && job-percent >= 0.0: Rectangle {
-                    // Determinate progress bar
                     width: 320px;
                     height: 6px;
                     border-radius: 3px;
@@ -79,22 +79,28 @@ export component Header inherits Rectangle {
                         animate width { duration: 200ms; easing: ease-out; }
                     }
                 }
+
+                // Indeterminate sweep — init triggers animation on creation
                 if job-running && job-percent < 0.0: Rectangle {
-                    // Indeterminate spinner pulse
                     width: 320px;
                     height: 6px;
                     border-radius: 3px;
                     background: Palette.border;
-                    property <float> pos: 0.0;
+                    clip: true;
+
+                    property <float> sweep: 0.0;
+                    init => { sweep = 1.0; }
+                    animate sweep { duration: 1600ms; easing: ease-in-out; iteration-count: -1; }
+
                     Rectangle {
-                        x: parent.width * pos;
-                        width: 80px;
+                        x: (parent.width + 100px) * sweep - 100px;
+                        width: 100px;
                         height: parent.height;
                         border-radius: parent.border-radius;
                         background: @linear-gradient(90deg, transparent, Palette.accent, transparent);
                     }
-                    animate pos { duration: 1400ms; easing: linear; iteration-count: -1; }
                 }
+
                 if status-text != "" && !job-running: Text {
                     text: status-text;
                     font-size: Sizes.font-sm;
@@ -118,37 +124,46 @@ export component Header inherits Rectangle {
                 width: 36px;
                 height: 36px;
                 border-radius: 8px;
-                background: doctor-open ? Palette.accent : Palette.elevated;
+                background: doctor-open ? Palette.accent
+                          : doc-ta.has-hover ? Palette.active
+                          : Palette.elevated;
                 border-width: 1px;
-                border-color: doctor-open ? Palette.accent : Palette.border;
-                animate background { duration: 150ms; }
+                border-color: doctor-open ? Palette.accent
+                            : doc-ta.has-hover ? Palette.border-focus
+                            : Palette.border;
+                animate background { duration: 120ms; }
+                animate border-color { duration: 120ms; }
                 Text {
                     text: "🩺";
                     font-size: 16px;
                     vertical-alignment: center;
                     horizontal-alignment: center;
                 }
-                TouchArea {
+                doc-ta := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
                     clicked => { root.doctor-toggled(); }
                 }
             }
 
             // Cancel button (only when running)
             if job-running: Rectangle {
-                width: 80px;
+                width: 90px;
                 height: 36px;
                 border-radius: 8px;
-                background: Palette.elevated;
+                background: cancel-ta.has-hover ? rgba(248, 81, 73, 0.16) : rgba(248, 81, 73, 0.08);
                 border-width: 1px;
-                border-color: Palette.red;
+                border-color: rgba(248, 81, 73, 0.5);
+                animate background { duration: 100ms; }
                 Text {
-                    text: "✕ Cancel";
+                    text: "✕  Cancel";
                     font-size: Sizes.font-sm;
+                    font-weight: 600;
                     color: Palette.red;
                     vertical-alignment: center;
                     horizontal-alignment: center;
                 }
-                TouchArea {
+                cancel-ta := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
                     clicked => { root.cancel(); }
                 }
             }

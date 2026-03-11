@@ -86,3 +86,18 @@ The legacy Tauri GUI has separate versions in `gui/package.json`,
 - MPL-2.0 and `LicenseRef-Slint-Royalty-free-2.0` are explicitly allowed
   (see deny.toml for rationale).
 - Suppress advisories only with a documented reason.
+
+---
+
+## Toolchain
+
+| Tool | Path | Version |
+|---|---|---|
+| rustc | `/usr/bin/rustc` | 1.93.1 (Fedora dnf) |
+| cargo | `/usr/bin/cargo` | 1.93.1 (Fedora dnf) |
+| rustfmt | `/usr/bin/rustfmt` | 1.93.1 |
+| rust-analyzer | `/usr/bin/rust-analyzer` | 1.93.1 |
+| node (Tauri GUI) | `/usr/bin/node` | v22.22.0 |
+
+Rust is system-installed via dnf — do not invoke `rustup` to switch toolchains.
+`~/.cargo/bin/` is in PATH (cargo-audit, cargo-deny).

@@ -1,10 +1,10 @@
 import { Palette, Sizes } from "../theme.slint";
-import { ScrollView, LineEdit, CheckBox, ComboBox, TextEdit } from "std-widgets.slint";
+import { ScrollView, CheckBox } from "std-widgets.slint";
 
 // ── Reusable field components ────────────────────────────────────────────────
 
 component FieldLabel inherits Text {
-    font-size: Sizes.font-xs;
+    font-size: Sizes.font-2xs;
     font-weight: 600;
     color: Palette.muted;
     letter-spacing: 0.5px;
@@ -21,26 +21,42 @@ component FieldInput inherits Rectangle {
     in property <string>     hint: "";
     in property <bool>       password: false;
     in property <bool>       enabled: true;
+    in property <bool>       error: false;
     callback changed(string);
 
     height: 42px;
     border-radius: Sizes.radius-sm;
-    background: Palette.elevated;
+    background: Palette.bg;
     border-width: 1px;
-    border-color: field.has-focus ? Palette.border-focus : Palette.border;
+    border-color: error ? Palette.red
+                : field.has-focus ? Palette.border-focus
+                : Palette.border;
     animate border-color { duration: 150ms; }
 
-    field := LineEdit {
+    // Placeholder shown when empty and unfocused
+    if value == "" && !field.has-focus: Text {
         x: 10px;
         y: 0;
         width: parent.width - 20px;
         height: parent.height;
-        text: value;
-        placeholder-text: hint;
+        text: hint;
         font-size: Sizes.font-sm;
+        color: Palette.subtle;
+        vertical-alignment: center;
+    }
+    field := TextInput {
+        x: 10px;
+        y: (parent.height - self.preferred-height) / 2;
+        width: parent.width - 20px;
+        text: value;
+        font-size: Sizes.font-sm;
+        color: Palette.text;
+        selection-background-color: Palette.accent;
+        selection-foreground-color: Palette.on-accent;
         enabled: parent.enabled;
+        single-line: true;
         input-type: password ? InputType.password : InputType.text;
-        edited(t) => { value = t; changed(t); }
+        edited => { value = field.text; changed(field.text); }
     }
 }
 
@@ -52,20 +68,25 @@ component FieldTextarea inherits Rectangle {
 
     height: 104px;
     border-radius: Sizes.radius-sm;
-    background: Palette.elevated;
+    background: Palette.bg;
     border-width: 1px;
     border-color: editor.has-focus ? Palette.border-focus : Palette.border;
     animate border-color { duration: 150ms; }
 
-    editor := TextEdit {
+    editor := TextInput {
         x: 10px;
-        y: 6px;
+        y: 8px;
         width: parent.width - 20px;
-        height: parent.height - 12px;
+        height: parent.height - 16px;
         text: value;
         font-size: Sizes.font-sm;
+        color: Palette.text;
+        selection-background-color: Palette.accent;
+        selection-foreground-color: Palette.on-accent;
         enabled: parent.enabled;
-        edited(t) => { value = t; changed(t); }
+        single-line: false;
+        wrap: word-wrap;
+        edited => { value = editor.text; changed(editor.text); }
     }
 }
 
@@ -75,7 +96,8 @@ component SectionHeader inherits Rectangle {
     callback toggle();
 
     height: 44px;
-    background: transparent;
+    background: hov.has-hover ? rgba(255, 255, 255, 0.02) : transparent;
+    animate background { duration: 120ms; }
 
     HorizontalLayout {
         padding-left: 6px;
@@ -95,7 +117,7 @@ component SectionHeader inherits Rectangle {
             }
             Text {
                 text: title;
-                font-size: 12px;
+                font-size: Sizes.font-sm;
                 font-weight: 700;
                 color: Palette.text-secondary;
                 vertical-alignment: center;
@@ -106,13 +128,15 @@ component SectionHeader inherits Rectangle {
             width: 28px;
             height: 28px;
             border-radius: 14px;
-            background: Palette.surface;
+            background: hov.has-hover ? Palette.active : Palette.surface;
             border-width: 1px;
-            border-color: Palette.border;
+            border-color: open ? rgba(47, 129, 247, 0.4) : Palette.border;
+            animate background { duration: 100ms; }
+            animate border-color { duration: 150ms; }
             Text {
                 text: open ? "▾" : "▸";
-                font-size: 11px;
-                color: Palette.subtle;
+                font-size: Sizes.font-xs;
+                color: open ? Palette.accent : hov.has-hover ? Palette.text-secondary : Palette.subtle;
                 vertical-alignment: center;
                 horizontal-alignment: center;
             }
@@ -127,7 +151,10 @@ component SectionHeader inherits Rectangle {
         opacity: 0.5;
     }
 
-    TouchArea { clicked => { toggle(); } }
+    hov := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { toggle(); }
+    }
 }
 
 // ── Main configure step ──────────────────────────────────────────────────────
@@ -257,7 +284,7 @@ export component StepConfigure inherits Rectangle {
         ScrollView {
             VerticalLayout {
                 padding-left: 40px;
-                padding-right: 32px;
+                padding-right: 40px;
                 padding-top: 32px;
                 padding-bottom: 40px;
                 spacing: 20px;
@@ -286,9 +313,10 @@ export component StepConfigure inherits Rectangle {
                         width: 110px;
                         height: 32px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.elevated;
+                        background: cfg-back-ta.has-hover ? Palette.active : Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
+                        animate background { duration: 100ms; }
                         Text {
                             text: "← Change ISO";
                             font-size: Sizes.font-xs;
@@ -296,7 +324,10 @@ export component StepConfigure inherits Rectangle {
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
-                        TouchArea { clicked => { back-clicked(); } }
+                        cfg-back-ta := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { back-clicked(); }
+                        }
                     }
                 }
 
@@ -373,19 +404,23 @@ export component StepConfigure inherits Rectangle {
                                 width: 116px;
                                 height: 28px;
                                 border-radius: Sizes.radius-sm;
-                                background: Palette.elevated;
+                                background: apply-ta.has-hover && !running
+                                    ? rgba(63, 185, 80, 0.16)
+                                    : rgba(63, 185, 80, 0.08);
                                 border-width: 1px;
-                                border-color: Palette.border;
+                                border-color: rgba(63, 185, 80, 0.35);
+                                animate background { duration: 100ms; }
                                 Text {
                                     text: "Apply Defaults";
                                     font-size: Sizes.font-xs;
                                     font-weight: 600;
-                                    color: Palette.text;
+                                    color: Palette.green;
                                     vertical-alignment: center;
                                     horizontal-alignment: center;
                                 }
-                                TouchArea {
+                                apply-ta := TouchArea {
                                     enabled: !running;
+                                    mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
                                     clicked => { apply-defaults(); }
                                 }
                             }
@@ -393,9 +428,10 @@ export component StepConfigure inherits Rectangle {
                                 width: 72px;
                                 height: 28px;
                                 border-radius: Sizes.radius-sm;
-                                background: Palette.elevated;
+                                background: reset-ta.has-hover && !running ? Palette.active : Palette.elevated;
                                 border-width: 1px;
                                 border-color: Palette.border;
+                                animate background { duration: 100ms; }
                                 Text {
                                     text: "Reset";
                                     font-size: Sizes.font-xs;
@@ -403,8 +439,9 @@ export component StepConfigure inherits Rectangle {
                                     vertical-alignment: center;
                                     horizontal-alignment: center;
                                 }
-                                TouchArea {
+                                reset-ta := TouchArea {
                                     enabled: !running;
+                                    mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
                                     clicked => { reset-defaults(); }
                                 }
                             }
@@ -448,7 +485,7 @@ export component StepConfigure inherits Rectangle {
                         VerticalLayout {
                             spacing: 4px;
                             FieldLabel { text: "CONFIRM PASSWORD"; }
-                            FieldInput { value <=> password-confirm; password: true; hint: "••••••••"; enabled: !running; }
+                            FieldInput { value <=> password-confirm; password: true; hint: "••••••••"; enabled: !running; error: pw-live-mismatch; }
                         }
                     }
                     if !passwords-match || pw-live-mismatch: Rectangle {
@@ -584,6 +621,14 @@ export component StepConfigure inherits Rectangle {
                     title: "System";
                     open: s-system-open;
                     toggle => { s-system-open = !s-system-open; }
+                }
+                if !s-system-open && (timezone != "" || locale != "" || keyboard-layout != ""): Text {
+                    text: (timezone != "" ? "tz: " + timezone : "")
+                        + (locale != "" ? (timezone != "" ? "  ·  " : "") + "locale: " + locale : "")
+                        + (keyboard-layout != "" ? "  ·  kbd: " + keyboard-layout : "");
+                    font-size: Sizes.font-xs;
+                    color: Palette.text-secondary;
+                    overflow: elide;
                 }
                 if s-system-open: VerticalLayout {
                     spacing: 10px;
@@ -783,6 +828,14 @@ export component StepConfigure inherits Rectangle {
                     open: s-advanced-open;
                     toggle => { s-advanced-open = !s-advanced-open; }
                 }
+                if !s-advanced-open && (run-commands != "" || late-commands != "" || no-user-interaction): Text {
+                    text: (no-user-interaction ? "unattended  " : "")
+                        + (run-commands != "" ? "run-commands: on" : "")
+                        + (late-commands != "" ? (run-commands != "" ? "  ·  " : "") + "late-commands: on" : "");
+                    font-size: Sizes.font-xs;
+                    color: Palette.text-secondary;
+                    overflow: elide;
+                }
                 if s-advanced-open: VerticalLayout {
                     spacing: 10px;
                     // Custom commands
@@ -834,10 +887,11 @@ export component StepConfigure inherits Rectangle {
                                 width: 90px;
                                 height: 38px;
                                 border-radius: Sizes.radius-sm;
-                                background: Palette.elevated;
+                                background: out-brw-ta.has-hover && !running ? Palette.active : Palette.elevated;
                                 border-width: 1px;
                                 border-color: Palette.border;
                                 opacity: running ? 0.5 : 1.0;
+                                animate background { duration: 100ms; }
                                 Text {
                                     text: "Browse…";
                                     font-size: Sizes.font-sm;
@@ -845,8 +899,9 @@ export component StepConfigure inherits Rectangle {
                                     vertical-alignment: center;
                                     horizontal-alignment: center;
                                 }
-                                TouchArea {
+                                out-brw-ta := TouchArea {
                                     enabled: !running;
+                                    mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
                                     clicked => { browse-output-dir(); }
                                 }
                             }
@@ -888,9 +943,11 @@ export component StepConfigure inherits Rectangle {
                         height: 46px;
                         border-radius: Sizes.radius-sm;
                         property <bool> btn-active: can-continue && !pw-live-mismatch;
-                        background: btn-active ? Palette.accent : Palette.elevated;
+                        background: btn-active
+                            ? (cfg-fwd-ta.has-hover ? #3d90ff : Palette.accent)
+                            : Palette.elevated;
                         opacity: btn-active ? 1.0 : 0.6;
-                        animate background { duration: 180ms; }
+                        animate background { duration: 120ms; }
                         animate opacity  { duration: 180ms; }
                         Text {
                             text: "Continue to Build Summary →";
@@ -900,8 +957,9 @@ export component StepConfigure inherits Rectangle {
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
-                        TouchArea {
+                        cfg-fwd-ta := TouchArea {
                             enabled: btn-active && !running;
+                            mouse-cursor: btn-active && !running ? MouseCursor.pointer : MouseCursor.default;
                             clicked => { configure-continue(); }
                         }
                     }

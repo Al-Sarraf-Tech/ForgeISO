@@ -1,5 +1,5 @@
 import { Palette, Sizes } from "../theme.slint";
-import { ScrollView, LineEdit } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 
 export struct PresetCard {
     id: string,
@@ -14,8 +14,8 @@ component DistroCard inherits Rectangle {
     in property <bool>       running: false;
     callback clicked();
 
-    width: 156px;
-    height: 130px;
+    width: 190px;
+    height: 140px;
     border-radius: Sizes.radius-md;
     background: selected ? rgba(63, 185, 80, 0.16)
               : hovered && !running ? rgba(255, 255, 255, 0.03)
@@ -52,12 +52,12 @@ component DistroCard inherits Rectangle {
 
     VerticalLayout {
         alignment: center;
-        spacing: 6px;
-        padding: 14px;
+        spacing: 8px;
+        padding: 16px;
 
         Text {
             text: card.emoji;
-            font-size: 30px;
+            font-size: 32px;
             horizontal-alignment: center;
         }
         Text {
@@ -76,7 +76,7 @@ component DistroCard inherits Rectangle {
         }
         if selected: Text {
             text: "✓ Selected";
-            font-size: 10px;
+            font-size: Sizes.font-2xs;
             color: Palette.green;
             font-weight: 700;
             horizontal-alignment: center;
@@ -91,7 +91,8 @@ component DistroCard inherits Rectangle {
 }
 
 export component StepSource inherits Rectangle {
-    in property <[PresetCard]> presets;
+    in property <[PresetCard]> presets-row1;
+    in property <[PresetCard]> presets-row2;
     in property <string>       source-path;
     in property <string>       selected-preset;
     in property <string>       detected-distro;
@@ -121,7 +122,7 @@ export component StepSource inherits Rectangle {
                     color: Palette.text;
                 }
                 Text {
-                    text: "Choose a Linux distribution to get started, or paste an ISO path directly.";
+                    text: "Inject unattended install config into any Linux ISO — Ubuntu, Fedora, Arch, Mint and more.";
                     font-size: Sizes.font-md;
                     color: Palette.muted;
                 }
@@ -132,18 +133,17 @@ export component StepSource inherits Rectangle {
                 spacing: 12px;
                 Text {
                     text: "POPULAR DISTRIBUTIONS";
-                    font-size: 10px;
+                    font-size: Sizes.font-2xs;
                     font-weight: 700;
                     color: Palette.subtle;
                     letter-spacing: 1.5px;
                 }
 
-                // Row 1 (indices 0–3)
+                // Row 1
                 HorizontalLayout {
                     spacing: 12px;
                     alignment: center;
-                    for card[i] in presets: DistroCard {
-                        visible: i < 4;
+                    for card in presets-row1: DistroCard {
                         card: card;
                         selected: selected-preset == card.id;
                         running: running;
@@ -151,12 +151,11 @@ export component StepSource inherits Rectangle {
                     }
                 }
 
-                // Row 2 (indices 4+)
-                HorizontalLayout {
+                // Row 2 (only rendered if non-empty)
+                if presets-row2.length > 0: HorizontalLayout {
                     spacing: 12px;
                     alignment: center;
-                    for card[i] in presets: DistroCard {
-                        visible: i >= 4;
+                    for card in presets-row2: DistroCard {
                         card: card;
                         selected: selected-preset == card.id;
                         running: running;
@@ -169,20 +168,23 @@ export component StepSource inherits Rectangle {
             VerticalLayout {
                 spacing: 10px;
                 HorizontalLayout {
-                    spacing: 8px;
-                    alignment: center;
-                    Rectangle {
-                        height: 1px;
-                        background: Palette.border;
+                    spacing: 12px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle { height: 1px; background: Palette.border; }
                     }
                     Text {
-                        text: "  or enter a path / URL directly  ";
+                        text: "or enter a path / URL directly";
                         font-size: Sizes.font-xs;
                         color: Palette.subtle;
+                        vertical-alignment: center;
+                        horizontal-stretch: 0;
                     }
-                    Rectangle {
-                        height: 1px;
-                        background: Palette.border;
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle { height: 1px; background: Palette.border; }
                     }
                 }
 
@@ -194,20 +196,32 @@ export component StepSource inherits Rectangle {
                     Rectangle {
                         height: 42px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.surface;
+                        background: Palette.bg;
                         border-width: 1px;
                         border-color: path-input.has-focus ? Palette.accent : Palette.border;
                         animate border-color { duration: 150ms; }
-                        path-input := LineEdit {
-                            x: 12px;
-                            y: 0;
+                        if source-path == "" && !path-input.has-focus: Text {
+                            x: 12px; y: 0;
                             width: parent.width - 24px;
                             height: parent.height;
-                            placeholder-text: "/path/to/ubuntu.iso  or  https://releases.ubuntu.com/…";
+                            text: "/path/to/ubuntu.iso  or  https://releases.ubuntu.com/…";
+                            font-size: Sizes.font-sm;
+                            color: Palette.subtle;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                        path-input := TextInput {
+                            x: 12px;
+                            y: (parent.height - self.preferred-height) / 2;
+                            width: parent.width - 24px;
                             text: source-path;
                             font-size: Sizes.font-sm;
+                            color: Palette.text;
+                            selection-background-color: Palette.accent;
+                            selection-foreground-color: Palette.on-accent;
+                            single-line: true;
                             enabled: !running;
-                            edited(t) => { source-changed(t); }
+                            edited => { source-changed(path-input.text); }
                         }
                     }
 
@@ -216,10 +230,11 @@ export component StepSource inherits Rectangle {
                         width: 90px;
                         height: 42px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.elevated;
+                        background: browse-ta.has-hover && !running ? Palette.active : Palette.elevated;
                         border-width: 1px;
                         border-color: Palette.border;
                         opacity: running ? 0.5 : 1.0;
+                        animate background { duration: 100ms; }
                         animate opacity { duration: 150ms; }
                         Text {
                             text: "Browse…";
@@ -228,8 +243,9 @@ export component StepSource inherits Rectangle {
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
-                        TouchArea {
+                        browse-ta := TouchArea {
                             enabled: !running;
+                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
                             clicked => { browse-clicked(); }
                         }
                     }
@@ -239,33 +255,38 @@ export component StepSource inherits Rectangle {
                         width: 42px;
                         height: 42px;
                         border-radius: Sizes.radius-sm;
-                        background: Palette.elevated;
+                        background: clear-ta.has-hover && !running ? rgba(248, 81, 73, 0.12) : Palette.elevated;
                         border-width: 1px;
-                        border-color: Palette.border;
+                        border-color: clear-ta.has-hover && !running ? rgba(248, 81, 73, 0.4) : Palette.border;
+                        animate background { duration: 100ms; }
+                        animate border-color { duration: 100ms; }
                         Text {
                             text: "✕";
                             font-size: 16px;
-                            color: Palette.text;
+                            color: clear-ta.has-hover && !running ? Palette.red : Palette.muted;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
-                        TouchArea {
+                        clear-ta := TouchArea {
                             enabled: !running;
+                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
                             clicked => { clear-clicked(); }
                         }
                     }
                 }
 
                 // Detected distro badge
-                if detected-distro != "" && detected-distro != "ubuntu": HorizontalLayout {
+                if detected-distro != "": HorizontalLayout {
                     alignment: start;
                     Rectangle {
-                        height: 24px;
-                        border-radius: 12px;
+                        height: 26px;
+                        border-radius: 13px;
                         background: rgba(63, 185, 80, 0.12);
                         border-width: 1px;
                         border-color: rgba(63, 185, 80, 0.3);
                         HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
                             spacing: 4px;
                             alignment: center;
                             Text {
@@ -283,26 +304,29 @@ export component StepSource inherits Rectangle {
             HorizontalLayout {
                 alignment: start;
                 Rectangle {
-                    width: 260px;
-                    height: 44px;
+                    width: 300px;
+                    height: 46px;
                     border-radius: Sizes.radius-sm;
-                    background: can-continue ? Palette.accent : Palette.elevated;
+                    background: can-continue
+                        ? (cont-ta.has-hover ? #3d90ff : Palette.accent)
+                        : Palette.elevated;
                     opacity: can-continue ? 1.0 : 0.6;
-                    animate background { duration: 180ms; }
+                    animate background { duration: 120ms; }
                     animate opacity  { duration: 180ms; }
 
                     HorizontalLayout {
                         alignment: center;
                         spacing: 8px;
                         Text {
-                            text: "Continue: Configure Installer  →";
+                            text: "Continue to Configure Installer →";
                             font-size: Sizes.font-sm;
                             font-weight: 600;
                             color: can-continue ? Palette.on-accent : Palette.subtle;
                         }
                     }
-                    TouchArea {
+                    cont-ta := TouchArea {
                         enabled: can-continue && !running;
+                        mouse-cursor: can-continue && !running ? MouseCursor.pointer : MouseCursor.default;
                         clicked => { continue-clicked(); }
                     }
                 }
