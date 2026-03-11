@@ -47,8 +47,9 @@ where
 
 // ── Preset cards shown on Step 1 ─────────────────────────────────────────────
 
-pub fn make_preset_cards() -> ModelRc<PresetCard> {
-    let cards: Vec<PresetCard> = vec![
+/// Returns (row1, row2) preset card models for the two-row distro grid.
+pub fn make_preset_cards() -> (ModelRc<PresetCard>, ModelRc<PresetCard>) {
+    let row1: Vec<PresetCard> = vec![
         PresetCard {
             id: "ubuntu-server-lts".into(),
             emoji: "🐧".into(),
@@ -79,6 +80,8 @@ pub fn make_preset_cards() -> ModelRc<PresetCard> {
             name: "Rocky Linux".into(),
             desc: "RHEL compatible".into(),
         },
+    ];
+    let row2: Vec<PresetCard> = vec![
         PresetCard {
             id: "almalinux".into(),
             emoji: "🦬".into(),
@@ -98,7 +101,10 @@ pub fn make_preset_cards() -> ModelRc<PresetCard> {
             desc: "Workstation".into(),
         },
     ];
-    ModelRc::new(VecModel::from(cards))
+    (
+        ModelRc::new(VecModel::from(row1)),
+        ModelRc::new(VecModel::from(row2)),
+    )
 }
 
 pub fn preset_display_name(id: &str) -> Option<&'static str> {
@@ -220,17 +226,17 @@ impl ForgeApp {
 
     pub fn push_log(&mut self, phase: &str, message: &str, level: i32, percent: Option<f32>) {
         let m = &self.log_vec;
+        let pct_val = percent.unwrap_or(-1.0);
 
         // For download progress: update in-place rather than append.
-        if let Some(pct) = percent {
-            if pct >= 0.0 {
-                if let Some(&idx) = self.download_idx.get(phase) {
-                    if idx < m.row_count() {
-                        let mut entry = m.row_data(idx).unwrap();
-                        entry.message = format!("{message} ({:.0}%)", pct * 100.0).into();
-                        m.set_row_data(idx, entry);
-                        return;
-                    }
+        if pct_val >= 0.0 {
+            if let Some(&idx) = self.download_idx.get(phase) {
+                if idx < m.row_count() {
+                    let mut entry = m.row_data(idx).unwrap();
+                    entry.message = message.into();
+                    entry.percent = pct_val;
+                    m.set_row_data(idx, entry);
+                    return;
                 }
             }
         }
@@ -241,10 +247,11 @@ impl ForgeApp {
             message: message.into(),
             level,
             timestamp: now_ts(),
+            percent: pct_val,
         });
 
         // Track download phase index for in-place progress updates.
-        if percent.is_some() {
+        if pct_val >= 0.0 {
             self.download_idx.insert(phase.to_string(), idx);
         }
 
