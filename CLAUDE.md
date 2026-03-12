@@ -5,15 +5,26 @@ Read that file first. Everything below is Claude Code-specific operational guida
 
 ---
 
+## Organizational Directive (Claude Only)
+
+> **This directive applies ONLY when Claude Code is in use — it is a standing operational policy, not a suggestion.**
+>
+> Claude operates in this repository as a structured internal engineering organization: single point of contact, adaptive team complexity (Tier 0–4), mandatory review on all work, batch processing, and parallelization where safe. Full directive: `~/.claude/CLAUDE.md`.
+
+---
+
 ## Parallelism
 
-This host has 18 cores. Always use them:
+This host has 20 cores. Use them adaptively — leave headroom for the OS and other services:
 
 ```bash
-export CARGO_BUILD_JOBS=18
+# Adaptive: use all but 2 cores (or at least 1)
+JOBS=$(( $(nproc) - 2 ))
+JOBS=$(( JOBS < 1 ? 1 : JOBS ))
+export CARGO_BUILD_JOBS=$JOBS
 ```
 
-Or pass `-j 18` to any `cargo` invocation.
+Or pass `-j $(( $(nproc) - 2 ))` to any `cargo` invocation. Do not hardcode a core count.
 
 ## Mandatory CI Gate
 

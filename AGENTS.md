@@ -1,9 +1,25 @@
 # ForgeISO — Agent Briefing
 
-> **Single source of truth for AI agents (Claude Code, Codex, etc.)**
+> **Codex operating directive for this repository.**
 > Read this file before making any changes. It describes what the project is,
 > how it is structured, how to build and test it, and the rules that must be
-> followed.
+> followed. Claude Code operates under a separate directive in `CLAUDE.md` — that file is Claude's territory, not Codex's.
+
+---
+
+## Codex-Only Organizational Directive
+
+This section is a mandatory Codex-only operating directive for this multi-crate ISO-building workspace. It applies only when Codex is the acting tool here. It is a directive, not a suggestion. Claude is a separate organization with its own instructions; keep shared repo facts compatible, but do not let Claude-specific policy override Codex policy.
+
+- Operate as one accountable engineering organization with a single external voice; do not expose fragmented internal deliberation.
+- Classify the task by size and risk before non-trivial work, then scale discovery, implementation, QA, security, CLI/UX, docs, and reliability review accordingly.
+- Research before significant change. Understand the repo's current architecture, entrypoints, toolchain, and operational constraints before editing.
+- Review everything touched. Code, tests, scripts, configs, workflows, docs, prompts, and user-facing text all require review before delivery.
+- Batch related work, parallelize safe independent workstreams, and keep the final change set coherent and minimal.
+- Use host parallelism adaptively. This host has 20 cores; prefer `$(nproc)` or repo-native job selection over fixed counts, and leave headroom when the task is small, interactive, or sharing the machine.
+- Keep repo-specific instructions authoritative. Do not let generic agent habits override the constraints in this file or the codebase.
+
+**Agent boundary:** Claude Code operates in this repo under its own separate directive in `CLAUDE.md`. That file is Claude's territory. This file is Codex's territory. Neither directive governs the other agent.
 
 ---
 
@@ -111,27 +127,28 @@ scripts/ci/run-parallel.sh
 
 ## Parallelism
 
-This host has **18 cores**. Use all of them for compilation and testing:
+This host currently reports **20 cores** (`nproc`). Use cores adaptively — leave headroom for the OS and concurrent services. Do not hardcode a core count.
 
 ```bash
-# Local builds
-cargo build --workspace --release -j 18
-cargo test --workspace -j 18
-cargo clippy --workspace --all-targets -j 18 -- -D warnings
+# Adaptive local builds (leave 2 cores free)
+JOBS=$(( $(nproc) - 2 ))
+JOBS=$(( JOBS < 1 ? 1 : JOBS ))
+cargo build --workspace --release -j "$JOBS"
+cargo test --workspace -j "$JOBS"
+cargo clippy --workspace --all-targets -j "$JOBS" -- -D warnings
 
-# Or set globally in the shell session
-export CARGO_BUILD_JOBS=18
+# Or set globally for the shell session
+export CARGO_BUILD_JOBS=$(( $(nproc) - 2 ))
 ```
 
-`docker-compose.ci.yml` now assigns stage-sized `CARGO_BUILD_JOBS` values that
-sum to the same 18-core host budget. Apply `CARGO_BUILD_JOBS=18` when running
-`cargo` directly on the host so local single-workspace builds still use all
-available cores.
+`docker-compose.ci.yml` assigns stage-sized `CARGO_BUILD_JOBS` values that
+share the host budget. Set `CARGO_BUILD_JOBS` adaptively (see above) when
+running `cargo` directly on the host.
 
-For Docker CI, use `scripts/ci/run-parallel.sh`. It keeps the total CPU budget
-at 18 cores across all running containers and rebalances quotas/shares as
-stages finish. Override the budget with `FORGEISO_CI_TOTAL_CPUS` only when the
-host has a different core allocation target.
+For Docker CI, use `scripts/ci/run-parallel.sh`. It distributes the CPU budget
+across all running containers and rebalances quotas/shares as stages finish.
+Override the total budget with `FORGEISO_CI_TOTAL_CPUS` when targeting a
+specific core allocation.
 
 ---
 
