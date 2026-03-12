@@ -222,6 +222,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
 
@@ -297,6 +299,15 @@ jobs:
             syft dir:. -o cyclonedx-json > dist/release/sbom.cdx.json
             syft dir:. -o spdx-json      > dist/release/sbom.spdx.json
           fi
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/release/forgeiso-*-1.x86_64.rpm
+            dist/release/forgeiso_*-1_amd64.deb
+            dist/release/forgeiso-*-1-x86_64.pkg.tar.zst
+            dist/release/forgeiso-*-linux-x86_64.tar.gz
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
