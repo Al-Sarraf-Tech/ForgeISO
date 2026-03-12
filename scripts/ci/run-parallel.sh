@@ -19,7 +19,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="${REPO_ROOT}/docker-compose.ci.yml"
 VERBOSE="${FORGEISO_CI_VERBOSE:-0}"
-TOTAL_CPUS="${FORGEISO_CI_TOTAL_CPUS:-18}"
+TOTAL_CPUS="${FORGEISO_CI_TOTAL_CPUS:-$(nproc)}"
 CI_CACHE_ROOT="${CI_CACHE_ROOT:-/tmp/ci-cache}"
 CACHE_DIR="${CI_CACHE_ROOT}/forgeiso"
 

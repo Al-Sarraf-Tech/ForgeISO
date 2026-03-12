@@ -83,19 +83,20 @@ sudo dnf install kdialog
 
 ## Building
 
-Use `CARGO_BUILD_JOBS=18` on the 18-core host (or `-j 18` per command):
+Use an adaptive job budget on this 20-core host instead of hardcoding a stale
+count:
 
 ```bash
-export CARGO_BUILD_JOBS=18
+export CARGO_BUILD_JOBS=$(( $(nproc) - 2 ))
 
 # Both GUIs + CLI + engine in one pass
 cargo build --workspace --release
 
 # forge-slint only
-cargo build --release -p forge-slint -j 18
+cargo build --release -p forge-slint -j "$CARGO_BUILD_JOBS"
 
 # forge-gui only
-cargo build --release -p forge-gui -j 18
+cargo build --release -p forge-gui -j "$CARGO_BUILD_JOBS"
 ```
 
 Binaries land in `target/release/forge-slint` and `target/release/forge-gui`.
@@ -103,8 +104,8 @@ Binaries land in `target/release/forge-slint` and `target/release/forge-gui`.
 ### Dev builds (faster, no optimisation)
 
 ```bash
-cargo build -p forge-slint -j 18
-cargo build -p forge-gui -j 18
+cargo build -p forge-slint -j "$CARGO_BUILD_JOBS"
+cargo build -p forge-gui -j "$CARGO_BUILD_JOBS"
 ```
 
 ---

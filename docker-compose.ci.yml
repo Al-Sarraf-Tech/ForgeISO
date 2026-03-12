@@ -10,10 +10,11 @@
 #   scripts/ci/run-parallel.sh                                  # run all, check all
 #
 # CPU scheduling:
-#   scripts/ci/run-parallel.sh enforces a shared 18-core budget across all
-#   running containers with `docker update --cpus/--cpu-shares`. As stages
-#   exit, their quota is redistributed to the remaining jobs so long-running
-#   Rust builds can consume the freed cores without restarting.
+#   scripts/ci/run-parallel.sh enforces a shared host CPU budget across all
+#   running containers with `docker update --cpus/--cpu-shares`. By default it
+#   uses `$(nproc)` and can be overridden with `FORGEISO_CI_TOTAL_CPUS`. As
+#   stages exit, their quota is redistributed to the remaining jobs so
+#   long-running Rust builds can consume the freed cores without restarting.
 #
 # Volumes are declared at the bottom and are ALL removed by:
 #   docker compose -f docker-compose.ci.yml down -v --remove-orphans
