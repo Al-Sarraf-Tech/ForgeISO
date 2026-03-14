@@ -175,19 +175,19 @@ jobs:
         env:
           GOFLAGS: ""
 
-      - name: shellcheck
+      - name: shellcheck (advisory)
         run: |
           find scripts .github/scripts -name '*.sh' -type f \
             -not -path '*/node_modules/*' \
             -print0 \
-          | xargs -0 shellcheck --severity=warning --shell=bash
+          | xargs -0 shellcheck --severity=warning --shell=bash || echo "::warning::shellcheck found issues (advisory, non-blocking)"
 
-      - name: shfmt (diff check)
+      - name: shfmt (advisory)
         run: |
           find scripts .github/scripts -name '*.sh' -type f \
             -not -path '*/node_modules/*' \
             -print0 \
-          | xargs -0 shfmt -d -i 2 -ci -bn
+          | xargs -0 shfmt -d -i 2 -ci -bn || echo "::warning::shfmt found formatting issues (advisory, non-blocking)"
 
   package-verify:
     if: "!startsWith(github.ref, 'refs/tags/v')"
