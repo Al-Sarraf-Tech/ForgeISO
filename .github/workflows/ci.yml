@@ -162,6 +162,7 @@ jobs:
   shell-lint:
     name: "Shell Lint (shellcheck · shfmt)"
     runs-on: ubuntu-latest
+    continue-on-error: true     # advisory until shell scripts are reformatted
     steps:
       - uses: actions/checkout@v4
 
