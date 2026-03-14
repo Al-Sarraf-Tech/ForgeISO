@@ -12,6 +12,12 @@ on:
 permissions:
   contents: read
 
+# Cancel redundant runs on the same branch (PRs and pushes).
+# Tag-triggered runs (releases) are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 # ── CI: 7 stages, all run in parallel ephemeral containers ───────────────────
 #
 # Each matrix entry spins up its own GitHub-hosted runner (ubuntu-latest).
@@ -151,6 +157,37 @@ jobs:
             **/sbom.cdx.json
             **/sbom.spdx.json
           if-no-files-found: ignore
+
+  # ── Shell lint: shellcheck + shfmt on all project shell scripts ────────────
+  shell-lint:
+    name: "Shell Lint (shellcheck · shfmt)"
+    runs-on: ubuntu-latest
+    continue-on-error: true     # advisory until shell scripts are reformatted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck and shfmt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          go install mvdan.cc/sh/v3/cmd/shfmt@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+        env:
+          GOFLAGS: ""
+
+      - name: shellcheck (advisory)
+        run: |
+          find scripts .github/scripts -name '*.sh' -type f \
+            -not -path '*/node_modules/*' \
+            -print0 \
+          | xargs -0 shellcheck --severity=warning --shell=bash || echo "::warning::shellcheck found issues (advisory, non-blocking)"
+
+      - name: shfmt (advisory)
+        run: |
+          find scripts .github/scripts -name '*.sh' -type f \
+            -not -path '*/node_modules/*' \
+            -print0 \
+          | xargs -0 shfmt -d -i 2 -ci -bn || echo "::warning::shfmt found formatting issues (advisory, non-blocking)"
 
   package-verify:
     if: "!startsWith(github.ref, 'refs/tags/v')"
