@@ -31,11 +31,10 @@ concurrency:
 jobs:
   ci-stage:
     name: "${{ matrix.label }}"
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, gentoo]
     strategy:
       fail-fast: false       # all stages run even if one fails — full report always
       max-parallel: 7        # spin up all 7 simultaneously
-      matrix:
         include:
           - id: c1
             label: "C1 Rust (fmt · clippy · test)"
@@ -161,7 +160,7 @@ jobs:
   # ── Shell lint: shellcheck + shfmt on all project shell scripts ────────────
   shell-lint:
     name: "Shell Lint (shellcheck · shfmt)"
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, gentoo]
     continue-on-error: true     # advisory until shell scripts are reformatted
     steps:
       - uses: actions/checkout@v4
@@ -192,7 +191,7 @@ jobs:
   package-verify:
     if: "!startsWith(github.ref, 'refs/tags/v')"
     needs: ci-stage
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, gentoo]
     steps:
       - uses: actions/checkout@v4
 
@@ -256,7 +255,7 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: ci-stage
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, gentoo]
     permissions:
       contents: write
       id-token: write
