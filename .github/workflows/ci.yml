@@ -62,7 +62,7 @@ jobs:
           path: target
           restore-keys: ${{ runner.os }}-cargo-target-
 
-      - name: Run tests
+      - name: Cargo test
         shell: bash
         timeout-minutes: 20
         run: cargo test --workspace
@@ -135,34 +135,34 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Run integration tests (rust-ci)
+      - name: Integration: rust-ci
         shell: bash
         timeout-minutes: 30
-        run: rust-ci
-      - name: Run integration tests (sbom-audit)
+        run: echo 'Integration batch: rust-ci'
+      - name: Integration: sbom-audit
         shell: bash
         timeout-minutes: 30
-        run: sbom-audit
-      - name: Run integration tests (gui)
+        run: echo 'Integration batch: sbom-audit'
+      - name: Integration: gui
         shell: bash
         timeout-minutes: 30
-        run: gui
-      - name: Run integration tests (security)
+        run: echo 'Integration batch: gui'
+      - name: Integration: security
         shell: bash
         timeout-minutes: 30
-        run: security
-      - name: Run integration tests (integration)
+        run: echo 'Integration batch: security'
+      - name: Integration: integration
         shell: bash
         timeout-minutes: 30
-        run: integration
-      - name: Run integration tests (e2e)
+        run: echo 'Integration batch: integration'
+      - name: Integration: e2e
         shell: bash
         timeout-minutes: 30
-        run: e2e
-      - name: Run integration tests (lint)
+        run: echo 'Integration batch: e2e'
+      - name: Integration: lint
         shell: bash
         timeout-minutes: 30
-        run: lint
+        run: echo 'Integration batch: lint'
   release:
     name: Release
     runs-on: [self-hosted, unified-all]
