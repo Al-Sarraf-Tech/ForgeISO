@@ -474,6 +474,14 @@ pub fn emit_launch(spec: &VmLaunchSpec) -> VmLaunchOutput {
                 FirmwareMode::Uefi => qemu_uefi_args(spec),
             };
             let args = maybe_remove_kvm(base_args);
+            notes.push(format!(
+                "QEMU {} mode — {}.",
+                match spec.firmware {
+                    FirmwareMode::Bios => "BIOS",
+                    FirmwareMode::Uefi => "UEFI",
+                },
+                if kvm_available { "KVM acceleration enabled" } else { "software emulation (slow)" },
+            ));
             if !kvm_available {
                 notes.push(
                     "KVM is not available; running in software emulation (slow).".to_string(),
