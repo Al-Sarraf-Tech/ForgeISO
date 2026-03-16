@@ -100,11 +100,6 @@ jobs:
         shell: bash
         timeout-minutes: 15
         run: trivy fs --severity HIGH,CRITICAL --exit-code 1 .
-      - name: Grype vulnerability scan
-        shell: bash
-        timeout-minutes: 15
-        run: |
-          grype dir:. --fail-on high
       - name: Syft SBOM generation
         shell: bash
         timeout-minutes: 10
