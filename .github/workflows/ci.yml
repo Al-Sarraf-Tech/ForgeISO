@@ -2,6 +2,7 @@
 name: ForgeISO CI
 on:
   push:
+    branches: [main]
     tags:
       - v*.*.*
       - v*
@@ -125,73 +126,3 @@ jobs:
           name: sbom
           path: sbom-*.json
           retention-days: 90
-  integration:
-    name: Integration
-    runs-on: [self-hosted, unified-all]
-    needs: test
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: "Integration: rust-ci"
-        shell: bash
-        timeout-minutes: 30
-        run: |
-          echo 'Integration batch: rust-ci'
-      - name: "Integration: sbom-audit"
-        shell: bash
-        timeout-minutes: 30
-        run: |
-          echo 'Integration batch: sbom-audit'
-      - name: "Integration: gui"
-        shell: bash
-        timeout-minutes: 30
-        run: |
-          echo 'Integration batch: gui'
-      - name: "Integration: security"
-        shell: bash
-        timeout-minutes: 30
-        run: |
-          echo 'Integration batch: security'
-      - name: "Integration: integration"
-        shell: bash
-        timeout-minutes: 30
-        run: |
-          echo 'Integration batch: integration'
-      - name: "Integration: e2e"
-        shell: bash
-        timeout-minutes: 30
-        run: |
-          echo 'Integration batch: e2e'
-      - name: "Integration: lint"
-        shell: bash
-        timeout-minutes: 30
-        run: |
-          echo 'Integration batch: lint'
-  release:
-    name: Release
-    runs-on: [self-hosted, unified-all]
-    needs:
-      - test
-      - security
-    if: startsWith(github.ref, 'refs/tags/')
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Generate checksums
-        shell: bash
-        timeout-minutes: 5
-        run: cd release-assets && sha256sum * > SHA256SUMS
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: release-assets/*
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: release-assets/*
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
