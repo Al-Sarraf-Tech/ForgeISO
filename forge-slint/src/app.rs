@@ -904,7 +904,9 @@ pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut ForgeApp) {
         // Apply distro-aware defaults for this preset.
         app.apply_distro_defaults(w);
 
-        w.set_current_step(2);
+        // Mark step 1 complete but stay on the page so the user sees
+        // their selection highlighted.  They click "Continue" to proceed.
+        w.set_step1_done(true);
     }
 }
 

@@ -2,7 +2,7 @@ import { Palette, Sizes } from "../theme.slint";
 
 export component Header inherits Rectangle {
     in property <string>  job-phase;
-    in property <float>   job-percent: -1.0;   // -1 = indeterminate
+    in property <float>   job-percent: -1.0;
     in property <bool>    job-running: false;
     in property <string>  status-text;
     in property <bool>    status-is-error: false;
@@ -10,50 +10,53 @@ export component Header inherits Rectangle {
     callback cancel();
     callback doctor-toggled();
 
-    height: 64px;
+    height: 68px;
     background: Palette.panel;
 
-    // Bottom separator
+    // Bottom separator — gradient shimmer
     Rectangle {
         y: parent.height - 1px;
         height: 1px;
-        background: Palette.border;
+        background: @linear-gradient(90deg,
+            Palette.border, rgba(99, 102, 241, 0.25), Palette.border);
     }
 
     HorizontalLayout {
-        padding-left: 24px;
-        padding-right: 24px;
-        padding-top: 12px;
-        padding-bottom: 12px;
-        spacing: 16px;
+        padding-left: 32px;
+        padding-right: 28px;
+        spacing: 20px;
         alignment: space-between;
 
-        // Left: logo + wordmark
+        // Left: gradient accent mark + wordmark
         HorizontalLayout {
-            spacing: 12px;
+            spacing: 16px;
             alignment: start;
             VerticalLayout {
                 alignment: center;
                 Rectangle {
                     width: 6px;
-                    height: 36px;
+                    height: 40px;
                     border-radius: 3px;
-                    background: @linear-gradient(180deg, Palette.accent 0%, #1a5cdb 100%);
+                    background: @linear-gradient(180deg, #6366f1 0%, #a855f7 100%);
+                    drop-shadow-blur: 14px;
+                    drop-shadow-color: rgba(99, 102, 241, 0.4);
                 }
             }
             VerticalLayout {
                 alignment: center;
-                spacing: 2px;
+                spacing: 3px;
                 Text {
                     text: "ForgeISO";
                     font-size: Sizes.font-xl;
-                    font-weight: 700;
+                    font-weight: 800;
                     color: Palette.text;
+                    letter-spacing: -0.5px;
                 }
                 Text {
-                    text: "ISO Pipeline Wizard";
+                    text: "Unattended ISO Builder";
                     font-size: Sizes.font-xs;
-                    color: Palette.muted;
+                    color: Palette.subtle;
+                    letter-spacing: 1.2px;
                 }
             }
         }
@@ -67,43 +70,44 @@ export component Header inherits Rectangle {
 
                 // Determinate progress bar
                 if job-running && job-percent >= 0.0: Rectangle {
-                    width: 320px;
-                    height: 6px;
-                    border-radius: 3px;
-                    background: Palette.border;
+                    width: 380px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: Palette.elevated;
                     Rectangle {
                         width: parent.width * job-percent;
                         height: parent.height;
                         border-radius: parent.border-radius;
-                        background: @linear-gradient(90deg, Palette.accent, #56a0f5);
+                        background: @linear-gradient(90deg, #6366f1, #818cf8);
+                        drop-shadow-blur: 16px;
+                        drop-shadow-color: rgba(99, 102, 241, 0.5);
                         animate width { duration: 200ms; easing: ease-out; }
                     }
                 }
 
-                // Indeterminate sweep — init triggers animation on creation
+                // Indeterminate sweep
                 if job-running && job-percent < 0.0: Rectangle {
-                    width: 320px;
-                    height: 6px;
-                    border-radius: 3px;
-                    background: Palette.border;
+                    width: 380px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: Palette.elevated;
                     clip: true;
-
                     property <float> sweep: 0.0;
                     init => { sweep = 1.0; }
                     animate sweep { duration: 1600ms; easing: ease-in-out; iteration-count: -1; }
-
                     Rectangle {
-                        x: (parent.width + 100px) * sweep - 100px;
-                        width: 100px;
+                        x: (parent.width + 140px) * sweep - 140px;
+                        width: 140px;
                         height: parent.height;
                         border-radius: parent.border-radius;
-                        background: @linear-gradient(90deg, transparent, Palette.accent, transparent);
+                        background: @linear-gradient(90deg, transparent, #6366f1, transparent);
                     }
                 }
 
                 if status-text != "" && !job-running: Text {
                     text: status-text;
                     font-size: Sizes.font-sm;
+                    font-weight: 600;
                     color: status-is-error ? Palette.red : Palette.green;
                 }
                 if job-running && job-phase != "": Text {
@@ -116,14 +120,14 @@ export component Header inherits Rectangle {
 
         // Right: cancel + doctor
         HorizontalLayout {
-            spacing: 8px;
+            spacing: 10px;
             alignment: end;
 
             // Doctor button
             Rectangle {
-                width: 36px;
-                height: 36px;
-                border-radius: 8px;
+                width: Sizes.btn-sm;
+                height: Sizes.btn-sm;
+                border-radius: Sizes.radius-sm;
                 background: doctor-open ? Palette.accent
                           : doc-ta.has-hover ? Palette.active
                           : Palette.elevated;
@@ -131,11 +135,14 @@ export component Header inherits Rectangle {
                 border-color: doctor-open ? Palette.accent
                             : doc-ta.has-hover ? Palette.border-focus
                             : Palette.border;
-                animate background { duration: 120ms; }
-                animate border-color { duration: 120ms; }
+                drop-shadow-blur: doctor-open ? 20px : 0px;
+                drop-shadow-color: doctor-open ? rgba(99, 102, 241, 0.45) : transparent;
+                animate background { duration: 150ms; }
+                animate border-color { duration: 150ms; }
+                animate drop-shadow-blur { duration: 300ms; }
                 Text {
                     text: "🩺";
-                    font-size: 16px;
+                    font-size: 17px;
                     vertical-alignment: center;
                     horizontal-alignment: center;
                 }
@@ -147,13 +154,13 @@ export component Header inherits Rectangle {
 
             // Cancel button (only when running)
             if job-running: Rectangle {
-                width: 90px;
-                height: 36px;
-                border-radius: 8px;
-                background: cancel-ta.has-hover ? rgba(248, 81, 73, 0.16) : rgba(248, 81, 73, 0.08);
+                width: 110px;
+                height: Sizes.btn-sm;
+                border-radius: Sizes.radius-sm;
+                background: cancel-ta.has-hover ? rgba(244, 63, 94, 0.2) : rgba(244, 63, 94, 0.08);
                 border-width: 1px;
-                border-color: rgba(248, 81, 73, 0.5);
-                animate background { duration: 100ms; }
+                border-color: rgba(244, 63, 94, 0.5);
+                animate background { duration: 120ms; }
                 Text {
                     text: "✕  Cancel";
                     font-size: Sizes.font-sm;

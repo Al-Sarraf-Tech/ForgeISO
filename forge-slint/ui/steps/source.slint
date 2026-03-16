@@ -14,50 +14,45 @@ component DistroCard inherits Rectangle {
     in property <bool>       running: false;
     callback clicked();
 
-    width: 190px;
-    height: 140px;
-    border-radius: Sizes.radius-md;
-    background: selected ? rgba(63, 185, 80, 0.16)
-              : hovered && !running ? rgba(255, 255, 255, 0.03)
-              : Palette.elevated;
+    width: 196px;
+    height: 148px;
+    border-radius: Sizes.radius-lg;
+    background: selected ? rgba(99, 102, 241, 0.10)
+              : hovered && !running ? Palette.surface-hover
+              : Palette.surface;
     border-width: selected ? 2px : 1px;
-    border-color: selected ? Palette.green
-               : hovered && !running ? Palette.border-focus
+    border-color: selected ? rgba(99, 102, 241, 0.65)
+               : hovered && !running ? rgba(99, 102, 241, 0.35)
                : Palette.border;
-    opacity: running ? 0.75 : 1.0;
+    opacity: running ? 0.35 : 1.0;
     clip: true;
-    drop-shadow-blur: selected ? 22px : 0px;
-    drop-shadow-color: selected ? rgba(63, 185, 80, 0.20) : transparent;
-    animate background { duration: 180ms; }
-    animate border-color { duration: 180ms; }
-    animate border-width { duration: 180ms; }
-    animate opacity { duration: 180ms; }
-    animate drop-shadow-blur { duration: 250ms; }
+    drop-shadow-blur: selected ? 28px : hovered && !running ? 14px : 0px;
+    drop-shadow-color: selected ? rgba(99, 102, 241, 0.30)
+                     : hovered && !running ? rgba(99, 102, 241, 0.14)
+                     : transparent;
+    animate background { duration: 200ms; }
+    animate border-color { duration: 200ms; }
+    animate border-width { duration: 200ms; }
+    animate opacity { duration: 200ms; }
+    animate drop-shadow-blur { duration: 300ms; }
+    animate drop-shadow-color { duration: 300ms; }
 
     property <bool> hovered: touch.has-hover;
-
-    // Hover overlay
-    Rectangle {
-        background: hovered && !running && !selected ? rgba(255, 255, 255, 0.03)
-                  : hovered && !running && selected ? rgba(63, 185, 80, 0.05)
-                  : transparent;
-        animate background { duration: 150ms; }
-    }
 
     // Selected accent bar at top
     if selected: Rectangle {
         height: 3px;
-        background: @linear-gradient(90deg, Palette.green, #56d880);
+        background: @linear-gradient(90deg, #6366f1, #818cf8);
     }
 
     VerticalLayout {
         alignment: center;
-        spacing: 8px;
-        padding: 16px;
+        spacing: 10px;
+        padding: 18px;
 
         Text {
             text: card.emoji;
-            font-size: 32px;
+            font-size: 34px;
             horizontal-alignment: center;
         }
         Text {
@@ -76,8 +71,8 @@ component DistroCard inherits Rectangle {
         }
         if selected: Text {
             text: "✓ Selected";
-            font-size: Sizes.font-2xs;
-            color: Palette.green;
+            font-size: Sizes.font-xs;
+            color: Palette.accent;
             font-weight: 700;
             horizontal-alignment: center;
         }
@@ -108,32 +103,37 @@ export component StepSource inherits Rectangle {
 
     ScrollView {
         VerticalLayout {
-            padding: 40px;
+            padding-left: 52px;
+            padding-right: 52px;
+            padding-top: 40px;
+            padding-bottom: 40px;
             spacing: 32px;
             alignment: start;
 
             // ── Title ────────────────────────────────────────────────────
             VerticalLayout {
-                spacing: 6px;
+                spacing: 8px;
                 Text {
                     text: "Build Your ISO";
                     font-size: Sizes.font-2xl;
-                    font-weight: 700;
+                    font-weight: 800;
                     color: Palette.text;
+                    letter-spacing: -0.5px;
                 }
                 Text {
                     text: "Inject unattended install config into any Linux ISO — Ubuntu, Fedora, Arch, Mint and more.";
                     font-size: Sizes.font-md;
                     color: Palette.muted;
+                    wrap: word-wrap;
                 }
             }
 
             // ── Distro grid ─────────────────────────────────────────────
             VerticalLayout {
-                spacing: 12px;
+                spacing: 18px;
                 Text {
                     text: "POPULAR DISTRIBUTIONS";
-                    font-size: Sizes.font-2xs;
+                    font-size: Sizes.font-xs;
                     font-weight: 700;
                     color: Palette.subtle;
                     letter-spacing: 1.5px;
@@ -141,7 +141,7 @@ export component StepSource inherits Rectangle {
 
                 // Row 1
                 HorizontalLayout {
-                    spacing: 12px;
+                    spacing: 14px;
                     alignment: center;
                     for card in presets-row1: DistroCard {
                         card: card;
@@ -151,9 +151,9 @@ export component StepSource inherits Rectangle {
                     }
                 }
 
-                // Row 2 (only rendered if non-empty)
+                // Row 2
                 if presets-row2.length > 0: HorizontalLayout {
-                    spacing: 12px;
+                    spacing: 14px;
                     alignment: center;
                     for card in presets-row2: DistroCard {
                         card: card;
@@ -166,9 +166,11 @@ export component StepSource inherits Rectangle {
 
             // ── Manual path entry ───────────────────────────────────────
             VerticalLayout {
-                spacing: 10px;
+                spacing: 16px;
+
+                // Divider
                 HorizontalLayout {
-                    spacing: 12px;
+                    spacing: 14px;
                     padding-top: 4px;
                     padding-bottom: 4px;
                     VerticalLayout {
@@ -189,20 +191,24 @@ export component StepSource inherits Rectangle {
                 }
 
                 HorizontalLayout {
-                    spacing: 8px;
+                    spacing: 10px;
                     alignment: start;
 
                     // Path input
                     Rectangle {
-                        height: 42px;
-                        border-radius: Sizes.radius-sm;
-                        background: Palette.bg;
-                        border-width: 1px;
+                        height: Sizes.btn-lg;
+                        border-radius: Sizes.radius-md;
+                        background: Palette.input;
+                        border-width: 1.5px;
                         border-color: path-input.has-focus ? Palette.accent : Palette.border;
-                        animate border-color { duration: 150ms; }
+                        drop-shadow-blur: path-input.has-focus ? 14px : 0px;
+                        drop-shadow-color: path-input.has-focus
+                            ? rgba(99, 102, 241, 0.18) : transparent;
+                        animate border-color { duration: 180ms; }
+                        animate drop-shadow-blur { duration: 250ms; }
                         if source-path == "" && !path-input.has-focus: Text {
-                            x: 12px; y: 0;
-                            width: parent.width - 24px;
+                            x: 16px; y: 0;
+                            width: parent.width - 32px;
                             height: parent.height;
                             text: "/path/to/ubuntu.iso  or  https://releases.ubuntu.com/…";
                             font-size: Sizes.font-sm;
@@ -211,9 +217,9 @@ export component StepSource inherits Rectangle {
                             overflow: elide;
                         }
                         path-input := TextInput {
-                            x: 12px;
+                            x: 16px;
                             y: (parent.height - self.preferred-height) / 2;
-                            width: parent.width - 24px;
+                            width: parent.width - 32px;
                             text: source-path;
                             font-size: Sizes.font-sm;
                             color: Palette.text;
@@ -227,19 +233,23 @@ export component StepSource inherits Rectangle {
 
                     // Browse button
                     Rectangle {
-                        width: 90px;
-                        height: 42px;
-                        border-radius: Sizes.radius-sm;
-                        background: browse-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        opacity: running ? 0.5 : 1.0;
-                        animate background { duration: 100ms; }
+                        width: 110px;
+                        height: Sizes.btn-lg;
+                        border-radius: Sizes.radius-md;
+                        background: browse-ta.has-hover && !running
+                            ? rgba(99, 102, 241, 0.18) : rgba(99, 102, 241, 0.08);
+                        border-width: 1.5px;
+                        border-color: browse-ta.has-hover && !running
+                            ? Palette.accent : rgba(99, 102, 241, 0.4);
+                        opacity: running ? 0.4 : 1.0;
+                        animate background { duration: 120ms; }
+                        animate border-color { duration: 120ms; }
                         animate opacity { duration: 150ms; }
                         Text {
                             text: "Browse…";
                             font-size: Sizes.font-sm;
-                            color: Palette.text;
+                            font-weight: 600;
+                            color: Palette.accent;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -252,14 +262,16 @@ export component StepSource inherits Rectangle {
 
                     // Clear button
                     if source-path != "": Rectangle {
-                        width: 42px;
-                        height: 42px;
-                        border-radius: Sizes.radius-sm;
-                        background: clear-ta.has-hover && !running ? rgba(248, 81, 73, 0.12) : Palette.elevated;
+                        width: Sizes.btn-lg;
+                        height: Sizes.btn-lg;
+                        border-radius: Sizes.radius-md;
+                        background: clear-ta.has-hover && !running
+                            ? rgba(239, 68, 68, 0.12) : Palette.elevated;
                         border-width: 1px;
-                        border-color: clear-ta.has-hover && !running ? rgba(248, 81, 73, 0.4) : Palette.border;
-                        animate background { duration: 100ms; }
-                        animate border-color { duration: 100ms; }
+                        border-color: clear-ta.has-hover && !running
+                            ? rgba(239, 68, 68, 0.35) : Palette.border;
+                        animate background { duration: 120ms; }
+                        animate border-color { duration: 120ms; }
                         Text {
                             text: "✕";
                             font-size: 16px;
@@ -279,20 +291,22 @@ export component StepSource inherits Rectangle {
                 if detected-distro != "": HorizontalLayout {
                     alignment: start;
                     Rectangle {
-                        height: 26px;
-                        border-radius: 13px;
-                        background: rgba(63, 185, 80, 0.12);
+                        height: 32px;
+                        border-radius: 16px;
+                        background: rgba(99, 102, 241, 0.10);
                         border-width: 1px;
-                        border-color: rgba(63, 185, 80, 0.3);
+                        border-color: rgba(99, 102, 241, 0.35);
+                        drop-shadow-blur: 10px;
+                        drop-shadow-color: rgba(99, 102, 241, 0.12);
                         HorizontalLayout {
-                            padding-left: 10px;
-                            padding-right: 10px;
+                            padding-left: 16px;
+                            padding-right: 16px;
                             spacing: 4px;
                             alignment: center;
                             Text {
                                 text: "✓ Detected: " + detected-distro;
-                                font-size: Sizes.font-xs;
-                                color: Palette.green;
+                                font-size: Sizes.font-sm;
+                                color: Palette.accent;
                                 font-weight: 600;
                             }
                         }
@@ -304,23 +318,29 @@ export component StepSource inherits Rectangle {
             HorizontalLayout {
                 alignment: start;
                 Rectangle {
-                    width: 300px;
-                    height: 46px;
-                    border-radius: Sizes.radius-sm;
+                    width: 320px;
+                    height: Sizes.btn-lg;
+                    border-radius: Sizes.radius-md;
                     background: can-continue
-                        ? (cont-ta.has-hover ? #3d90ff : Palette.accent)
+                        ? (cont-ta.has-hover
+                            ? @linear-gradient(135deg, #818cf8, #6366f1)
+                            : @linear-gradient(135deg, #6366f1, #4f46e5))
                         : Palette.elevated;
-                    opacity: can-continue ? 1.0 : 0.6;
-                    animate background { duration: 120ms; }
-                    animate opacity  { duration: 180ms; }
+                    opacity: can-continue ? 1.0 : 0.4;
+                    drop-shadow-blur: can-continue ? 22px : 0px;
+                    drop-shadow-color: can-continue
+                        ? rgba(99, 102, 241, 0.3) : transparent;
+                    animate background { duration: 150ms; }
+                    animate opacity  { duration: 200ms; }
+                    animate drop-shadow-blur { duration: 300ms; }
 
                     HorizontalLayout {
                         alignment: center;
                         spacing: 8px;
                         Text {
-                            text: "Continue to Configure Installer →";
+                            text: "Continue to Configure  →";
                             font-size: Sizes.font-sm;
-                            font-weight: 600;
+                            font-weight: 700;
                             color: can-continue ? Palette.on-accent : Palette.subtle;
                         }
                     }

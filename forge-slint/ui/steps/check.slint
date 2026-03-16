@@ -7,15 +7,20 @@ component ResultCard inherits Rectangle {
     in property <string> detail;
     border-radius: Sizes.radius-lg;
     background: !has-result ? Palette.surface
-              : passed ? rgba(63, 185, 80, 0.08)
-              : rgba(248, 81, 73, 0.08);
+              : passed ? rgba(34, 197, 94, 0.05)
+              : rgba(239, 68, 68, 0.05);
     border-width: 1px;
     border-color: !has-result ? Palette.border
-                : passed ? rgba(63, 185, 80, 0.4)
-                : rgba(248, 81, 73, 0.4);
-    animate background { duration: 250ms; }
+                : passed ? rgba(34, 197, 94, 0.3)
+                : rgba(239, 68, 68, 0.3);
+    drop-shadow-blur: has-result ? 14px : 0px;
+    drop-shadow-color: has-result
+        ? (passed ? rgba(34, 197, 94, 0.1) : rgba(239, 68, 68, 0.1))
+        : transparent;
+    animate background { duration: 300ms; }
+    animate drop-shadow-blur { duration: 300ms; }
     VerticalLayout {
-        padding: 16px;
+        padding: 18px;
         spacing: 6px;
         HorizontalLayout {
             spacing: 8px;
@@ -80,8 +85,8 @@ export component StepCheck inherits Rectangle {
     background: Palette.bg;
 
     VerticalLayout {
-        padding: 40px;
-        spacing: 28px;
+        padding: 44px;
+        spacing: 24px;
         alignment: start;
 
         // ── Title ─────────────────────────────────────────────────────────
@@ -89,12 +94,13 @@ export component StepCheck inherits Rectangle {
             spacing: 12px;
             alignment: space-between;
             VerticalLayout {
-                spacing: 4px;
+                spacing: 6px;
                 Text {
                     text: "Optional Checks";
                     font-size: Sizes.font-2xl;
-                    font-weight: 700;
+                    font-weight: 800;
                     color: Palette.text;
+                    letter-spacing: -0.5px;
                 }
                 Text {
                     text: "Your ISO is already ready to use. Run checksum or ISO-9660 checks only if you want extra validation.";
@@ -107,17 +113,20 @@ export component StepCheck inherits Rectangle {
 
                 Rectangle {
                     width: 148px;
-                    height: 32px;
-                    border-radius: 16px;
-                    background: chk-back-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                    border-width: 1px;
-                    border-color: Palette.border;
-                    animate background { duration: 100ms; }
+                    height: Sizes.btn-sm;
+                    border-radius: Sizes.radius-sm;
+                    background: chk-back-ta.has-hover && !running
+                        ? rgba(99, 102, 241, 0.18) : rgba(99, 102, 241, 0.08);
+                    border-width: 1.5px;
+                    border-color: chk-back-ta.has-hover && !running
+                        ? Palette.accent : rgba(99, 102, 241, 0.4);
+                    animate background { duration: 120ms; }
+                    animate border-color { duration: 120ms; }
                     Text {
                         text: "← Back to Build";
-                        font-size: Sizes.font-sm;
+                        font-size: Sizes.font-xs;
                         font-weight: 600;
-                        color: Palette.text;
+                        color: Palette.accent;
                         vertical-alignment: center;
                         horizontal-alignment: center;
                     }
@@ -129,15 +138,15 @@ export component StepCheck inherits Rectangle {
                 }
 
                 Rectangle {
-                    width: 82px;
-                    height: 24px;
-                    border-radius: 12px;
-                    background: rgba(139, 148, 158, 0.15);
+                    width: 78px;
+                    height: 26px;
+                    border-radius: 13px;
+                    background: rgba(100, 116, 139, 0.1);
                     border-width: 1px;
                     border-color: Palette.border;
                     Text {
                         text: "Optional";
-                        font-size: Sizes.font-xs;
+                        font-size: Sizes.font-2xs;
                         font-weight: 600;
                         color: Palette.muted;
                         letter-spacing: 0.5px;
@@ -151,9 +160,11 @@ export component StepCheck inherits Rectangle {
         // ── Build success banner ──────────────────────────────────────────
         if artifact-path != "": Rectangle {
             border-radius: Sizes.radius-lg;
-            background: rgba(63, 185, 80, 0.06);
+            background: rgba(34, 197, 94, 0.04);
             border-width: 1px;
-            border-color: rgba(63, 185, 80, 0.35);
+            border-color: rgba(34, 197, 94, 0.25);
+            drop-shadow-blur: 16px;
+            drop-shadow-color: rgba(34, 197, 94, 0.06);
 
             VerticalLayout {
                 padding: 20px;
@@ -164,7 +175,7 @@ export component StepCheck inherits Rectangle {
                     alignment: start;
                     Text {
                         text: "✓";
-                        font-size: 22px;
+                        font-size: 20px;
                         color: Palette.green;
                         vertical-alignment: center;
                     }
@@ -195,13 +206,16 @@ export component StepCheck inherits Rectangle {
                     spacing: 8px;
                     alignment: start;
 
-                    // Start New Build (primary)
                     Rectangle {
                         width: 160px;
-                        height: 36px;
+                        height: Sizes.btn-md;
                         border-radius: Sizes.radius-sm;
-                        background: snb-ta.has-hover && !running ? #3d90ff : Palette.accent;
-                        animate background { duration: 100ms; }
+                        background: snb-ta.has-hover && !running
+                            ? @linear-gradient(135deg, #818cf8, #6366f1)
+                            : @linear-gradient(135deg, #6366f1, #4f46e5);
+                        drop-shadow-blur: 18px;
+                        drop-shadow-color: rgba(99, 102, 241, 0.35);
+                        animate background { duration: 120ms; }
                         Text {
                             text: "＋ Start New Build";
                             font-size: Sizes.font-sm;
@@ -217,19 +231,21 @@ export component StepCheck inherits Rectangle {
                         }
                     }
 
-                    // Copy SHA-256 (secondary)
                     Rectangle {
                         width: 140px;
-                        height: 36px;
+                        height: Sizes.btn-md;
                         border-radius: Sizes.radius-sm;
-                        background: csha-ta.has-hover ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        animate background { duration: 100ms; }
+                        background: csha-ta.has-hover
+                            ? rgba(99, 102, 241, 0.18) : rgba(99, 102, 241, 0.08);
+                        border-width: 1.5px;
+                        border-color: csha-ta.has-hover ? Palette.accent : rgba(99, 102, 241, 0.4);
+                        animate background { duration: 120ms; }
+                        animate border-color { duration: 120ms; }
                         Text {
                             text: "📋 Copy SHA-256";
                             font-size: Sizes.font-xs;
-                            color: Palette.text;
+                            font-weight: 600;
+                            color: Palette.accent;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -239,19 +255,21 @@ export component StepCheck inherits Rectangle {
                         }
                     }
 
-                    // Open Folder (secondary)
                     Rectangle {
-                        width: 120px;
-                        height: 36px;
+                        width: 130px;
+                        height: Sizes.btn-md;
                         border-radius: Sizes.radius-sm;
-                        background: ofld2-ta.has-hover ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        animate background { duration: 100ms; }
+                        background: ofld2-ta.has-hover
+                            ? rgba(99, 102, 241, 0.18) : rgba(99, 102, 241, 0.08);
+                        border-width: 1.5px;
+                        border-color: ofld2-ta.has-hover ? Palette.accent : rgba(99, 102, 241, 0.4);
+                        animate background { duration: 120ms; }
+                        animate border-color { duration: 120ms; }
                         Text {
                             text: "📂 Open Folder";
                             font-size: Sizes.font-xs;
-                            color: Palette.text;
+                            font-weight: 600;
+                            color: Palette.accent;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -270,229 +288,265 @@ export component StepCheck inherits Rectangle {
             background: Palette.surface;
             border-width: 1px;
             border-color: Palette.border;
+            clip: true;
 
             VerticalLayout {
-                padding: 20px;
-                spacing: 14px;
-
-                HorizontalLayout {
-                    spacing: 8px;
-                    alignment: start;
-                    Text {
-                        text: "CHECKSUM VERIFICATION";
-                        font-size: Sizes.font-2xs;
-                        font-weight: 700;
-                        color: Palette.subtle;
-                        letter-spacing: 1.5px;
-                    }
-                    Rectangle {
-                        width: 70px;
-                        height: 18px;
-                        border-radius: 9px;
-                        background: rgba(139, 148, 158, 0.12);
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        Text {
-                            text: "Optional";
-                            font-size: Sizes.font-2xs;
-                            color: Palette.muted;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                    }
+                // Gradient accent line
+                Rectangle {
+                    height: 2px;
+                    background: @linear-gradient(90deg,
+                        rgba(99, 102, 241, 0.6), rgba(99, 102, 241, 0.1), transparent);
                 }
 
-                HorizontalLayout {
-                    spacing: 8px;
-                    Rectangle {
-                        height: 38px;
-                        border-radius: Sizes.radius-sm;
-                        background: Palette.bg;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        if verify-source == "" && !vsrc-input.has-focus: Text {
-                            x: 10px; y: 0;
-                            width: parent.width - 20px;
-                            height: parent.height;
-                            text: "/path/to/output.iso  or  https://…";
-                            font-size: Sizes.font-sm;
-                            color: Palette.subtle;
-                            vertical-alignment: center;
-                            overflow: elide;
-                        }
-                        vsrc-input := TextInput {
-                            x: 10px;
-                            y: (parent.height - self.preferred-height) / 2;
-                            width: parent.width - 20px;
-                            text: verify-source;
-                            font-size: Sizes.font-sm;
-                            color: Palette.text;
-                            selection-background-color: Palette.accent;
-                            selection-foreground-color: Palette.on-accent;
-                            single-line: true;
-                            enabled: !running;
-                            edited => { verify-source = self.text; }
-                        }
-                    }
-                    Rectangle {
-                        width: 90px;
-                        height: 38px;
-                        border-radius: Sizes.radius-sm;
-                        background: vbrw-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        animate background { duration: 100ms; }
-                        Text {
-                            text: "Browse…";
-                            font-size: Sizes.font-sm;
-                            color: Palette.text;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        vbrw-ta := TouchArea {
-                            enabled: !running;
-                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                            clicked => { browse-verify-source(); }
-                        }
-                    }
-                }
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 16px;
 
-                HorizontalLayout {
-                    spacing: 8px;
-                    Rectangle {
-                        height: 38px;
-                        border-radius: Sizes.radius-sm;
-                        background: Palette.bg;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        if sums-url == "" && !sums-input.has-focus: Text {
-                            x: 10px; y: 0;
-                            width: parent.width - 20px;
-                            height: parent.height;
-                            text: "SHA256SUMS URL or file path (optional)";
-                            font-size: Sizes.font-sm;
-                            color: Palette.subtle;
-                            vertical-alignment: center;
-                            overflow: elide;
-                        }
-                        sums-input := TextInput {
-                            x: 10px;
-                            y: (parent.height - self.preferred-height) / 2;
-                            width: parent.width - 20px;
-                            text: sums-url;
-                            font-size: Sizes.font-sm;
-                            color: Palette.text;
-                            selection-background-color: Palette.accent;
-                            selection-foreground-color: Palette.on-accent;
-                            single-line: true;
-                            enabled: !running;
-                            edited => { sums-url = self.text; }
-                        }
-                    }
-                }
-
-                HorizontalLayout {
-                    spacing: 12px;
-                    alignment: start;
-                    Rectangle {
-                        property <bool> ck-active: verify-source != "" && !running;
-                        width: 170px;
-                        height: 38px;
-                        border-radius: Sizes.radius-sm;
-                        background: ck-active
-                            ? (cfi-ta.has-hover ? #3d90ff : Palette.accent)
-                            : Palette.elevated;
-                        opacity: ck-active ? 1.0 : 0.6;
-                        animate background { duration: 120ms; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
                         Text {
-                            text: "🔍 Check File Integrity";
-                            font-size: Sizes.font-sm;
-                            font-weight: 600;
-                            color: ck-active ? Palette.on-accent : Palette.subtle;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        cfi-ta := TouchArea {
-                            enabled: ck-active;
-                            mouse-cursor: ck-active ? MouseCursor.pointer : MouseCursor.default;
-                            clicked => { run-verify(); }
-                        }
-                    }
-                    Rectangle {
-                        property <bool> iso-active: verify-source != "" && !running;
-                        width: 170px;
-                        height: 38px;
-                        border-radius: Sizes.radius-sm;
-                        background: iso-ta.has-hover && iso-active ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: iso-active ? Palette.accent : Palette.border;
-                        opacity: iso-active ? 1.0 : 0.6;
-                        animate background { duration: 100ms; }
-                        Text {
-                            text: "📋 ISO-9660 Layout";
-                            font-size: Sizes.font-sm;
-                            color: iso-active ? Palette.text : Palette.subtle;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        iso-ta := TouchArea {
-                            enabled: iso-active;
-                            mouse-cursor: iso-active ? MouseCursor.pointer : MouseCursor.default;
-                            clicked => { run-iso9660(); }
-                        }
-                    }
-                }
-
-                // Results
-                if !verify-done && !iso9660-done: Rectangle {
-                    border-radius: Sizes.radius-lg;
-                    background: Palette.elevated;
-                    border-width: 1px;
-                    border-color: Palette.border;
-                    VerticalLayout {
-                        padding: 16px;
-                        spacing: 6px;
-                        Text {
-                            text: "Build complete — checks skipped for now";
-                            font-size: Sizes.font-md;
+                            text: "CHECKSUM VERIFICATION";
+                            font-size: Sizes.font-xs;
                             font-weight: 700;
-                            color: Palette.text;
-                        }
-                        Text {
-                            text: "You can stop here, ship the ISO, or come back later to run checksum and ISO layout checks.";
-                            font-size: Sizes.font-sm;
                             color: Palette.muted;
-                            wrap: word-wrap;
+                            letter-spacing: 1.2px;
+                            vertical-alignment: center;
+                        }
+                        Rectangle {
+                            width: 68px;
+                            height: 20px;
+                            border-radius: 10px;
+                            background: rgba(100, 116, 139, 0.08);
+                            border-width: 1px;
+                            border-color: Palette.border;
+                            Text {
+                                text: "Optional";
+                                font-size: Sizes.font-2xs;
+                                color: Palette.muted;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                            }
                         }
                     }
-                }
-                if verify-done: ResultCard {
-                    has-result: true;
-                    passed: verify-matched;
-                    title: verify-matched ? "Integrity verified" : "Checksum mismatch";
-                    detail: verify-hash-display;
-                }
-                if iso9660-done: ResultCard {
-                    has-result: true;
-                    passed: iso9660-compliant;
-                    title: iso9660-compliant ? "ISO-9660 compliant" : "ISO-9660 issues found";
-                    detail: (iso9660-boot-bios ? "BIOS boot ✓  " : "")
-                          + (iso9660-boot-uefi ? "UEFI boot ✓  " : "")
-                          + (iso9660-volume-id != "" ? "Label: " + iso9660-volume-id : "");
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Rectangle {
+                            height: Sizes.btn-lg;
+                            border-radius: Sizes.radius-md;
+                            background: Palette.input;
+                            border-width: 1.5px;
+                            border-color: vsrc-input.has-focus ? Palette.accent : Palette.border;
+                            drop-shadow-blur: vsrc-input.has-focus ? 14px : 0px;
+                            drop-shadow-color: vsrc-input.has-focus
+                                ? rgba(99, 102, 241, 0.15) : transparent;
+                            animate border-color { duration: 180ms; }
+                            animate drop-shadow-blur { duration: 250ms; }
+                            if verify-source == "" && !vsrc-input.has-focus: Text {
+                                x: 14px; y: 0;
+                                width: parent.width - 28px;
+                                height: parent.height;
+                                text: "/path/to/output.iso  or  https://…";
+                                font-size: Sizes.font-sm;
+                                color: Palette.subtle;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                            vsrc-input := TextInput {
+                                x: 14px;
+                                y: (parent.height - self.preferred-height) / 2;
+                                width: parent.width - 28px;
+                                text: verify-source;
+                                font-size: Sizes.font-sm;
+                                color: Palette.text;
+                                selection-background-color: Palette.accent;
+                                selection-foreground-color: Palette.on-accent;
+                                single-line: true;
+                                enabled: !running;
+                                edited => { verify-source = self.text; }
+                            }
+                        }
+                        Rectangle {
+                            width: 100px;
+                            height: Sizes.btn-lg;
+                            border-radius: Sizes.radius-md;
+                            background: vbrw-ta.has-hover && !running
+                                ? rgba(99, 102, 241, 0.18) : rgba(99, 102, 241, 0.08);
+                            border-width: 1.5px;
+                            border-color: vbrw-ta.has-hover && !running
+                                ? Palette.accent : rgba(99, 102, 241, 0.4);
+                            animate background { duration: 120ms; }
+                            animate border-color { duration: 120ms; }
+                            Text {
+                                text: "Browse…";
+                                font-size: Sizes.font-sm;
+                                font-weight: 600;
+                                color: Palette.accent;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                            }
+                            vbrw-ta := TouchArea {
+                                enabled: !running;
+                                mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                                clicked => { browse-verify-source(); }
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Rectangle {
+                            height: Sizes.btn-lg;
+                            border-radius: Sizes.radius-md;
+                            background: Palette.input;
+                            border-width: 1.5px;
+                            border-color: sums-input.has-focus ? Palette.accent : Palette.border;
+                            drop-shadow-blur: sums-input.has-focus ? 14px : 0px;
+                            drop-shadow-color: sums-input.has-focus
+                                ? rgba(99, 102, 241, 0.15) : transparent;
+                            animate border-color { duration: 180ms; }
+                            animate drop-shadow-blur { duration: 250ms; }
+                            if sums-url == "" && !sums-input.has-focus: Text {
+                                x: 14px; y: 0;
+                                width: parent.width - 28px;
+                                height: parent.height;
+                                text: "SHA256SUMS URL or file path (optional)";
+                                font-size: Sizes.font-sm;
+                                color: Palette.subtle;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                            sums-input := TextInput {
+                                x: 14px;
+                                y: (parent.height - self.preferred-height) / 2;
+                                width: parent.width - 28px;
+                                text: sums-url;
+                                font-size: Sizes.font-sm;
+                                color: Palette.text;
+                                selection-background-color: Palette.accent;
+                                selection-foreground-color: Palette.on-accent;
+                                single-line: true;
+                                enabled: !running;
+                                edited => { sums-url = self.text; }
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        alignment: start;
+                        Rectangle {
+                            property <bool> ck-active: verify-source != "" && !running;
+                            width: 176px;
+                            height: Sizes.btn-md;
+                            border-radius: Sizes.radius-sm;
+                            background: ck-active
+                                ? (cfi-ta.has-hover
+                                    ? @linear-gradient(135deg, #818cf8, #6366f1)
+                                    : @linear-gradient(135deg, #6366f1, #4f46e5))
+                                : Palette.elevated;
+                            opacity: ck-active ? 1.0 : 0.4;
+                            drop-shadow-blur: ck-active ? 14px : 0px;
+                            drop-shadow-color: ck-active
+                                ? rgba(99, 102, 241, 0.2) : transparent;
+                            animate background { duration: 150ms; }
+                            animate drop-shadow-blur { duration: 250ms; }
+                            Text {
+                                text: "🔍 Check Integrity";
+                                font-size: Sizes.font-sm;
+                                font-weight: 600;
+                                color: ck-active ? Palette.on-accent : Palette.subtle;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                            }
+                            cfi-ta := TouchArea {
+                                enabled: ck-active;
+                                mouse-cursor: ck-active ? MouseCursor.pointer : MouseCursor.default;
+                                clicked => { run-verify(); }
+                            }
+                        }
+                        Rectangle {
+                            property <bool> iso-active: verify-source != "" && !running;
+                            width: 168px;
+                            height: Sizes.btn-md;
+                            border-radius: Sizes.radius-sm;
+                            background: iso-ta.has-hover && iso-active
+                                ? rgba(99, 102, 241, 0.18) : rgba(99, 102, 241, 0.08);
+                            border-width: 1.5px;
+                            border-color: iso-active
+                                ? (iso-ta.has-hover ? Palette.accent : rgba(99, 102, 241, 0.4))
+                                : Palette.border;
+                            opacity: iso-active ? 1.0 : 0.4;
+                            animate background { duration: 120ms; }
+                            animate border-color { duration: 120ms; }
+                            Text {
+                                text: "📋 ISO-9660 Layout";
+                                font-size: Sizes.font-sm;
+                                font-weight: 600;
+                                color: iso-active ? Palette.accent : Palette.subtle;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                            }
+                            iso-ta := TouchArea {
+                                enabled: iso-active;
+                                mouse-cursor: iso-active ? MouseCursor.pointer : MouseCursor.default;
+                                clicked => { run-iso9660(); }
+                            }
+                        }
+                    }
+
+                    // Results
+                    if !verify-done && !iso9660-done: Rectangle {
+                        border-radius: Sizes.radius-md;
+                        background: Palette.elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        VerticalLayout {
+                            padding: 16px;
+                            spacing: 4px;
+                            Text {
+                                text: "No checks run yet";
+                                font-size: Sizes.font-md;
+                                font-weight: 700;
+                                color: Palette.text;
+                            }
+                            Text {
+                                text: "You can skip this entirely, or run checksum and ISO layout checks above.";
+                                font-size: Sizes.font-sm;
+                                color: Palette.muted;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                    if verify-done: ResultCard {
+                        has-result: true;
+                        passed: verify-matched;
+                        title: verify-matched ? "Integrity verified" : "Checksum mismatch";
+                        detail: verify-hash-display;
+                    }
+                    if iso9660-done: ResultCard {
+                        has-result: true;
+                        passed: iso9660-compliant;
+                        title: iso9660-compliant ? "ISO-9660 compliant" : "ISO-9660 issues found";
+                        detail: (iso9660-boot-bios ? "BIOS boot ✓  " : "")
+                              + (iso9660-boot-uefi ? "UEFI boot ✓  " : "")
+                              + (iso9660-volume-id != "" ? "Label: " + iso9660-volume-id : "");
+                    }
                 }
             }
         }
 
         // ── Danger zone (reset) ───────────────────────────────────────────
         Rectangle {
-            width: 150px;
-            height: 36px;
+            width: 156px;
+            height: Sizes.btn-sm;
             border-radius: Sizes.radius-sm;
-            background: rst-ta.has-hover && !running ? rgba(248, 81, 73, 0.10) : Palette.elevated;
-            animate background { duration: 100ms; }
-            animate border-color { duration: 100ms; }
+            background: rst-ta.has-hover && !running ? rgba(239, 68, 68, 0.08) : Palette.elevated;
+            animate background { duration: 120ms; }
             border-width: 1px;
-            border-color: Palette.border;
+            border-color: rst-ta.has-hover && !running ? rgba(239, 68, 68, 0.25) : Palette.border;
+            animate border-color { duration: 120ms; }
             Text {
                 text: "🗑 Reset All Forms";
                 font-size: Sizes.font-xs;

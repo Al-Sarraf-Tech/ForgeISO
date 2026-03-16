@@ -10,36 +10,44 @@ component StepBadge inherits Rectangle {
     in property <bool>   locked: false;
     callback clicked();
 
-    width: 174px;
-    height: 64px;
-    border-radius: Sizes.radius-lg;
-    background: current ? rgba(47, 129, 247, 0.08) : transparent;
+    width: 200px;
+    height: 66px;
+    border-radius: Sizes.radius-md;
+    background: current ? rgba(99, 102, 241, 0.08) : transparent;
     border-width: current ? 1px : 0px;
-    border-color: current ? rgba(47, 129, 247, 0.25) : transparent;
+    border-color: current ? rgba(99, 102, 241, 0.25) : transparent;
+    animate background { duration: 200ms; }
 
     HorizontalLayout {
-        spacing: 10px;
+        spacing: 14px;
         alignment: start;
-        padding-left: 12px;
-        padding-right: 12px;
+        padding-left: 16px;
+        padding-right: 16px;
 
         // Badge circle
         Rectangle {
-            width: 30px;
-            height: 30px;
-            border-radius: 15px;
-            background: done ? Palette.green : current ? Palette.accent : Palette.surface;
-            border-width: 1.5px;
-            border-color: done ? Palette.green : current ? Palette.accent : Palette.border;
+            width: 36px;
+            height: 36px;
+            border-radius: 18px;
+            background: done ? @linear-gradient(135deg, #6366f1, #818cf8)
+                      : current ? @linear-gradient(135deg, #6366f1, #4f46e5)
+                      : Palette.surface;
+            border-width: done || current ? 0px : 2px;
+            border-color: Palette.border;
+            drop-shadow-blur: current ? 18px : done ? 12px : 0px;
+            drop-shadow-color: current ? rgba(99, 102, 241, 0.4)
+                             : done ? rgba(99, 102, 241, 0.3)
+                             : transparent;
             y: (parent.height - self.height) / 2;
-            animate background { duration: 200ms; }
-            animate border-color { duration: 200ms; }
+            animate background { duration: 250ms; }
+            animate border-width { duration: 250ms; }
+            animate drop-shadow-blur { duration: 350ms; }
 
             Text {
                 text: done ? "✓" : locked ? "🔒" : num;
-                font-size: locked ? Sizes.font-2xs : Sizes.font-sm;
+                font-size: locked ? Sizes.font-xs : Sizes.font-sm;
                 font-weight: 700;
-                color: done ? #0d1117 : current ? #ffffff : Palette.muted;
+                color: done || current ? #ffffff : Palette.muted;
                 vertical-alignment: center;
                 horizontal-alignment: center;
             }
@@ -47,12 +55,15 @@ component StepBadge inherits Rectangle {
 
         VerticalLayout {
             alignment: center;
-            spacing: 2px;
+            spacing: 3px;
             Text {
                 text: label;
                 font-size: Sizes.font-sm;
-                font-weight: current ? 700 : 400;
-                color: done ? Palette.green : current ? Palette.text : clickable ? Palette.text-secondary : Palette.muted;
+                font-weight: current ? 700 : 500;
+                color: done ? Palette.accent
+                     : current ? Palette.text
+                     : clickable ? Palette.text-secondary
+                     : Palette.muted;
                 animate color { duration: 200ms; }
             }
             Text {
@@ -78,7 +89,7 @@ export component StepBar inherits Rectangle {
     in property <bool> job-running: false;
     callback step-clicked(int);
 
-    height: 84px;
+    height: 82px;
     background: Palette.panel;
 
     // Bottom separator
@@ -95,21 +106,22 @@ export component StepBar inherits Rectangle {
         padding-bottom: 8px;
 
         StepBadge {
-            num: "1"; label: "Choose ISO"; sublabel: "Pick your source image";
+            num: "1"; label: "Choose ISO"; sublabel: "Pick your source";
             done: step1-done; current: current-step == 1;
             clickable: !job-running && current-step != 1;
             locked: job-running && current-step != 1;
             clicked => { step-clicked(1); }
         }
 
-        // Connector 1→2
         Rectangle {
-            width: 72px;
+            width: 52px;
             height: 2px;
             y: (parent.height - self.height) / 2;
             border-radius: 1px;
-            background: step1-done ? Palette.accent : Palette.border;
-            animate background { duration: 300ms; }
+            background: step1-done
+                ? Palette.accent
+                : Palette.border;
+            animate background { duration: 400ms; }
         }
 
         StepBadge {
@@ -120,14 +132,15 @@ export component StepBar inherits Rectangle {
             clicked => { step-clicked(2); }
         }
 
-        // Connector 2→3
         Rectangle {
-            width: 72px;
+            width: 52px;
             height: 2px;
             y: (parent.height - self.height) / 2;
             border-radius: 1px;
-            background: step2-done ? Palette.accent : Palette.border;
-            animate background { duration: 300ms; }
+            background: step2-done
+                ? Palette.accent
+                : Palette.border;
+            animate background { duration: 400ms; }
         }
 
         StepBadge {
@@ -138,18 +151,19 @@ export component StepBar inherits Rectangle {
             clicked => { step-clicked(3); }
         }
 
-        // Connector 3→4
         Rectangle {
-            width: 72px;
+            width: 52px;
             height: 2px;
             y: (parent.height - self.height) / 2;
             border-radius: 1px;
-            background: step3-done ? Palette.accent : Palette.border;
-            animate background { duration: 300ms; }
+            background: step3-done
+                ? Palette.accent
+                : Palette.border;
+            animate background { duration: 400ms; }
         }
 
         StepBadge {
-            num: "4"; label: "Optional Checks"; sublabel: "Extra validation";
+            num: "4"; label: "Verify"; sublabel: "Optional checks";
             done: step4-done; current: current-step == 4;
             clickable: !job-running && step3-done && current-step != 4;
             locked: job-running && current-step != 4;

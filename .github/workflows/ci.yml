@@ -20,7 +20,7 @@ concurrency:
 jobs:
   lint:
     name: Lint
-    runs-on: [self-hosted, gentoo]
+    runs-on: [self-hosted, unified-all]
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -40,7 +40,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
   test:
     name: Test
-    runs-on: [self-hosted, gentoo]
+    runs-on: [self-hosted, unified-all]
     needs: lint
     timeout-minutes: 30
     steps:
@@ -78,7 +78,7 @@ jobs:
         run: cargo test --workspace
   security:
     name: Security
-    runs-on: [self-hosted, gentoo]
+    runs-on: [self-hosted, unified-all]
     needs: lint
     timeout-minutes: 30
     steps:
@@ -120,7 +120,7 @@ jobs:
         run: syft dir:. -o spdx-json=sbom-spdx.json -o cyclonedx-json=sbom-cyclonedx.json
   sbom:
     name: SBOM
-    runs-on: [self-hosted, gentoo]
+    runs-on: [self-hosted, unified-all]
     needs: test
     if: github.ref == 'refs/heads/main'
     timeout-minutes: 15
@@ -139,7 +139,7 @@ jobs:
           retention-days: 90
   integration:
     name: Integration
-    runs-on: [self-hosted, gentoo]
+    runs-on: [self-hosted, unified-all]
     needs: test
     timeout-minutes: 60
     steps:
@@ -175,7 +175,7 @@ jobs:
         run: lint
   release:
     name: Release
-    runs-on: [self-hosted, gentoo]
+    runs-on: [self-hosted, unified-all]
     needs:
       - test
       - security

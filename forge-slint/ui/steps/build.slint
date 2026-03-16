@@ -6,17 +6,17 @@ component SummaryRow inherits Rectangle {
     in property <string> value;
     in property <bool>   set: true;
 
-    height: value-text.preferred-height + 24px;
+    height: value-text.preferred-height + 20px;
     background: transparent;
 
     VerticalLayout {
-        spacing: 4px;
+        spacing: 3px;
         Text {
             text: label;
             font-size: Sizes.font-2xs;
             font-weight: 700;
             color: Palette.subtle;
-            letter-spacing: 1.2px;
+            letter-spacing: 1px;
         }
         value-text := Text {
             text: set ? value : "— not set";
@@ -35,8 +35,15 @@ component SummaryCard inherits Rectangle {
     background: Palette.surface;
     border-width: 1px;
     border-color: Palette.border;
+    clip: true;
 
     VerticalLayout {
+        // Gradient accent line at top
+        Rectangle {
+            height: 2px;
+            background: @linear-gradient(90deg,
+                rgba(99, 102, 241, 0.6), rgba(99, 102, 241, 0.1), transparent);
+        }
         HorizontalLayout {
             height: 40px;
             padding-left: 20px;
@@ -44,14 +51,14 @@ component SummaryCard inherits Rectangle {
             alignment: start;
             Text {
                 text: title;
-                font-size: Sizes.font-2xs;
+                font-size: Sizes.font-xs;
                 font-weight: 700;
-                color: Palette.subtle;
-                letter-spacing: 1.4px;
+                color: Palette.muted;
+                letter-spacing: 1.2px;
                 vertical-alignment: center;
             }
         }
-        Rectangle { height: 1px; background: Palette.border; opacity: 0.5; }
+        Rectangle { height: 1px; background: Palette.border; opacity: 0.3; }
         @children
     }
 }
@@ -114,19 +121,20 @@ export component StepBuild inherits Rectangle {
 
     ScrollView {
         VerticalLayout {
-            padding: 40px;
+            padding: 44px;
             spacing: 20px;
             alignment: start;
 
             HorizontalLayout {
                 alignment: space-between;
                 VerticalLayout {
-                    spacing: 4px;
+                    spacing: 6px;
                     Text {
                         text: artifact-path == "" ? "Review & Build" : "ISO Ready";
                         font-size: Sizes.font-2xl;
-                        font-weight: 700;
+                        font-weight: 800;
                         color: Palette.text;
+                        letter-spacing: -0.5px;
                     }
                     Text {
                         text: artifact-path == ""
@@ -141,16 +149,20 @@ export component StepBuild inherits Rectangle {
                     alignment: end;
                     Rectangle {
                         width: 120px;
-                        height: 34px;
+                        height: Sizes.btn-sm;
                         border-radius: Sizes.radius-sm;
-                        background: bts-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        animate background { duration: 100ms; }
+                        background: bts-ta.has-hover && !running
+                            ? rgba(99, 102, 241, 0.18) : rgba(99, 102, 241, 0.08);
+                        border-width: 1.5px;
+                        border-color: bts-ta.has-hover && !running
+                            ? Palette.accent : rgba(99, 102, 241, 0.4);
+                        animate background { duration: 120ms; }
+                        animate border-color { duration: 120ms; }
                         Text {
                             text: "← Choose ISO";
                             font-size: Sizes.font-xs;
-                            color: Palette.text;
+                            font-weight: 600;
+                            color: Palette.accent;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -162,16 +174,20 @@ export component StepBuild inherits Rectangle {
                     }
                     Rectangle {
                         width: 130px;
-                        height: 34px;
+                        height: Sizes.btn-sm;
                         border-radius: Sizes.radius-sm;
-                        background: bld-back-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        animate background { duration: 100ms; }
+                        background: bld-back-ta.has-hover && !running
+                            ? rgba(99, 102, 241, 0.18) : rgba(99, 102, 241, 0.08);
+                        border-width: 1.5px;
+                        border-color: bld-back-ta.has-hover && !running
+                            ? Palette.accent : rgba(99, 102, 241, 0.4);
+                        animate background { duration: 120ms; }
+                        animate border-color { duration: 120ms; }
                         Text {
                             text: "← Edit Settings";
                             font-size: Sizes.font-xs;
-                            color: Palette.text;
+                            font-weight: 600;
+                            color: Palette.accent;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -185,20 +201,20 @@ export component StepBuild inherits Rectangle {
             }
 
             if artifact-path == "": Rectangle {
-                border-radius: Sizes.radius-sm;
-                background: rgba(47, 129, 247, 0.08);
+                border-radius: Sizes.radius-md;
+                background: rgba(99, 102, 241, 0.05);
                 border-width: 1px;
-                border-color: rgba(47, 129, 247, 0.30);
+                border-color: rgba(99, 102, 241, 0.2);
 
                 VerticalLayout {
                     padding: 16px;
-                    spacing: 6px;
+                    spacing: 4px;
                     Text {
                         text: "CONFIRMATION STAGE";
                         font-size: Sizes.font-2xs;
                         font-weight: 700;
                         color: Palette.accent;
-                        letter-spacing: 1.4px;
+                        letter-spacing: 1.2px;
                     }
                     Text {
                         text: "Use the back buttons if anything looks wrong. Build starts only when you click Start Build below.";
@@ -210,10 +226,10 @@ export component StepBuild inherits Rectangle {
             }
 
             if artifact-path == "": SummaryCard {
-                title: "Source & Output";
+                title: "SOURCE & OUTPUT";
                 VerticalLayout {
                     padding: 20px;
-                    spacing: 10px;
+                    spacing: 8px;
                     SummaryRow { label: "Installer format"; value: distro-display; }
                     SummaryRow { label: "Source ISO"; value: source; }
                     if expected-sha256 != "": SummaryRow { label: "Expected source SHA-256"; value: expected-sha256; }
@@ -224,10 +240,10 @@ export component StepBuild inherits Rectangle {
             }
 
             if artifact-path == "": SummaryCard {
-                title: "Identity & Access";
+                title: "IDENTITY & ACCESS";
                 VerticalLayout {
                     padding: 20px;
-                    spacing: 10px;
+                    spacing: 8px;
                     SummaryRow { label: "Hostname"; value: hostname; set: hostname != ""; }
                     SummaryRow { label: "Username"; value: username; set: username != ""; }
                     if realname != "": SummaryRow { label: "Full name"; value: realname; }
@@ -254,10 +270,10 @@ export component StepBuild inherits Rectangle {
             }
 
             if artifact-path == "": SummaryCard {
-                title: "System, Network & Security";
+                title: "SYSTEM, NETWORK & SECURITY";
                 VerticalLayout {
                     padding: 20px;
-                    spacing: 10px;
+                    spacing: 8px;
                     if timezone != "": SummaryRow { label: "Timezone"; value: timezone; }
                     if locale != "": SummaryRow { label: "Locale"; value: locale; }
                     if keyboard-layout != "": SummaryRow { label: "Keyboard layout"; value: keyboard-layout; }
@@ -282,10 +298,10 @@ export component StepBuild inherits Rectangle {
             }
 
             if artifact-path == "" && (packages != "" || extra-repos != "" || enable-services != "" || disable-services != "" || docker-on || podman-on || mounts != ""): SummaryCard {
-                title: "Packages, Services & Runtime";
+                title: "PACKAGES, SERVICES & RUNTIME";
                 VerticalLayout {
                     padding: 20px;
-                    spacing: 10px;
+                    spacing: 8px;
                     if packages != "": SummaryRow { label: "Extra packages"; value: packages; }
                     if extra-repos != "": SummaryRow { label: "Extra repositories"; value: extra-repos; }
                     if enable-services != "": SummaryRow { label: "Enable services"; value: enable-services; }
@@ -302,10 +318,10 @@ export component StepBuild inherits Rectangle {
             }
 
             if artifact-path == "" && (run-commands != "" || late-commands != "" || unattended): SummaryCard {
-                title: "Custom Behavior";
+                title: "CUSTOM BEHAVIOR";
                 VerticalLayout {
                     padding: 20px;
-                    spacing: 10px;
+                    spacing: 8px;
                     if run-commands != "": SummaryRow { label: "Run commands"; value: run-commands; }
                     if late-commands != "": SummaryRow { label: "Late commands"; value: late-commands; }
                     if unattended: SummaryRow {
@@ -316,22 +332,22 @@ export component StepBuild inherits Rectangle {
             }
 
             if unattended && artifact-path == "": Rectangle {
-                border-radius: Sizes.radius-sm;
-                background: rgba(210, 153, 34, 0.10);
+                border-radius: Sizes.radius-md;
+                background: rgba(245, 158, 11, 0.06);
                 border-width: 1px;
-                border-color: rgba(210, 153, 34, 0.40);
+                border-color: rgba(245, 158, 11, 0.3);
                 VerticalLayout {
-                    padding: 14px;
-                    spacing: 6px;
+                    padding: 16px;
+                    spacing: 4px;
                     Text {
                         text: "UNATTENDED MODE";
                         font-size: Sizes.font-2xs;
                         font-weight: 700;
                         color: Palette.amber;
-                        letter-spacing: 1.4px;
+                        letter-spacing: 1.2px;
                     }
                     Text {
-                        text: "This build will create media that installs without interactive prompts. Review the plan above carefully before you continue.";
+                        text: "This build will create media that installs without interactive prompts. Review the plan above carefully.";
                         font-size: Sizes.font-sm;
                         color: Palette.amber;
                         wrap: word-wrap;
@@ -345,14 +361,18 @@ export component StepBuild inherits Rectangle {
 
                 Rectangle {
                     width: 220px;
-                    height: 50px;
+                    height: Sizes.btn-lg;
                     border-radius: Sizes.radius-md;
                     background: running ? Palette.elevated
-                              : build-ta.has-hover ? @linear-gradient(135deg, #3d90ff 0%, #2060e8 100%)
-                              : @linear-gradient(135deg, Palette.accent 0%, #1a5cdb 100%);
+                              : build-ta.has-hover
+                                ? @linear-gradient(135deg, #818cf8, #6366f1)
+                                : @linear-gradient(135deg, #6366f1, #4338ca);
                     border-width: running ? 1px : 0px;
                     border-color: Palette.border;
-                    animate background { duration: 120ms; }
+                    drop-shadow-blur: running ? 0px : 26px;
+                    drop-shadow-color: running ? transparent : rgba(99, 102, 241, 0.4);
+                    animate background { duration: 150ms; }
+                    animate drop-shadow-blur { duration: 300ms; }
 
                     HorizontalLayout {
                         alignment: center;
@@ -386,20 +406,23 @@ export component StepBuild inherits Rectangle {
                     color: Palette.muted;
                 }
                 Rectangle {
-                    width: 180px;
-                    height: 38px;
+                    width: 160px;
+                    height: Sizes.btn-md;
                     border-radius: Sizes.radius-sm;
-                    background: rebuild-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                    border-width: 1px;
-                    border-color: Palette.border;
-                    opacity: running ? 0.5 : 1.0;
-                    animate background { duration: 100ms; }
+                    background: rebuild-ta.has-hover && !running
+                        ? rgba(99, 102, 241, 0.18) : rgba(99, 102, 241, 0.08);
+                    border-width: 1.5px;
+                    border-color: rebuild-ta.has-hover && !running
+                        ? Palette.accent : rgba(99, 102, 241, 0.4);
+                    opacity: running ? 0.4 : 1.0;
+                    animate background { duration: 120ms; }
+                    animate border-color { duration: 120ms; }
                     animate opacity { duration: 150ms; }
                     Text {
                         text: "Rebuild ISO";
                         font-size: Sizes.font-sm;
                         font-weight: 600;
-                        color: Palette.text;
+                        color: Palette.accent;
                         vertical-alignment: center;
                         horizontal-alignment: center;
                     }
@@ -413,18 +436,20 @@ export component StepBuild inherits Rectangle {
 
             if artifact-path != "": Rectangle {
                 border-radius: Sizes.radius-lg;
-                background: rgba(63, 185, 80, 0.06);
+                background: rgba(34, 197, 94, 0.04);
                 border-width: 1px;
-                border-color: rgba(63, 185, 80, 0.3);
+                border-color: rgba(34, 197, 94, 0.25);
+                drop-shadow-blur: 20px;
+                drop-shadow-color: rgba(34, 197, 94, 0.08);
 
                 VerticalLayout {
-                    padding: 20px;
-                    spacing: 8px;
+                    padding: 22px;
+                    spacing: 12px;
                     HorizontalLayout {
-                        spacing: 8px;
+                        spacing: 10px;
                         Text {
                             text: "✓";
-                            font-size: 18px;
+                            font-size: 20px;
                             color: Palette.green;
                             vertical-alignment: center;
                         }
@@ -458,11 +483,15 @@ export component StepBuild inherits Rectangle {
                         alignment: start;
 
                         Rectangle {
-                            width: 170px;
-                            height: 38px;
+                            width: 168px;
+                            height: Sizes.btn-md;
                             border-radius: Sizes.radius-sm;
-                            background: chk-ta.has-hover ? #3d90ff : Palette.accent;
-                            animate background { duration: 100ms; }
+                            background: chk-ta.has-hover
+                                ? @linear-gradient(135deg, #818cf8, #6366f1)
+                                : @linear-gradient(135deg, #6366f1, #4f46e5);
+                            drop-shadow-blur: 14px;
+                            drop-shadow-color: rgba(99, 102, 241, 0.25);
+                            animate background { duration: 120ms; }
                             Text {
                                 text: "Optional Checks →";
                                 font-size: Sizes.font-sm;
@@ -478,17 +507,21 @@ export component StepBuild inherits Rectangle {
                         }
 
                         Rectangle {
-                            width: 132px;
-                            height: 38px;
+                            width: 130px;
+                            height: Sizes.btn-md;
                             border-radius: Sizes.radius-sm;
-                            background: ofld-ta.has-hover ? Palette.active : Palette.elevated;
-                            border-width: 1px;
-                            border-color: Palette.border;
-                            animate background { duration: 100ms; }
+                            background: ofld-ta.has-hover
+                                ? rgba(99, 102, 241, 0.18) : rgba(99, 102, 241, 0.08);
+                            border-width: 1.5px;
+                            border-color: ofld-ta.has-hover
+                                ? Palette.accent : rgba(99, 102, 241, 0.4);
+                            animate background { duration: 120ms; }
+                            animate border-color { duration: 120ms; }
                             Text {
                                 text: "Open Folder";
                                 font-size: Sizes.font-sm;
-                                color: Palette.text;
+                                font-weight: 600;
+                                color: Palette.accent;
                                 vertical-alignment: center;
                                 horizontal-alignment: center;
                             }
@@ -499,17 +532,21 @@ export component StepBuild inherits Rectangle {
                         }
 
                         Rectangle {
-                            width: 132px;
-                            height: 38px;
+                            width: 140px;
+                            height: Sizes.btn-md;
                             border-radius: Sizes.radius-sm;
-                            background: newbld-ta.has-hover ? Palette.active : Palette.elevated;
-                            border-width: 1px;
-                            border-color: Palette.border;
-                            animate background { duration: 100ms; }
+                            background: newbld-ta.has-hover
+                                ? rgba(99, 102, 241, 0.18) : rgba(99, 102, 241, 0.08);
+                            border-width: 1.5px;
+                            border-color: newbld-ta.has-hover
+                                ? Palette.accent : rgba(99, 102, 241, 0.4);
+                            animate background { duration: 120ms; }
+                            animate border-color { duration: 120ms; }
                             Text {
                                 text: "Start New Build";
                                 font-size: Sizes.font-sm;
-                                color: Palette.text;
+                                font-weight: 600;
+                                color: Palette.accent;
                                 vertical-alignment: center;
                                 horizontal-alignment: center;
                             }

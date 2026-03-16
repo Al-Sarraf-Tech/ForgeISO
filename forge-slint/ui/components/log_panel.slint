@@ -16,7 +16,7 @@ export component LogPanel inherits Rectangle {
     callback filter-toggled();
     callback close-clicked();
 
-    width: 360px;
+    width: 400px;
     background: Palette.panel;
     border-width: 0px;
 
@@ -32,32 +32,34 @@ export component LogPanel inherits Rectangle {
         padding-left: 1px; // account for separator
         // Header
         Rectangle {
-            height: 44px;
+            height: 48px;
             background: Palette.panel;
             HorizontalLayout {
-                padding-left: 14px;
+                padding-left: 18px;
                 padding-right: 14px;
                 spacing: 8px;
                 alignment: space-between;
                 VerticalLayout {
                     alignment: center;
                     HorizontalLayout {
-                        spacing: 6px;
+                        spacing: 8px;
                         alignment: start;
                         Text {
                             text: "Log";
                             font-size: Sizes.font-sm;
                             font-weight: 700;
                             color: Palette.text;
+                            vertical-alignment: center;
                         }
                         if error-count > 0: Rectangle {
-                            width: 20px;
-                            height: 16px;
-                            border-radius: 8px;
+                            width: 24px;
+                            height: 20px;
+                            border-radius: 10px;
                             background: Palette.red;
+                            y: (parent.height - self.height) / 2;
                             Text {
                                 text: error-count > 99 ? "99+" : error-count;
-                                font-size: 9px;
+                                font-size: Sizes.font-2xs;
                                 font-weight: 700;
                                 color: #ffffff;
                                 vertical-alignment: center;
@@ -67,13 +69,13 @@ export component LogPanel inherits Rectangle {
                     }
                 }
                 HorizontalLayout {
-                    spacing: 4px;
+                    spacing: 8px;
                     alignment: end;
                     // Errors-only filter toggle
                     Rectangle {
-                        width: 64px;
-                        height: 24px;
-                        border-radius: 12px;
+                        width: 72px;
+                        height: 28px;
+                        border-radius: 14px;
                         background: errors-only ? Palette.red
                                   : flt-ta.has-hover ? Palette.active
                                   : Palette.elevated;
@@ -83,7 +85,8 @@ export component LogPanel inherits Rectangle {
                         Text {
                             text: "Errors";
                             font-size: Sizes.font-2xs;
-                            color: errors-only ? #ffffff : Palette.text;
+                            font-weight: 600;
+                            color: errors-only ? #ffffff : Palette.text-secondary;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -94,15 +97,15 @@ export component LogPanel inherits Rectangle {
                     }
                     // Close button
                     Rectangle {
-                        width: 24px;
-                        height: 24px;
-                        border-radius: 12px;
+                        width: 28px;
+                        height: 28px;
+                        border-radius: 14px;
                         background: lp-close-ta.has-hover ? Palette.active : Palette.elevated;
                         animate background { duration: 100ms; }
                         Text {
                             text: "×";
-                            font-size: 14px;
-                            color: Palette.text;
+                            font-size: 16px;
+                            color: lp-close-ta.has-hover ? Palette.text : Palette.muted;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -121,23 +124,23 @@ export component LogPanel inherits Rectangle {
             }
         }
 
-        // Log entries — VerticalLayout auto-sizes each row to its content
+        // Log entries
         ScrollView {
             VerticalLayout {
                 for entry in entries: VerticalLayout {
                     visible: !errors-only || entry.level == 2;
 
                     HorizontalLayout {
-                        padding-left: 12px;
-                        padding-right: 8px;
-                        padding-top: 8px;
-                        padding-bottom: 8px;
-                        spacing: 8px;
+                        padding-left: 16px;
+                        padding-right: 12px;
+                        padding-top: 10px;
+                        padding-bottom: 10px;
+                        spacing: 10px;
 
-                        // Level indicator bar — vertically centred via manual y offset
+                        // Level indicator bar
                         Rectangle {
                             width: 3px;
-                            min-height: 36px;
+                            min-height: 32px;
                             border-radius: 1.5px;
                             background: entry.level == 2 ? Palette.red
                                       : entry.level == 1 ? Palette.amber
@@ -148,7 +151,7 @@ export component LogPanel inherits Rectangle {
                             alignment: start;
                             spacing: 4px;
                             HorizontalLayout {
-                                spacing: 6px;
+                                spacing: 8px;
                                 Text {
                                     text: entry.timestamp;
                                     font-size: Sizes.font-2xs;
@@ -171,21 +174,21 @@ export component LogPanel inherits Rectangle {
                                      : Palette.text-secondary;
                                 wrap: word-wrap;
                             }
-                            // Progress bar — visible only for download entries
+                            // Progress bar for download entries
                             if entry.percent >= 0.0: VerticalLayout {
                                 spacing: 3px;
-                                // Track background
                                 Rectangle {
-                                    height: 6px;
-                                    border-radius: 3px;
+                                    height: 5px;
+                                    border-radius: 2.5px;
                                     background: Palette.elevated;
-                                    // Fill
                                     Rectangle {
                                         x: 0;
                                         width: parent.width * entry.percent;
                                         height: parent.height;
-                                        border-radius: 3px;
-                                        background: @linear-gradient(90deg, Palette.accent, #56b0ff);
+                                        border-radius: 2.5px;
+                                        background: @linear-gradient(90deg, #6366f1, #818cf8);
+                                        drop-shadow-blur: 8px;
+                                        drop-shadow-color: rgba(99, 102, 241, 0.3);
                                         animate width { duration: 200ms; easing: ease-out; }
                                     }
                                 }
@@ -203,7 +206,7 @@ export component LogPanel inherits Rectangle {
                     Rectangle {
                         height: 1px;
                         background: Palette.border;
-                        opacity: 0.4;
+                        opacity: 0.2;
                     }
                 }
             }
