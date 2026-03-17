@@ -1,0 +1,336 @@
+import { Palette, Sizes } from "../theme.slint";
+import { ScrollView } from "std-widgets.slint";
+
+export struct PresetCard {
+    id: string,
+    emoji: string,
+    name: string,
+    desc: string,
+}
+
+component DistroCard inherits Rectangle {
+    in property <PresetCard> card;
+    in property <bool>       selected: false;
+    in property <bool>       running: false;
+    callback clicked();
+
+    width: 190px;
+    height: 140px;
+    border-radius: Sizes.radius-md;
+    background: selected ? rgba(63, 185, 80, 0.16)
+              : hovered && !running ? rgba(255, 255, 255, 0.03)
+              : Palette.elevated;
+    border-width: selected ? 2px : 1px;
+    border-color: selected ? Palette.green
+               : hovered && !running ? Palette.border-focus
+               : Palette.border;
+    opacity: running ? 0.75 : 1.0;
+    clip: true;
+    drop-shadow-blur: selected ? 22px : 0px;
+    drop-shadow-color: selected ? rgba(63, 185, 80, 0.20) : transparent;
+    animate background { duration: 180ms; }
+    animate border-color { duration: 180ms; }
+    animate border-width { duration: 180ms; }
+    animate opacity { duration: 180ms; }
+    animate drop-shadow-blur { duration: 250ms; }
+
+    property <bool> hovered: touch.has-hover;
+
+    // Hover overlay
+    Rectangle {
+        background: hovered && !running && !selected ? rgba(255, 255, 255, 0.03)
+                  : hovered && !running && selected ? rgba(63, 185, 80, 0.05)
+                  : transparent;
+        animate background { duration: 150ms; }
+    }
+
+    // Selected accent bar at top
+    if selected: Rectangle {
+        height: 3px;
+        background: @linear-gradient(90deg, Palette.green, #56d880);
+    }
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 8px;
+        padding: 16px;
+
+        Text {
+            text: card.emoji;
+            font-size: 32px;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: card.name;
+            font-size: Sizes.font-sm;
+            font-weight: 700;
+            color: Palette.text;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: card.desc;
+            font-size: Sizes.font-xs;
+            color: Palette.muted;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+        if selected: Text {
+            text: "✓ Selected";
+            font-size: Sizes.font-2xs;
+            color: Palette.green;
+            font-weight: 700;
+            horizontal-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: !running;
+        mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component StepSource inherits Rectangle {
+    in property <[PresetCard]> presets-row1;
+    in property <[PresetCard]> presets-row2;
+    in property <string>       source-path;
+    in property <string>       selected-preset;
+    in property <string>       detected-distro;
+    in property <bool>         running: false;
+    in property <bool>         can-continue: false;
+    callback preset-clicked(string);
+    callback browse-clicked();
+    callback source-changed(string);
+    callback continue-clicked();
+    callback clear-clicked();
+
+    background: Palette.bg;
+
+    ScrollView {
+        VerticalLayout {
+            padding: 40px;
+            spacing: 32px;
+            alignment: start;
+
+            // ── Title ────────────────────────────────────────────────────
+            VerticalLayout {
+                spacing: 6px;
+                Text {
+                    text: "Build Your ISO";
+                    font-size: Sizes.font-2xl;
+                    font-weight: 700;
+                    color: Palette.text;
+                }
+                Text {
+                    text: "Inject unattended install config into any Linux ISO — Ubuntu, Fedora, Arch, Mint and more.";
+                    font-size: Sizes.font-md;
+                    color: Palette.muted;
+                }
+            }
+
+            // ── Distro grid ─────────────────────────────────────────────
+            VerticalLayout {
+                spacing: 12px;
+                Text {
+                    text: "POPULAR DISTRIBUTIONS";
+                    font-size: Sizes.font-2xs;
+                    font-weight: 700;
+                    color: Palette.subtle;
+                    letter-spacing: 1.5px;
+                }
+
+                // Row 1
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: center;
+                    for card in presets-row1: DistroCard {
+                        card: card;
+                        selected: selected-preset == card.id;
+                        running: running;
+                        clicked => { preset-clicked(card.id); }
+                    }
+                }
+
+                // Row 2 (only rendered if non-empty)
+                if presets-row2.length > 0: HorizontalLayout {
+                    spacing: 12px;
+                    alignment: center;
+                    for card in presets-row2: DistroCard {
+                        card: card;
+                        selected: selected-preset == card.id;
+                        running: running;
+                        clicked => { preset-clicked(card.id); }
+                    }
+                }
+            }
+
+            // ── Manual path entry ───────────────────────────────────────
+            VerticalLayout {
+                spacing: 10px;
+                HorizontalLayout {
+                    spacing: 12px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle { height: 1px; background: Palette.border; }
+                    }
+                    Text {
+                        text: "or enter a path / URL directly";
+                        font-size: Sizes.font-xs;
+                        color: Palette.subtle;
+                        vertical-alignment: center;
+                        horizontal-stretch: 0;
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle { height: 1px; background: Palette.border; }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+
+                    // Path input
+                    Rectangle {
+                        height: 42px;
+                        border-radius: Sizes.radius-sm;
+                        background: Palette.bg;
+                        border-width: 1px;
+                        border-color: path-input.has-focus ? Palette.accent : Palette.border;
+                        animate border-color { duration: 150ms; }
+                        if source-path == "" && !path-input.has-focus: Text {
+                            x: 12px; y: 0;
+                            width: parent.width - 24px;
+                            height: parent.height;
+                            text: "/path/to/ubuntu.iso  or  https://releases.ubuntu.com/…";
+                            font-size: Sizes.font-sm;
+                            color: Palette.subtle;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                        path-input := TextInput {
+                            x: 12px;
+                            y: (parent.height - self.preferred-height) / 2;
+                            width: parent.width - 24px;
+                            text: source-path;
+                            font-size: Sizes.font-sm;
+                            color: Palette.text;
+                            selection-background-color: Palette.accent;
+                            selection-foreground-color: Palette.on-accent;
+                            single-line: true;
+                            enabled: !running;
+                            edited => { source-changed(path-input.text); }
+                        }
+                    }
+
+                    // Browse button
+                    Rectangle {
+                        width: 90px;
+                        height: 42px;
+                        border-radius: Sizes.radius-sm;
+                        background: browse-ta.has-hover && !running ? Palette.active : Palette.elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        opacity: running ? 0.5 : 1.0;
+                        animate background { duration: 100ms; }
+                        animate opacity { duration: 150ms; }
+                        Text {
+                            text: "Browse…";
+                            font-size: Sizes.font-sm;
+                            color: Palette.text;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        browse-ta := TouchArea {
+                            enabled: !running;
+                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                            clicked => { browse-clicked(); }
+                        }
+                    }
+
+                    // Clear button
+                    if source-path != "": Rectangle {
+                        width: 42px;
+                        height: 42px;
+                        border-radius: Sizes.radius-sm;
+                        background: clear-ta.has-hover && !running ? rgba(248, 81, 73, 0.12) : Palette.elevated;
+                        border-width: 1px;
+                        border-color: clear-ta.has-hover && !running ? rgba(248, 81, 73, 0.4) : Palette.border;
+                        animate background { duration: 100ms; }
+                        animate border-color { duration: 100ms; }
+                        Text {
+                            text: "✕";
+                            font-size: 16px;
+                            color: clear-ta.has-hover && !running ? Palette.red : Palette.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        clear-ta := TouchArea {
+                            enabled: !running;
+                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                            clicked => { clear-clicked(); }
+                        }
+                    }
+                }
+
+                // Detected distro badge
+                if detected-distro != "": HorizontalLayout {
+                    alignment: start;
+                    Rectangle {
+                        height: 26px;
+                        border-radius: 13px;
+                        background: rgba(63, 185, 80, 0.12);
+                        border-width: 1px;
+                        border-color: rgba(63, 185, 80, 0.3);
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            spacing: 4px;
+                            alignment: center;
+                            Text {
+                                text: "✓ Detected: " + detected-distro;
+                                font-size: Sizes.font-xs;
+                                color: Palette.green;
+                                font-weight: 600;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Continue button ─────────────────────────────────────────
+            HorizontalLayout {
+                alignment: start;
+                Rectangle {
+                    width: 300px;
+                    height: 46px;
+                    border-radius: Sizes.radius-sm;
+                    background: can-continue
+                        ? (cont-ta.has-hover ? #3d90ff : Palette.accent)
+                        : Palette.elevated;
+                    opacity: can-continue ? 1.0 : 0.6;
+                    animate background { duration: 120ms; }
+                    animate opacity  { duration: 180ms; }
+
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 8px;
+                        Text {
+                            text: "Continue to Configure Installer →";
+                            font-size: Sizes.font-sm;
+                            font-weight: 600;
+                            color: can-continue ? Palette.on-accent : Palette.subtle;
+                        }
+                    }
+                    cont-ta := TouchArea {
+                        enabled: can-continue && !running;
+                        mouse-cursor: can-continue && !running ? MouseCursor.pointer : MouseCursor.default;
+                        clicked => { continue-clicked(); }
+                    }
+                }
+            }
+        }
+    }
+}

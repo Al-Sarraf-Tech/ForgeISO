@@ -1,0 +1,510 @@
+import { Palette, Sizes } from "../theme.slint";
+
+component ResultCard inherits Rectangle {
+    in property <bool>   passed;
+    in property <bool>   has-result;
+    in property <string> title;
+    in property <string> detail;
+    border-radius: Sizes.radius-lg;
+    background: !has-result ? Palette.surface
+              : passed ? rgba(63, 185, 80, 0.08)
+              : rgba(248, 81, 73, 0.08);
+    border-width: 1px;
+    border-color: !has-result ? Palette.border
+                : passed ? rgba(63, 185, 80, 0.4)
+                : rgba(248, 81, 73, 0.4);
+    animate background { duration: 250ms; }
+    VerticalLayout {
+        padding: 16px;
+        spacing: 6px;
+        HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: !has-result ? "○" : passed ? "✓" : "✗";
+                font-size: 18px;
+                color: !has-result ? Palette.subtle
+                     : passed ? Palette.green
+                     : Palette.red;
+                vertical-alignment: center;
+            }
+            Text {
+                text: title;
+                font-size: Sizes.font-md;
+                font-weight: 700;
+                color: !has-result ? Palette.muted
+                     : passed ? Palette.green
+                     : Palette.red;
+                vertical-alignment: center;
+            }
+        }
+        if detail != "": Text {
+            text: detail;
+            font-size: Sizes.font-sm;
+            color: Palette.muted;
+            wrap: word-wrap;
+        }
+    }
+}
+
+export component StepCheck inherits Rectangle {
+    // Source
+    in-out property <string> verify-source;
+    in-out property <string> sums-url;
+
+    // Inject artifact (auto-filled)
+    in property <string>  artifact-path;
+    in property <string>  artifact-sha256;
+
+    // Verify result
+    in property <bool>    verify-done;
+    in property <bool>    verify-matched;
+    in property <string>  verify-hash-display;
+
+    // ISO-9660 result
+    in property <bool>    iso9660-done;
+    in property <bool>    iso9660-compliant;
+    in property <bool>    iso9660-boot-bios;
+    in property <bool>    iso9660-boot-uefi;
+    in property <string>  iso9660-volume-id;
+
+    in property <bool>    running;
+
+    callback back-clicked();
+    callback browse-verify-source();
+    callback run-verify();
+    callback run-iso9660();
+    callback copy-sha256();
+    callback open-folder();
+    callback clear-forms();
+
+    background: Palette.bg;
+
+    VerticalLayout {
+        padding: 40px;
+        spacing: 28px;
+        alignment: start;
+
+        // ── Title ─────────────────────────────────────────────────────────
+        HorizontalLayout {
+            spacing: 12px;
+            alignment: space-between;
+            VerticalLayout {
+                spacing: 4px;
+                Text {
+                    text: "Optional Checks";
+                    font-size: Sizes.font-2xl;
+                    font-weight: 700;
+                    color: Palette.text;
+                }
+                Text {
+                    text: "Your ISO is already ready to use. Run checksum or ISO-9660 checks only if you want extra validation.";
+                    font-size: Sizes.font-sm;
+                    color: Palette.muted;
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+
+                Rectangle {
+                    width: 148px;
+                    height: 32px;
+                    border-radius: 16px;
+                    background: chk-back-ta.has-hover && !running ? Palette.active : Palette.elevated;
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    animate background { duration: 100ms; }
+                    Text {
+                        text: "← Back to Build";
+                        font-size: Sizes.font-sm;
+                        font-weight: 600;
+                        color: Palette.text;
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
+                    chk-back-ta := TouchArea {
+                        enabled: !running;
+                        mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                        clicked => { back-clicked(); }
+                    }
+                }
+
+                Rectangle {
+                    width: 82px;
+                    height: 24px;
+                    border-radius: 12px;
+                    background: rgba(139, 148, 158, 0.15);
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    Text {
+                        text: "Optional";
+                        font-size: Sizes.font-xs;
+                        font-weight: 600;
+                        color: Palette.muted;
+                        letter-spacing: 0.5px;
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+        }
+
+        // ── Build success banner ──────────────────────────────────────────
+        if artifact-path != "": Rectangle {
+            border-radius: Sizes.radius-lg;
+            background: rgba(63, 185, 80, 0.06);
+            border-width: 1px;
+            border-color: rgba(63, 185, 80, 0.35);
+
+            VerticalLayout {
+                padding: 20px;
+                spacing: 12px;
+
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: start;
+                    Text {
+                        text: "✓";
+                        font-size: 22px;
+                        color: Palette.green;
+                        vertical-alignment: center;
+                    }
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text {
+                            text: "Build complete — verification optional";
+                            font-size: Sizes.font-lg;
+                            font-weight: 700;
+                            color: Palette.green;
+                        }
+                        Text {
+                            text: artifact-path;
+                            font-size: Sizes.font-sm;
+                            color: Palette.muted;
+                            overflow: elide;
+                        }
+                    }
+                }
+
+                if artifact-sha256 != "": Text {
+                    text: "SHA-256: " + artifact-sha256;
+                    font-size: Sizes.font-xs;
+                    color: Palette.muted;
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+
+                    // Start New Build (primary)
+                    Rectangle {
+                        width: 160px;
+                        height: 36px;
+                        border-radius: Sizes.radius-sm;
+                        background: snb-ta.has-hover && !running ? #3d90ff : Palette.accent;
+                        animate background { duration: 100ms; }
+                        Text {
+                            text: "＋ Start New Build";
+                            font-size: Sizes.font-sm;
+                            font-weight: 600;
+                            color: Palette.on-accent;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        snb-ta := TouchArea {
+                            enabled: !running;
+                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                            clicked => { clear-forms(); }
+                        }
+                    }
+
+                    // Copy SHA-256 (secondary)
+                    Rectangle {
+                        width: 140px;
+                        height: 36px;
+                        border-radius: Sizes.radius-sm;
+                        background: csha-ta.has-hover ? Palette.active : Palette.elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        animate background { duration: 100ms; }
+                        Text {
+                            text: "📋 Copy SHA-256";
+                            font-size: Sizes.font-xs;
+                            color: Palette.text;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        csha-ta := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { copy-sha256(); }
+                        }
+                    }
+
+                    // Open Folder (secondary)
+                    Rectangle {
+                        width: 120px;
+                        height: 36px;
+                        border-radius: Sizes.radius-sm;
+                        background: ofld2-ta.has-hover ? Palette.active : Palette.elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        animate background { duration: 100ms; }
+                        Text {
+                            text: "📂 Open Folder";
+                            font-size: Sizes.font-xs;
+                            color: Palette.text;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        ofld2-ta := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { open-folder(); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Checksum Verification ─────────────────────────────────────────
+        Rectangle {
+            border-radius: Sizes.radius-lg;
+            background: Palette.surface;
+            border-width: 1px;
+            border-color: Palette.border;
+
+            VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Text {
+                        text: "CHECKSUM VERIFICATION";
+                        font-size: Sizes.font-2xs;
+                        font-weight: 700;
+                        color: Palette.subtle;
+                        letter-spacing: 1.5px;
+                    }
+                    Rectangle {
+                        width: 70px;
+                        height: 18px;
+                        border-radius: 9px;
+                        background: rgba(139, 148, 158, 0.12);
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        Text {
+                            text: "Optional";
+                            font-size: Sizes.font-2xs;
+                            color: Palette.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    Rectangle {
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: Palette.bg;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        if verify-source == "" && !vsrc-input.has-focus: Text {
+                            x: 10px; y: 0;
+                            width: parent.width - 20px;
+                            height: parent.height;
+                            text: "/path/to/output.iso  or  https://…";
+                            font-size: Sizes.font-sm;
+                            color: Palette.subtle;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                        vsrc-input := TextInput {
+                            x: 10px;
+                            y: (parent.height - self.preferred-height) / 2;
+                            width: parent.width - 20px;
+                            text: verify-source;
+                            font-size: Sizes.font-sm;
+                            color: Palette.text;
+                            selection-background-color: Palette.accent;
+                            selection-foreground-color: Palette.on-accent;
+                            single-line: true;
+                            enabled: !running;
+                            edited => { verify-source = self.text; }
+                        }
+                    }
+                    Rectangle {
+                        width: 90px;
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: vbrw-ta.has-hover && !running ? Palette.active : Palette.elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        animate background { duration: 100ms; }
+                        Text {
+                            text: "Browse…";
+                            font-size: Sizes.font-sm;
+                            color: Palette.text;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        vbrw-ta := TouchArea {
+                            enabled: !running;
+                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                            clicked => { browse-verify-source(); }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    Rectangle {
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: Palette.bg;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        if sums-url == "" && !sums-input.has-focus: Text {
+                            x: 10px; y: 0;
+                            width: parent.width - 20px;
+                            height: parent.height;
+                            text: "SHA256SUMS URL or file path (optional)";
+                            font-size: Sizes.font-sm;
+                            color: Palette.subtle;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                        sums-input := TextInput {
+                            x: 10px;
+                            y: (parent.height - self.preferred-height) / 2;
+                            width: parent.width - 20px;
+                            text: sums-url;
+                            font-size: Sizes.font-sm;
+                            color: Palette.text;
+                            selection-background-color: Palette.accent;
+                            selection-foreground-color: Palette.on-accent;
+                            single-line: true;
+                            enabled: !running;
+                            edited => { sums-url = self.text; }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: start;
+                    Rectangle {
+                        property <bool> ck-active: verify-source != "" && !running;
+                        width: 170px;
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: ck-active
+                            ? (cfi-ta.has-hover ? #3d90ff : Palette.accent)
+                            : Palette.elevated;
+                        opacity: ck-active ? 1.0 : 0.6;
+                        animate background { duration: 120ms; }
+                        Text {
+                            text: "🔍 Check File Integrity";
+                            font-size: Sizes.font-sm;
+                            font-weight: 600;
+                            color: ck-active ? Palette.on-accent : Palette.subtle;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        cfi-ta := TouchArea {
+                            enabled: ck-active;
+                            mouse-cursor: ck-active ? MouseCursor.pointer : MouseCursor.default;
+                            clicked => { run-verify(); }
+                        }
+                    }
+                    Rectangle {
+                        property <bool> iso-active: verify-source != "" && !running;
+                        width: 170px;
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: iso-ta.has-hover && iso-active ? Palette.active : Palette.elevated;
+                        border-width: 1px;
+                        border-color: iso-active ? Palette.accent : Palette.border;
+                        opacity: iso-active ? 1.0 : 0.6;
+                        animate background { duration: 100ms; }
+                        Text {
+                            text: "📋 ISO-9660 Layout";
+                            font-size: Sizes.font-sm;
+                            color: iso-active ? Palette.text : Palette.subtle;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        iso-ta := TouchArea {
+                            enabled: iso-active;
+                            mouse-cursor: iso-active ? MouseCursor.pointer : MouseCursor.default;
+                            clicked => { run-iso9660(); }
+                        }
+                    }
+                }
+
+                // Results
+                if !verify-done && !iso9660-done: Rectangle {
+                    border-radius: Sizes.radius-lg;
+                    background: Palette.elevated;
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 6px;
+                        Text {
+                            text: "Build complete — checks skipped for now";
+                            font-size: Sizes.font-md;
+                            font-weight: 700;
+                            color: Palette.text;
+                        }
+                        Text {
+                            text: "You can stop here, ship the ISO, or come back later to run checksum and ISO layout checks.";
+                            font-size: Sizes.font-sm;
+                            color: Palette.muted;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+                if verify-done: ResultCard {
+                    has-result: true;
+                    passed: verify-matched;
+                    title: verify-matched ? "Integrity verified" : "Checksum mismatch";
+                    detail: verify-hash-display;
+                }
+                if iso9660-done: ResultCard {
+                    has-result: true;
+                    passed: iso9660-compliant;
+                    title: iso9660-compliant ? "ISO-9660 compliant" : "ISO-9660 issues found";
+                    detail: (iso9660-boot-bios ? "BIOS boot ✓  " : "")
+                          + (iso9660-boot-uefi ? "UEFI boot ✓  " : "")
+                          + (iso9660-volume-id != "" ? "Label: " + iso9660-volume-id : "");
+                }
+            }
+        }
+
+        // ── Danger zone (reset) ───────────────────────────────────────────
+        Rectangle {
+            width: 150px;
+            height: 36px;
+            border-radius: Sizes.radius-sm;
+            background: rst-ta.has-hover && !running ? rgba(248, 81, 73, 0.10) : Palette.elevated;
+            animate background { duration: 100ms; }
+            animate border-color { duration: 100ms; }
+            border-width: 1px;
+            border-color: Palette.border;
+            Text {
+                text: "🗑 Reset All Forms";
+                font-size: Sizes.font-xs;
+                color: rst-ta.has-hover && !running ? Palette.red : Palette.muted;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+            rst-ta := TouchArea {
+                enabled: !running;
+                mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                clicked => { clear-forms(); }
+            }
+        }
+    }
+}

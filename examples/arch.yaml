@@ -1,0 +1,4 @@
+name: arch-local
+source: /srv/isos/archlinux.iso
+overlay_dir: /srv/forgeiso/overlays/arch
+profile: minimal

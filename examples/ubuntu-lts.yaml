@@ -1,0 +1,6 @@
+name: ubuntu-local
+source: /srv/isos/ubuntu-24.04.iso
+overlay_dir: /srv/forgeiso/overlays/ubuntu
+auto_scan: false
+auto_test: false
+profile: desktop

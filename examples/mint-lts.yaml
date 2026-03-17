@@ -1,0 +1,4 @@
+name: mint-local
+source: https://example.invalid/linuxmint.iso
+overlay_dir: /srv/forgeiso/overlays/mint
+profile: desktop

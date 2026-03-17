@@ -1,0 +1,526 @@
+import { Palette, Sizes } from "../theme.slint";
+import { ScrollView } from "std-widgets.slint";
+
+component SummaryRow inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <bool>   set: true;
+
+    height: value-text.preferred-height + 24px;
+    background: transparent;
+
+    VerticalLayout {
+        spacing: 4px;
+        Text {
+            text: label;
+            font-size: Sizes.font-2xs;
+            font-weight: 700;
+            color: Palette.subtle;
+            letter-spacing: 1.2px;
+        }
+        value-text := Text {
+            text: set ? value : "— not set";
+            font-size: Sizes.font-sm;
+            color: set ? Palette.text : Palette.subtle;
+            font-weight: set ? 600 : 400;
+            wrap: word-wrap;
+        }
+    }
+}
+
+component SummaryCard inherits Rectangle {
+    in property <string> title;
+
+    border-radius: Sizes.radius-lg;
+    background: Palette.surface;
+    border-width: 1px;
+    border-color: Palette.border;
+
+    VerticalLayout {
+        HorizontalLayout {
+            height: 40px;
+            padding-left: 20px;
+            padding-right: 20px;
+            alignment: start;
+            Text {
+                text: title;
+                font-size: Sizes.font-2xs;
+                font-weight: 700;
+                color: Palette.subtle;
+                letter-spacing: 1.4px;
+                vertical-alignment: center;
+            }
+        }
+        Rectangle { height: 1px; background: Palette.border; opacity: 0.5; }
+        @children
+    }
+}
+
+export component StepBuild inherits Rectangle {
+    in property <string>  distro-display;
+    in property <string>  admin-group;
+    in property <string>  source;
+    in property <string>  expected-sha256;
+    in property <string>  hostname;
+    in property <string>  username;
+    in property <string>  realname;
+    in property <bool>    password-set;
+    in property <string>  user-groups;
+    in property <string>  user-shell;
+    in property <bool>    sudo-nopasswd;
+    in property <bool>    ssh-server;
+    in property <bool>    ssh-password-auth;
+    in property <string>  ssh-keys;
+    in property <string>  timezone;
+    in property <string>  locale;
+    in property <string>  keyboard-layout;
+    in property <string>  static-ip;
+    in property <string>  gateway;
+    in property <string>  dns-servers;
+    in property <string>  ntp-servers;
+    in property <bool>    firewall-on;
+    in property <string>  firewall-policy;
+    in property <string>  allow-ports;
+    in property <string>  deny-ports;
+    in property <string>  output-dir;
+    in property <string>  out-name;
+    in property <string>  output-label;
+    in property <bool>    unattended;
+    in property <bool>    running;
+    in property <string>  packages;
+    in property <string>  extra-repos;
+    in property <string>  enable-services;
+    in property <string>  disable-services;
+    in property <bool>    docker-on;
+    in property <bool>    podman-on;
+    in property <string>  docker-users;
+    in property <bool>    encrypt-on;
+    in property <string>  storage-layout;
+    in property <string>  mounts;
+    in property <string>  run-commands;
+    in property <string>  late-commands;
+    in property <string>  artifact-path;
+    in property <string>  artifact-sha256;
+    in property <string>  verify-summary;
+
+    callback back-clicked();
+    callback back-to-source();
+    callback run-clicked();
+    callback view-results();
+    callback open-folder();
+    callback start-over();
+
+    background: Palette.bg;
+
+    ScrollView {
+        VerticalLayout {
+            padding: 40px;
+            spacing: 20px;
+            alignment: start;
+
+            HorizontalLayout {
+                alignment: space-between;
+                VerticalLayout {
+                    spacing: 4px;
+                    Text {
+                        text: artifact-path == "" ? "Review & Build" : "ISO Ready";
+                        font-size: Sizes.font-2xl;
+                        font-weight: 700;
+                        color: Palette.text;
+                    }
+                    Text {
+                        text: artifact-path == ""
+                            ? "Inspect the full plan below. Nothing starts until you click Start Build."
+                            : "Build is complete. Optional checks are available if you want an extra confidence pass.";
+                        font-size: Sizes.font-sm;
+                        color: Palette.muted;
+                    }
+                }
+                if artifact-path == "": HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+                    Rectangle {
+                        width: 120px;
+                        height: 34px;
+                        border-radius: Sizes.radius-sm;
+                        background: bts-ta.has-hover && !running ? Palette.active : Palette.elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        animate background { duration: 100ms; }
+                        Text {
+                            text: "← Choose ISO";
+                            font-size: Sizes.font-xs;
+                            color: Palette.text;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        bts-ta := TouchArea {
+                            enabled: !running;
+                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                            clicked => { back-to-source(); }
+                        }
+                    }
+                    Rectangle {
+                        width: 130px;
+                        height: 34px;
+                        border-radius: Sizes.radius-sm;
+                        background: bld-back-ta.has-hover && !running ? Palette.active : Palette.elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        animate background { duration: 100ms; }
+                        Text {
+                            text: "← Edit Settings";
+                            font-size: Sizes.font-xs;
+                            color: Palette.text;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        bld-back-ta := TouchArea {
+                            enabled: !running;
+                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                            clicked => { back-clicked(); }
+                        }
+                    }
+                }
+            }
+
+            if artifact-path == "": Rectangle {
+                border-radius: Sizes.radius-sm;
+                background: rgba(47, 129, 247, 0.08);
+                border-width: 1px;
+                border-color: rgba(47, 129, 247, 0.30);
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 6px;
+                    Text {
+                        text: "CONFIRMATION STAGE";
+                        font-size: Sizes.font-2xs;
+                        font-weight: 700;
+                        color: Palette.accent;
+                        letter-spacing: 1.4px;
+                    }
+                    Text {
+                        text: "Use the back buttons if anything looks wrong. Build starts only when you click Start Build below.";
+                        font-size: Sizes.font-sm;
+                        color: Palette.text-secondary;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            if artifact-path == "": SummaryCard {
+                title: "Source & Output";
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 10px;
+                    SummaryRow { label: "Installer format"; value: distro-display; }
+                    SummaryRow { label: "Source ISO"; value: source; }
+                    if expected-sha256 != "": SummaryRow { label: "Expected source SHA-256"; value: expected-sha256; }
+                    SummaryRow { label: "Output directory"; value: output-dir; }
+                    SummaryRow { label: "Output filename"; value: out-name; }
+                    if output-label != "": SummaryRow { label: "Volume label"; value: output-label; }
+                }
+            }
+
+            if artifact-path == "": SummaryCard {
+                title: "Identity & Access";
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 10px;
+                    SummaryRow { label: "Hostname"; value: hostname; set: hostname != ""; }
+                    SummaryRow { label: "Username"; value: username; set: username != ""; }
+                    if realname != "": SummaryRow { label: "Full name"; value: realname; }
+                    SummaryRow { label: "Password"; value: password-set ? "Configured" : "Not set"; set: password-set; }
+                    SummaryRow {
+                        label: "Admin access";
+                        value: sudo-nopasswd ? admin-group + " + passwordless sudo" : admin-group;
+                        set: admin-group != "";
+                    }
+                    if user-groups != "": SummaryRow { label: "Groups"; value: user-groups; }
+                    if user-shell != "": SummaryRow { label: "Login shell"; value: user-shell; }
+                    SummaryRow { label: "SSH server"; value: ssh-server ? "Install and enable" : "Not requested"; set: true; }
+                    SummaryRow {
+                        label: "SSH password auth";
+                        value: ssh-password-auth ? "Allowed" : "Disabled";
+                        set: ssh-server;
+                    }
+                    SummaryRow {
+                        label: "SSH keys";
+                        value: ssh-keys != "" ? "Configured" : "None provided";
+                        set: true;
+                    }
+                }
+            }
+
+            if artifact-path == "": SummaryCard {
+                title: "System, Network & Security";
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 10px;
+                    if timezone != "": SummaryRow { label: "Timezone"; value: timezone; }
+                    if locale != "": SummaryRow { label: "Locale"; value: locale; }
+                    if keyboard-layout != "": SummaryRow { label: "Keyboard layout"; value: keyboard-layout; }
+                    if storage-layout != "": SummaryRow { label: "Storage layout"; value: storage-layout; }
+                    SummaryRow { label: "IP configuration"; value: static-ip != "" ? static-ip : "DHCP"; set: true; }
+                    if gateway != "": SummaryRow { label: "Gateway"; value: gateway; }
+                    if dns-servers != "": SummaryRow { label: "DNS servers"; value: dns-servers; }
+                    if ntp-servers != "": SummaryRow { label: "NTP servers"; value: ntp-servers; }
+                    SummaryRow {
+                        label: "Firewall";
+                        value: firewall-on
+                            ? (firewall-policy != ""
+                                ? "Enabled (" + firewall-policy + ")"
+                                : "Enabled")
+                            : "Disabled";
+                        set: true;
+                    }
+                    if allow-ports != "": SummaryRow { label: "Allowed ports"; value: allow-ports; }
+                    if deny-ports != "": SummaryRow { label: "Denied ports"; value: deny-ports; }
+                    if encrypt-on: SummaryRow { label: "Disk encryption"; value: "LUKS enabled"; }
+                }
+            }
+
+            if artifact-path == "" && (packages != "" || extra-repos != "" || enable-services != "" || disable-services != "" || docker-on || podman-on || mounts != ""): SummaryCard {
+                title: "Packages, Services & Runtime";
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 10px;
+                    if packages != "": SummaryRow { label: "Extra packages"; value: packages; }
+                    if extra-repos != "": SummaryRow { label: "Extra repositories"; value: extra-repos; }
+                    if enable-services != "": SummaryRow { label: "Enable services"; value: enable-services; }
+                    if disable-services != "": SummaryRow { label: "Disable services"; value: disable-services; }
+                    if docker-on || podman-on: SummaryRow {
+                        label: "Containers";
+                        value: docker-on && podman-on ? "Docker + Podman"
+                             : docker-on ? "Docker"
+                             : "Podman";
+                    }
+                    if docker-users != "": SummaryRow { label: "Docker users"; value: docker-users; }
+                    if mounts != "": SummaryRow { label: "Custom mounts"; value: mounts; }
+                }
+            }
+
+            if artifact-path == "" && (run-commands != "" || late-commands != "" || unattended): SummaryCard {
+                title: "Custom Behavior";
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 10px;
+                    if run-commands != "": SummaryRow { label: "Run commands"; value: run-commands; }
+                    if late-commands != "": SummaryRow { label: "Late commands"; value: late-commands; }
+                    if unattended: SummaryRow {
+                        label: "Installer mode";
+                        value: "Fully unattended — target disks will be wiped without prompts";
+                    }
+                }
+            }
+
+            if unattended && artifact-path == "": Rectangle {
+                border-radius: Sizes.radius-sm;
+                background: rgba(210, 153, 34, 0.10);
+                border-width: 1px;
+                border-color: rgba(210, 153, 34, 0.40);
+                VerticalLayout {
+                    padding: 14px;
+                    spacing: 6px;
+                    Text {
+                        text: "UNATTENDED MODE";
+                        font-size: Sizes.font-2xs;
+                        font-weight: 700;
+                        color: Palette.amber;
+                        letter-spacing: 1.4px;
+                    }
+                    Text {
+                        text: "This build will create media that installs without interactive prompts. Review the plan above carefully before you continue.";
+                        font-size: Sizes.font-sm;
+                        color: Palette.amber;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            if artifact-path == "": HorizontalLayout {
+                spacing: 16px;
+                alignment: start;
+
+                Rectangle {
+                    width: 220px;
+                    height: 50px;
+                    border-radius: Sizes.radius-md;
+                    background: running ? Palette.elevated
+                              : build-ta.has-hover ? @linear-gradient(135deg, #3d90ff 0%, #2060e8 100%)
+                              : @linear-gradient(135deg, Palette.accent 0%, #1a5cdb 100%);
+                    border-width: running ? 1px : 0px;
+                    border-color: Palette.border;
+                    animate background { duration: 120ms; }
+
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 10px;
+                        if !running: Text {
+                            text: "🔨";
+                            font-size: 18px;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: running ? "Building…" : "Start Build";
+                            font-size: Sizes.font-md;
+                            font-weight: 700;
+                            color: running ? Palette.muted : Palette.on-accent;
+                            vertical-alignment: center;
+                        }
+                    }
+                    build-ta := TouchArea {
+                        enabled: !running;
+                        mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                        clicked => { run-clicked(); }
+                    }
+                }
+            }
+
+            if artifact-path != "": VerticalLayout {
+                spacing: 6px;
+                Text {
+                    text: "Need another artifact after changing settings?";
+                    font-size: Sizes.font-sm;
+                    color: Palette.muted;
+                }
+                Rectangle {
+                    width: 180px;
+                    height: 38px;
+                    border-radius: Sizes.radius-sm;
+                    background: rebuild-ta.has-hover && !running ? Palette.active : Palette.elevated;
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    opacity: running ? 0.5 : 1.0;
+                    animate background { duration: 100ms; }
+                    animate opacity { duration: 150ms; }
+                    Text {
+                        text: "Rebuild ISO";
+                        font-size: Sizes.font-sm;
+                        font-weight: 600;
+                        color: Palette.text;
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
+                    rebuild-ta := TouchArea {
+                        enabled: !running;
+                        mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                        clicked => { run-clicked(); }
+                    }
+                }
+            }
+
+            if artifact-path != "": Rectangle {
+                border-radius: Sizes.radius-lg;
+                background: rgba(63, 185, 80, 0.06);
+                border-width: 1px;
+                border-color: rgba(63, 185, 80, 0.3);
+
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 8px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text {
+                            text: "✓";
+                            font-size: 18px;
+                            color: Palette.green;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "Build complete";
+                            font-size: Sizes.font-lg;
+                            font-weight: 700;
+                            color: Palette.green;
+                            vertical-alignment: center;
+                        }
+                    }
+                    Text {
+                        text: artifact-path;
+                        font-size: Sizes.font-sm;
+                        color: Palette.muted;
+                        overflow: elide;
+                    }
+                    if artifact-sha256 != "": Text {
+                        text: "SHA-256: " + artifact-sha256;
+                        font-size: Sizes.font-xs;
+                        font-family: "monospace";
+                        color: Palette.subtle;
+                    }
+                    if verify-summary != "": Text {
+                        text: verify-summary;
+                        font-size: Sizes.font-sm;
+                        color: Palette.muted;
+                    }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        alignment: start;
+
+                        Rectangle {
+                            width: 170px;
+                            height: 38px;
+                            border-radius: Sizes.radius-sm;
+                            background: chk-ta.has-hover ? #3d90ff : Palette.accent;
+                            animate background { duration: 100ms; }
+                            Text {
+                                text: "Optional Checks →";
+                                font-size: Sizes.font-sm;
+                                font-weight: 700;
+                                color: Palette.on-accent;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                            }
+                            chk-ta := TouchArea {
+                                mouse-cursor: MouseCursor.pointer;
+                                clicked => { view-results(); }
+                            }
+                        }
+
+                        Rectangle {
+                            width: 132px;
+                            height: 38px;
+                            border-radius: Sizes.radius-sm;
+                            background: ofld-ta.has-hover ? Palette.active : Palette.elevated;
+                            border-width: 1px;
+                            border-color: Palette.border;
+                            animate background { duration: 100ms; }
+                            Text {
+                                text: "Open Folder";
+                                font-size: Sizes.font-sm;
+                                color: Palette.text;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                            }
+                            ofld-ta := TouchArea {
+                                mouse-cursor: MouseCursor.pointer;
+                                clicked => { open-folder(); }
+                            }
+                        }
+
+                        Rectangle {
+                            width: 132px;
+                            height: 38px;
+                            border-radius: Sizes.radius-sm;
+                            background: newbld-ta.has-hover ? Palette.active : Palette.elevated;
+                            border-width: 1px;
+                            border-color: Palette.border;
+                            animate background { duration: 100ms; }
+                            Text {
+                                text: "Start New Build";
+                                font-size: Sizes.font-sm;
+                                color: Palette.text;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                            }
+                            newbld-ta := TouchArea {
+                                mouse-cursor: MouseCursor.pointer;
+                                clicked => { start-over(); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

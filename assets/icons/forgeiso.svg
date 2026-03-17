@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Dark background gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="45%" r="52%">
+      <stop offset="0%" stop-color="#1c2333"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </radialGradient>
+    <!-- Disc shine gradient -->
+    <radialGradient id="discShine" cx="38%" cy="32%" r="60%">
+      <stop offset="0%" stop-color="#2f81f7" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#2f81f7" stop-opacity="0.0"/>
+    </radialGradient>
+    <!-- Flame gradient - hot orange core to blue tip -->
+    <linearGradient id="flameGrad" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%"  stop-color="#ff6a00"/>
+      <stop offset="35%" stop-color="#f5a623"/>
+      <stop offset="68%" stop-color="#2f81f7"/>
+      <stop offset="100%" stop-color="#56a0f5" stop-opacity="0.7"/>
+    </linearGradient>
+    <!-- Inner flame -->
+    <linearGradient id="innerFlame" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%"  stop-color="#ffe066"/>
+      <stop offset="60%" stop-color="#fff5cc" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.0"/>
+    </linearGradient>
+    <!-- Disc ring gradient -->
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"  stop-color="#2f81f7"/>
+      <stop offset="50%" stop-color="#1a5cdb"/>
+      <stop offset="100%" stop-color="#0d3b8c"/>
+    </linearGradient>
+    <!-- Glow filter for flame -->
+    <filter id="flameGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- Subtle drop shadow -->
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="6" stdDeviation="16" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+    <!-- Outer glow for disc ring -->
+    <filter id="ringGlow" x="-8%" y="-8%" width="116%" height="116%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="discClip">
+      <circle cx="256" cy="256" r="220"/>
+    </clipPath>
+  </defs>
+
+  <!-- Outer shadow layer -->
+  <circle cx="256" cy="256" r="230" fill="#0d1117" opacity="0.6" filter="url(#shadow)"/>
+
+  <!-- Main disc body -->
+  <circle cx="256" cy="256" r="224" fill="url(#bgGrad)" stroke="#1c2b3d" stroke-width="2"/>
+
+  <!-- Disc ring (outer track) -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="url(#ringGrad)" stroke-width="12" filter="url(#ringGlow)" opacity="0.85"/>
+
+  <!-- Inner track ring (data tracks) -->
+  <circle cx="256" cy="256" r="185" fill="none" stroke="#2f81f7" stroke-width="1.5" opacity="0.25"/>
+  <circle cx="256" cy="256" r="170" fill="none" stroke="#2f81f7" stroke-width="1" opacity="0.18"/>
+  <circle cx="256" cy="256" r="155" fill="none" stroke="#2f81f7" stroke-width="1" opacity="0.14"/>
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#2f81f7" stroke-width="0.8" opacity="0.10"/>
+
+  <!-- Disc shine overlay -->
+  <circle cx="256" cy="256" r="224" fill="url(#discShine)"/>
+
+  <!-- Flame — outer body, clipped to disc -->
+  <g clip-path="url(#discClip)" filter="url(#flameGlow)">
+    <!-- Wide flame base -->
+    <path d="M256 370
+             C220 370 196 350 188 318
+             C178 282 194 258 200 240
+             C208 218 204 198 198 180
+             C212 196 218 212 216 232
+             C228 210 230 188 224 164
+             C238 182 244 208 240 236
+             C248 216 252 192 248 162
+             C260 182 264 212 260 244
+             C268 220 274 198 270 170
+             C282 190 286 220 280 252
+             C288 236 294 216 292 194
+             C302 218 302 248 294 278
+             C304 260 310 240 308 216
+             C320 244 318 276 308 302
+             C318 288 326 268 324 244
+             C334 268 334 300 322 328
+             C314 352 290 370 256 370Z"
+          fill="url(#flameGrad)" opacity="0.92"/>
+
+    <!-- Inner bright core -->
+    <path d="M256 350
+             C238 350 224 336 220 314
+             C214 290 224 270 228 256
+             C234 240 232 226 228 212
+             C236 222 240 236 238 252
+             C246 234 248 216 244 196
+             C254 210 258 232 254 254
+             C260 238 264 218 260 196
+             C268 214 270 238 266 262
+             C272 244 276 224 272 202
+             C280 224 280 252 272 278
+             C278 262 282 242 280 222
+             C288 246 286 276 276 300
+             C286 284 290 260 288 238
+             C296 262 294 292 282 318
+             C274 340 262 350 256 350Z"
+          fill="url(#innerFlame)" opacity="0.85"/>
+  </g>
+
+  <!-- Center hole (CD spindle) -->
+  <circle cx="256" cy="256" r="32" fill="#0a0e15" stroke="#1c2b3d" stroke-width="2"/>
+  <circle cx="256" cy="256" r="22" fill="#161b22" stroke="#2f81f7" stroke-width="1.5" opacity="0.6"/>
+  <circle cx="256" cy="256" r="6" fill="#2f81f7" opacity="0.7"/>
+
+  <!-- Accent arc — top highlight on disc edge -->
+  <path d="M 100 178 A 180 180 0 0 1 412 178" fill="none" stroke="#56a0f5" stroke-width="3" opacity="0.3" stroke-linecap="round"/>
+</svg>

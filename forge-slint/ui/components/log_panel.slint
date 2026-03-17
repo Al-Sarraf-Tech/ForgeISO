@@ -1,0 +1,212 @@
+import { Palette, Sizes } from "../theme.slint";
+import { ScrollView } from "std-widgets.slint";
+
+export struct LogEntry {
+    phase: string,
+    message: string,
+    level: int,       // 0=info 1=warn 2=error
+    timestamp: string,
+    percent: float,   // -1.0 = no bar; 0.0–1.0 = download/progress
+}
+
+export component LogPanel inherits Rectangle {
+    in property <[LogEntry]> entries;
+    in property <bool>       errors-only: false;
+    in property <int>        error-count: 0;
+    callback filter-toggled();
+    callback close-clicked();
+
+    width: 360px;
+    background: Palette.panel;
+    border-width: 0px;
+
+    // Left separator
+    Rectangle {
+        x: 0;
+        width: 1px;
+        height: parent.height;
+        background: Palette.border;
+    }
+
+    VerticalLayout {
+        padding-left: 1px; // account for separator
+        // Header
+        Rectangle {
+            height: 44px;
+            background: Palette.panel;
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                spacing: 8px;
+                alignment: space-between;
+                VerticalLayout {
+                    alignment: center;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        alignment: start;
+                        Text {
+                            text: "Log";
+                            font-size: Sizes.font-sm;
+                            font-weight: 700;
+                            color: Palette.text;
+                        }
+                        if error-count > 0: Rectangle {
+                            width: 20px;
+                            height: 16px;
+                            border-radius: 8px;
+                            background: Palette.red;
+                            Text {
+                                text: error-count > 99 ? "99+" : error-count;
+                                font-size: 9px;
+                                font-weight: 700;
+                                color: #ffffff;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                            }
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    alignment: end;
+                    // Errors-only filter toggle
+                    Rectangle {
+                        width: 64px;
+                        height: 24px;
+                        border-radius: 12px;
+                        background: errors-only ? Palette.red
+                                  : flt-ta.has-hover ? Palette.active
+                                  : Palette.elevated;
+                        border-width: 1px;
+                        border-color: errors-only ? Palette.red : Palette.border;
+                        animate background { duration: 120ms; }
+                        Text {
+                            text: "Errors";
+                            font-size: Sizes.font-2xs;
+                            color: errors-only ? #ffffff : Palette.text;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        flt-ta := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { filter-toggled(); }
+                        }
+                    }
+                    // Close button
+                    Rectangle {
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 12px;
+                        background: lp-close-ta.has-hover ? Palette.active : Palette.elevated;
+                        animate background { duration: 100ms; }
+                        Text {
+                            text: "×";
+                            font-size: 14px;
+                            color: Palette.text;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                        lp-close-ta := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { close-clicked(); }
+                        }
+                    }
+                }
+            }
+            // Bottom divider
+            Rectangle {
+                y: parent.height - 1px;
+                height: 1px;
+                background: Palette.border;
+            }
+        }
+
+        // Log entries — VerticalLayout auto-sizes each row to its content
+        ScrollView {
+            VerticalLayout {
+                for entry in entries: VerticalLayout {
+                    visible: !errors-only || entry.level == 2;
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 8px;
+                        padding-top: 8px;
+                        padding-bottom: 8px;
+                        spacing: 8px;
+
+                        // Level indicator bar — vertically centred via manual y offset
+                        Rectangle {
+                            width: 3px;
+                            min-height: 36px;
+                            border-radius: 1.5px;
+                            background: entry.level == 2 ? Palette.red
+                                      : entry.level == 1 ? Palette.amber
+                                      : Palette.accent;
+                        }
+
+                        VerticalLayout {
+                            alignment: start;
+                            spacing: 4px;
+                            HorizontalLayout {
+                                spacing: 6px;
+                                Text {
+                                    text: entry.timestamp;
+                                    font-size: Sizes.font-2xs;
+                                    color: Palette.subtle;
+                                }
+                                Text {
+                                    text: entry.phase;
+                                    font-size: Sizes.font-2xs;
+                                    font-weight: 600;
+                                    color: entry.level == 2 ? Palette.red
+                                         : entry.level == 1 ? Palette.amber
+                                         : Palette.accent;
+                                }
+                            }
+                            Text {
+                                text: entry.message;
+                                font-size: Sizes.font-xs;
+                                color: entry.level == 2 ? Palette.red
+                                     : entry.level == 1 ? Palette.amber
+                                     : Palette.text-secondary;
+                                wrap: word-wrap;
+                            }
+                            // Progress bar — visible only for download entries
+                            if entry.percent >= 0.0: VerticalLayout {
+                                spacing: 3px;
+                                // Track background
+                                Rectangle {
+                                    height: 6px;
+                                    border-radius: 3px;
+                                    background: Palette.elevated;
+                                    // Fill
+                                    Rectangle {
+                                        x: 0;
+                                        width: parent.width * entry.percent;
+                                        height: parent.height;
+                                        border-radius: 3px;
+                                        background: @linear-gradient(90deg, Palette.accent, #56b0ff);
+                                        animate width { duration: 200ms; easing: ease-out; }
+                                    }
+                                }
+                                Text {
+                                    text: Math.round(entry.percent * 100) + "%";
+                                    font-size: Sizes.font-2xs;
+                                    color: Palette.muted;
+                                    horizontal-alignment: right;
+                                }
+                            }
+                        }
+                    }
+
+                    // Row divider
+                    Rectangle {
+                        height: 1px;
+                        background: Palette.border;
+                        opacity: 0.4;
+                    }
+                }
+            }
+        }
+    }
+}

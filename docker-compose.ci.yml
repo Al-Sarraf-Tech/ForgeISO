@@ -1,0 +1,153 @@
+# ForgeISO CI — 7 ephemeral containers, all in parallel
+#
+# Each service gets its own named volumes for Cargo target and cargo home so
+# that compilation in one container NEVER blocks another (no artifact locks).
+# CARGO_TARGET_DIR and CARGO_HOME are redirected to isolated named volumes;
+# the source workspace is writable only for Cargo's own scratch files.
+#
+# Usage:
+#   docker compose -f docker-compose.ci.yml build --parallel   # build all images
+#   scripts/ci/run-parallel.sh                                  # run all, check all
+#
+# CPU scheduling:
+#   scripts/ci/run-parallel.sh enforces a shared host CPU budget across all
+#   running containers with `docker update --cpus/--cpu-shares`. By default it
+#   uses `$(nproc)` and can be overridden with `FORGEISO_CI_TOTAL_CPUS`. As
+#   stages exit, their quota is redistributed to the remaining jobs so
+#   long-running Rust builds can consume the freed cores without restarting.
+#
+# Volumes are declared at the bottom and are ALL removed by:
+#   docker compose -f docker-compose.ci.yml down -v --remove-orphans
+
+services:
+  c1:
+    build:
+      context: .
+      dockerfile: containers/C1.rust.Dockerfile
+    command: ["bash", "-c", "scripts/ci/c1-rust.sh"]
+    volumes:
+      - .:/workspace
+      - c1-cargo-target:/ci-target
+      - c1-cargo-home:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=5
+    cpus: 5
+    cpu_shares: 5120
+
+  c2:
+    build:
+      context: .
+      dockerfile: containers/C2.sbom.Dockerfile
+    command: ["bash", "-c", "scripts/ci/c2-sbom.sh"]
+    volumes:
+      - .:/workspace
+      - c2-cargo-target:/ci-target
+      - c2-cargo-home:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=1
+    cpus: 1
+    cpu_shares: 1024
+
+  c3:
+    build:
+      context: .
+      dockerfile: containers/C3.gui.Dockerfile
+    command: ["bash", "-c", "scripts/ci/c3-gui.sh"]
+    volumes:
+      - .:/workspace
+      - c3-cargo-target:/ci-target
+      - c3-cargo-home:/ci-cargo
+      - c3-node-modules:/workspace/gui/node_modules
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=3
+    cpus: 3
+    cpu_shares: 3072
+
+  c4:
+    build:
+      context: .
+      dockerfile: containers/C4.security.Dockerfile
+    command: ["bash", "-c", "scripts/ci/c4-security.sh"]
+    volumes:
+      - .:/workspace
+    environment:
+      - CI=true
+    cpus: 1
+    cpu_shares: 1024
+
+  c5:
+    build:
+      context: .
+      dockerfile: containers/C5.integration.Dockerfile
+    command: ["bash", "-c", "scripts/ci/c5-integration.sh"]
+    volumes:
+      - .:/workspace
+      - c5-cargo-target:/ci-target
+      - c5-cargo-home:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=4
+    cpus: 4
+    cpu_shares: 4096
+
+  c6:
+    build:
+      context: .
+      dockerfile: containers/C6.e2e.Dockerfile
+    command: ["bash", "-c", "scripts/ci/c6-e2e.sh"]
+    volumes:
+      - .:/workspace
+      - c6-cargo-target:/ci-target
+      - c6-cargo-home:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=3
+    cpus: 3
+    cpu_shares: 3072
+
+  c7:
+    build:
+      context: .
+      dockerfile: containers/C7.lint.Dockerfile
+    command: ["bash", "-c", "scripts/ci/c7-lint.sh"]
+    volumes:
+      - .:/workspace
+      - c7-cargo-target:/ci-target
+      - c7-cargo-home:/ci-cargo
+    environment:
+      - CI=true
+      - CARGO_TARGET_DIR=/ci-target
+      - CARGO_HOME=/ci-cargo
+      - CARGO_BUILD_JOBS=1
+    cpus: 1
+    cpu_shares: 1024
+
+# ── Ephemeral volumes ─────────────────────────────────────────────────────────
+# Removed on: docker compose -f docker-compose.ci.yml down -v --remove-orphans
+volumes:
+  c1-cargo-target:
+  c1-cargo-home:
+  c2-cargo-target:
+  c2-cargo-home:
+  c3-cargo-target:
+  c3-cargo-home:
+  c3-node-modules:
+  c5-cargo-target:
+  c5-cargo-home:
+  c6-cargo-target:
+  c6-cargo-home:
+  c7-cargo-target:
+  c7-cargo-home:

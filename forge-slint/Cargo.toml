@@ -1,0 +1,32 @@
+[package]
+name = "forge-slint"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "forge-slint"
+path = "src/main.rs"
+
+[dependencies]
+forgeiso-engine = { path = "../engine" }
+slint = { version = "1.15", default-features = false, features = [
+    "backend-winit",
+    "renderer-femtovg",
+    "std",
+    "compat-1-2",
+] }
+chrono     = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+sha2       = { workspace = true }
+tokio      = { workspace = true }
+tracing    = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow     = { workspace = true }
+dirs       = "5.0"
+
+[build-dependencies]
+slint-build = "1.15"

@@ -1,0 +1,64 @@
+# Maintainer: Jamal Al-Sarraf <https://github.com/jalsarraf0>
+pkgname=forgeiso
+pkgver=0.2.1
+pkgrel=1
+pkgdesc="Linux ISO builder and autoinstall injection tool"
+arch=('x86_64')
+url="https://github.com/jalsarraf0/ForgeISO"
+license=('Apache-2.0')
+depends=('xorriso' 'squashfs-tools' 'mtools')
+optdepends=(
+  'qemu: BIOS/UEFI smoke testing'
+  'ovmf: UEFI smoke testing'
+  'trivy: vulnerability scanning'
+  'syft: SBOM generation'
+  'zenity: GNOME file picker for forge-slint'
+  'kdialog: KDE file picker fallback for forge-slint'
+  'wl-clipboard: Wayland clipboard integration for forge-slint'
+  'xclip: X11 clipboard integration for forge-slint'
+  'xsel: alternate X11 clipboard integration for forge-slint'
+  'xdg-utils: open artifact folders from forge-slint'
+)
+source=("${pkgname}-${pkgver}-linux-x86_64.tar.gz::https://github.com/jalsarraf0/ForgeISO/releases/download/v${pkgver}/${pkgname}-${pkgver}-linux-x86_64.tar.gz")
+sha256sums=('SKIP')  # Replace with actual sha256 after release
+
+package() {
+  cd "${srcdir}/${pkgname}-${pkgver}-linux-x86_64"
+
+  install -Dm755 "bin/forgeiso"     "${pkgdir}/usr/bin/forgeiso"
+  install -Dm755 "bin/forgeiso-tui" "${pkgdir}/usr/bin/forgeiso-tui"
+  if [[ -f "bin/forge-slint" ]]; then
+    install -Dm755 "bin/forge-slint" "${pkgdir}/usr/bin/forge-slint"
+  fi
+  if [[ -f "bin/forge-gui" ]]; then
+    install -Dm755 "bin/forge-gui" "${pkgdir}/usr/bin/forge-gui"
+  fi
+  install -Dm644 "README.md"        "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+
+  if [[ -f "VERSION" ]]; then
+    install -Dm644 "VERSION" "${pkgdir}/usr/share/doc/${pkgname}/VERSION"
+  fi
+
+  if [[ -f "share/applications/forgeiso.desktop" ]]; then
+    install -Dm644 "share/applications/forgeiso.desktop" \
+      "${pkgdir}/usr/share/applications/forgeiso.desktop"
+  fi
+  if [[ -f "share/pixmaps/forgeiso.png" ]]; then
+    install -Dm644 "share/pixmaps/forgeiso.png" \
+      "${pkgdir}/usr/share/pixmaps/forgeiso.png"
+  fi
+  for size in 32 128 256 512; do
+    if [[ -f "share/icons/hicolor/${size}x${size}/apps/forgeiso.png" ]]; then
+      install -Dm644 "share/icons/hicolor/${size}x${size}/apps/forgeiso.png" \
+        "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/forgeiso.png"
+    fi
+  done
+  if [[ -f "share/man/man1/forgeiso.1.gz" ]]; then
+    install -Dm644 "share/man/man1/forgeiso.1.gz" \
+      "${pkgdir}/usr/share/man/man1/forgeiso.1.gz"
+  fi
+  if [[ -f "share/bash-completion/completions/forgeiso" ]]; then
+    install -Dm644 "share/bash-completion/completions/forgeiso" \
+      "${pkgdir}/usr/share/bash-completion/completions/forgeiso"
+  fi
+}
