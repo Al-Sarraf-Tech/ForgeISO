@@ -2,6 +2,8 @@
 name: ForgeISO CI
 on:
   push:
+    branches:
+      - main
     tags:
       - v*.*.*
       - v*
