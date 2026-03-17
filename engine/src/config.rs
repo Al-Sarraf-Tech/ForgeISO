@@ -1122,6 +1122,30 @@ impl InjectConfig {
             ));
         }
 
+        // extra_packages — each entry is written as a bare line in Kickstart
+        // %packages, interpolated into Mint preseed `pkgsel/include`, or
+        // serialised into cloud-init YAML.  In Kickstart, a package name
+        // containing a newline followed by `%end` would terminate the
+        // %packages section early and allow injecting arbitrary directives.
+        // Valid dpkg/rpm/pacman package names use alphanumeric, dash,
+        // underscore, dot, plus, and colon (architecture qualifier).
+        for pkg in &self.extra_packages {
+            if pkg.is_empty() {
+                return Err(EngineError::InvalidConfig(
+                    "extra_packages entry must not be empty".to_string(),
+                ));
+            }
+            if !pkg
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | '+' | ':'))
+            {
+                return Err(EngineError::InvalidConfig(format!(
+                    "extra_packages entry contains unsafe characters: {pkg:?} \
+                     (only alphanumeric, dash, underscore, dot, plus, colon allowed)"
+                )));
+            }
+        }
+
         Ok(())
     }
 }
