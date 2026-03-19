@@ -1,34 +1,38 @@
 import { Palette, Sizes } from "../theme.slint";
+import { FButton, FCard, FBadge, FDivider, FTextInput } from "../components/design_system.slint";
 
-component ResultCard inherits Rectangle {
+component ResultCard inherits FCard {
     in property <bool>   passed;
     in property <bool>   has-result;
-    in property <string> title;
+    in property <string> result-title;
     in property <string> detail;
-    border-radius: Sizes.radius-lg;
-    background: !has-result ? Palette.surface
-              : passed ? rgba(63, 185, 80, 0.08)
-              : rgba(248, 81, 73, 0.08);
-    border-width: 1px;
+
     border-color: !has-result ? Palette.border
-                : passed ? rgba(63, 185, 80, 0.4)
-                : rgba(248, 81, 73, 0.4);
+               : passed ? rgba(69, 194, 107, 0.4)
+               : rgba(240, 82, 75, 0.4);
+    background: !has-result ? Palette.surface
+              : passed ? rgba(69, 194, 107, 0.06)
+              : rgba(240, 82, 75, 0.06);
+
     animate background { duration: 250ms; }
+    animate border-color { duration: 250ms; }
+
     VerticalLayout {
-        padding: 16px;
-        spacing: 6px;
+        padding: Sizes.space-4;
+        spacing: Sizes.space-2;
         HorizontalLayout {
-            spacing: 8px;
-            Text {
-                text: !has-result ? "○" : passed ? "✓" : "✗";
-                font-size: 18px;
-                color: !has-result ? Palette.subtle
-                     : passed ? Palette.green
-                     : Palette.red;
-                vertical-alignment: center;
+            spacing: Sizes.space-2;
+            alignment: start;
+            if has-result: FBadge {
+                text: passed ? "PASS" : "FAIL";
+                variant: passed ? "success" : "error";
+            }
+            if !has-result: FBadge {
+                text: "PENDING";
+                variant: "default";
             }
             Text {
-                text: title;
+                text: result-title;
                 font-size: Sizes.font-md;
                 font-weight: 700;
                 color: !has-result ? Palette.muted
@@ -80,16 +84,16 @@ export component StepCheck inherits Rectangle {
     background: Palette.bg;
 
     VerticalLayout {
-        padding: 40px;
-        spacing: 28px;
+        padding: Sizes.space-10;
+        spacing: Sizes.space-8;
         alignment: start;
 
-        // ── Title ─────────────────────────────────────────────────────────
+        // ── Title ────────────────────────────────────────────────────
         HorizontalLayout {
-            spacing: 12px;
+            spacing: Sizes.space-3;
             alignment: space-between;
             VerticalLayout {
-                spacing: 4px;
+                spacing: Sizes.space-1;
                 Text {
                     text: "Optional Checks";
                     font-size: Sizes.font-2xl;
@@ -103,64 +107,34 @@ export component StepCheck inherits Rectangle {
                 }
             }
             HorizontalLayout {
-                spacing: 8px;
+                spacing: Sizes.space-2;
+                alignment: end;
 
-                Rectangle {
-                    width: 148px;
-                    height: 32px;
-                    border-radius: 16px;
-                    background: chk-back-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                    border-width: 1px;
-                    border-color: Palette.border;
-                    animate background { duration: 100ms; }
-                    Text {
-                        text: "← Back to Build";
-                        font-size: Sizes.font-sm;
-                        font-weight: 600;
-                        color: Palette.text;
-                        vertical-alignment: center;
-                        horizontal-alignment: center;
-                    }
-                    chk-back-ta := TouchArea {
-                        enabled: !running;
-                        mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                        clicked => { back-clicked(); }
-                    }
+                FButton {
+                    label: "← Back to Build";
+                    variant: "secondary";
+                    enabled: !running;
+                    clicked => { back-clicked(); }
                 }
 
-                Rectangle {
-                    width: 82px;
-                    height: 24px;
-                    border-radius: 12px;
-                    background: rgba(139, 148, 158, 0.15);
-                    border-width: 1px;
-                    border-color: Palette.border;
-                    Text {
-                        text: "Optional";
-                        font-size: Sizes.font-xs;
-                        font-weight: 600;
-                        color: Palette.muted;
-                        letter-spacing: 0.5px;
-                        vertical-alignment: center;
-                        horizontal-alignment: center;
-                    }
+                FBadge {
+                    text: "Optional";
+                    variant: "default";
                 }
             }
         }
 
-        // ── Build success banner ──────────────────────────────────────────
-        if artifact-path != "": Rectangle {
-            border-radius: Sizes.radius-lg;
-            background: rgba(63, 185, 80, 0.06);
-            border-width: 1px;
-            border-color: rgba(63, 185, 80, 0.35);
+        // ── Build success banner ─────────────────────────────────────
+        if artifact-path != "": FCard {
+            border-color: rgba(69, 194, 107, 0.35);
+            background: rgba(69, 194, 107, 0.05);
 
             VerticalLayout {
-                padding: 20px;
-                spacing: 12px;
+                padding: Sizes.space-5;
+                spacing: Sizes.space-3;
 
                 HorizontalLayout {
-                    spacing: 10px;
+                    spacing: Sizes.space-3;
                     alignment: start;
                     Text {
                         text: "✓";
@@ -188,95 +162,48 @@ export component StepCheck inherits Rectangle {
                 if artifact-sha256 != "": Text {
                     text: "SHA-256: " + artifact-sha256;
                     font-size: Sizes.font-xs;
+                    font-family: "monospace";
                     color: Palette.muted;
                 }
 
+                FDivider {}
+
                 HorizontalLayout {
-                    spacing: 8px;
+                    spacing: Sizes.space-2;
                     alignment: start;
 
-                    // Start New Build (primary)
-                    Rectangle {
-                        width: 160px;
-                        height: 36px;
-                        border-radius: Sizes.radius-sm;
-                        background: snb-ta.has-hover && !running ? #3d90ff : Palette.accent;
-                        animate background { duration: 100ms; }
-                        Text {
-                            text: "＋ Start New Build";
-                            font-size: Sizes.font-sm;
-                            font-weight: 600;
-                            color: Palette.on-accent;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        snb-ta := TouchArea {
-                            enabled: !running;
-                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                            clicked => { clear-forms(); }
-                        }
+                    FButton {
+                        label: "＋ Start New Build";
+                        variant: "primary";
+                        enabled: !running;
+                        clicked => { clear-forms(); }
                     }
 
-                    // Copy SHA-256 (secondary)
-                    Rectangle {
-                        width: 140px;
-                        height: 36px;
-                        border-radius: Sizes.radius-sm;
-                        background: csha-ta.has-hover ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        animate background { duration: 100ms; }
-                        Text {
-                            text: "📋 Copy SHA-256";
-                            font-size: Sizes.font-xs;
-                            color: Palette.text;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        csha-ta := TouchArea {
-                            mouse-cursor: MouseCursor.pointer;
-                            clicked => { copy-sha256(); }
-                        }
+                    FButton {
+                        label: "Copy SHA-256";
+                        icon: "📋";
+                        variant: "secondary";
+                        clicked => { copy-sha256(); }
                     }
 
-                    // Open Folder (secondary)
-                    Rectangle {
-                        width: 120px;
-                        height: 36px;
-                        border-radius: Sizes.radius-sm;
-                        background: ofld2-ta.has-hover ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        animate background { duration: 100ms; }
-                        Text {
-                            text: "📂 Open Folder";
-                            font-size: Sizes.font-xs;
-                            color: Palette.text;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        ofld2-ta := TouchArea {
-                            mouse-cursor: MouseCursor.pointer;
-                            clicked => { open-folder(); }
-                        }
+                    FButton {
+                        label: "Open Folder";
+                        icon: "📂";
+                        variant: "secondary";
+                        clicked => { open-folder(); }
                     }
                 }
             }
         }
 
-        // ── Checksum Verification ─────────────────────────────────────────
-        Rectangle {
-            border-radius: Sizes.radius-lg;
-            background: Palette.surface;
-            border-width: 1px;
-            border-color: Palette.border;
-
+        // ── Checksum Verification ────────────────────────────────────
+        FCard {
             VerticalLayout {
-                padding: 20px;
-                spacing: 14px;
+                padding: Sizes.space-5;
+                spacing: Sizes.space-4;
 
                 HorizontalLayout {
-                    spacing: 8px;
+                    spacing: Sizes.space-2;
                     alignment: start;
                     Text {
                         text: "CHECKSUM VERIFICATION";
@@ -284,174 +211,68 @@ export component StepCheck inherits Rectangle {
                         font-weight: 700;
                         color: Palette.subtle;
                         letter-spacing: 1.5px;
+                        vertical-alignment: center;
                     }
-                    Rectangle {
-                        width: 70px;
-                        height: 18px;
-                        border-radius: 9px;
-                        background: rgba(139, 148, 158, 0.12);
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        Text {
-                            text: "Optional";
-                            font-size: Sizes.font-2xs;
-                            color: Palette.muted;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
+                    FBadge {
+                        text: "Optional";
+                        variant: "default";
                     }
                 }
 
                 HorizontalLayout {
-                    spacing: 8px;
-                    Rectangle {
-                        height: 38px;
-                        border-radius: Sizes.radius-sm;
-                        background: Palette.bg;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        if verify-source == "" && !vsrc-input.has-focus: Text {
-                            x: 10px; y: 0;
-                            width: parent.width - 20px;
-                            height: parent.height;
-                            text: "/path/to/output.iso  or  https://…";
-                            font-size: Sizes.font-sm;
-                            color: Palette.subtle;
-                            vertical-alignment: center;
-                            overflow: elide;
-                        }
-                        vsrc-input := TextInput {
-                            x: 10px;
-                            y: (parent.height - self.preferred-height) / 2;
-                            width: parent.width - 20px;
-                            text: verify-source;
-                            font-size: Sizes.font-sm;
-                            color: Palette.text;
-                            selection-background-color: Palette.accent;
-                            selection-foreground-color: Palette.on-accent;
-                            single-line: true;
-                            enabled: !running;
-                            edited => { verify-source = self.text; }
-                        }
+                    spacing: Sizes.space-2;
+                    FTextInput {
+                        value <=> verify-source;
+                        hint: "/path/to/output.iso  or  https://…";
+                        enabled: !running;
+                        changed(v) => { verify-source = v; }
                     }
-                    Rectangle {
-                        width: 90px;
-                        height: 38px;
-                        border-radius: Sizes.radius-sm;
-                        background: vbrw-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        animate background { duration: 100ms; }
-                        Text {
-                            text: "Browse…";
-                            font-size: Sizes.font-sm;
-                            color: Palette.text;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        vbrw-ta := TouchArea {
-                            enabled: !running;
-                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                            clicked => { browse-verify-source(); }
-                        }
+                    FButton {
+                        label: "Browse…";
+                        variant: "secondary";
+                        enabled: !running;
+                        clicked => { browse-verify-source(); }
                     }
                 }
 
-                HorizontalLayout {
-                    spacing: 8px;
-                    Rectangle {
-                        height: 38px;
-                        border-radius: Sizes.radius-sm;
-                        background: Palette.bg;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        if sums-url == "" && !sums-input.has-focus: Text {
-                            x: 10px; y: 0;
-                            width: parent.width - 20px;
-                            height: parent.height;
-                            text: "SHA256SUMS URL or file path (optional)";
-                            font-size: Sizes.font-sm;
-                            color: Palette.subtle;
-                            vertical-alignment: center;
-                            overflow: elide;
-                        }
-                        sums-input := TextInput {
-                            x: 10px;
-                            y: (parent.height - self.preferred-height) / 2;
-                            width: parent.width - 20px;
-                            text: sums-url;
-                            font-size: Sizes.font-sm;
-                            color: Palette.text;
-                            selection-background-color: Palette.accent;
-                            selection-foreground-color: Palette.on-accent;
-                            single-line: true;
-                            enabled: !running;
-                            edited => { sums-url = self.text; }
-                        }
-                    }
+                FTextInput {
+                    value <=> sums-url;
+                    hint: "SHA256SUMS URL or file path (optional)";
+                    enabled: !running;
+                    changed(v) => { sums-url = v; }
                 }
 
                 HorizontalLayout {
-                    spacing: 12px;
+                    spacing: Sizes.space-3;
                     alignment: start;
-                    Rectangle {
-                        property <bool> ck-active: verify-source != "" && !running;
-                        width: 170px;
-                        height: 38px;
-                        border-radius: Sizes.radius-sm;
-                        background: ck-active
-                            ? (cfi-ta.has-hover ? #3d90ff : Palette.accent)
-                            : Palette.elevated;
-                        opacity: ck-active ? 1.0 : 0.6;
-                        animate background { duration: 120ms; }
-                        Text {
-                            text: "🔍 Check File Integrity";
-                            font-size: Sizes.font-sm;
-                            font-weight: 600;
-                            color: ck-active ? Palette.on-accent : Palette.subtle;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        cfi-ta := TouchArea {
-                            enabled: ck-active;
-                            mouse-cursor: ck-active ? MouseCursor.pointer : MouseCursor.default;
-                            clicked => { run-verify(); }
-                        }
+
+                    FButton {
+                        label: "Check File Integrity";
+                        icon: "🔍";
+                        variant: "primary";
+                        enabled: verify-source != "" && !running;
+                        clicked => { run-verify(); }
                     }
-                    Rectangle {
-                        property <bool> iso-active: verify-source != "" && !running;
-                        width: 170px;
-                        height: 38px;
-                        border-radius: Sizes.radius-sm;
-                        background: iso-ta.has-hover && iso-active ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: iso-active ? Palette.accent : Palette.border;
-                        opacity: iso-active ? 1.0 : 0.6;
-                        animate background { duration: 100ms; }
-                        Text {
-                            text: "📋 ISO-9660 Layout";
-                            font-size: Sizes.font-sm;
-                            color: iso-active ? Palette.text : Palette.subtle;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        iso-ta := TouchArea {
-                            enabled: iso-active;
-                            mouse-cursor: iso-active ? MouseCursor.pointer : MouseCursor.default;
-                            clicked => { run-iso9660(); }
-                        }
+
+                    FButton {
+                        label: "ISO-9660 Layout";
+                        icon: "📋";
+                        variant: "secondary";
+                        enabled: verify-source != "" && !running;
+                        clicked => { run-iso9660(); }
                     }
                 }
+
+                FDivider {}
 
                 // Results
-                if !verify-done && !iso9660-done: Rectangle {
-                    border-radius: Sizes.radius-lg;
+                if !verify-done && !iso9660-done: FCard {
+                    drop-shadow-blur: 0px;
                     background: Palette.elevated;
-                    border-width: 1px;
-                    border-color: Palette.border;
+
                     VerticalLayout {
-                        padding: 16px;
-                        spacing: 6px;
+                        padding: Sizes.space-4;
+                        spacing: Sizes.space-2;
                         Text {
                             text: "Build complete — checks skipped for now";
                             font-size: Sizes.font-md;
@@ -469,13 +290,13 @@ export component StepCheck inherits Rectangle {
                 if verify-done: ResultCard {
                     has-result: true;
                     passed: verify-matched;
-                    title: verify-matched ? "Integrity verified" : "Checksum mismatch";
+                    result-title: verify-matched ? "Integrity verified" : "Checksum mismatch";
                     detail: verify-hash-display;
                 }
                 if iso9660-done: ResultCard {
                     has-result: true;
                     passed: iso9660-compliant;
-                    title: iso9660-compliant ? "ISO-9660 compliant" : "ISO-9660 issues found";
+                    result-title: iso9660-compliant ? "ISO-9660 compliant" : "ISO-9660 issues found";
                     detail: (iso9660-boot-bios ? "BIOS boot ✓  " : "")
                           + (iso9660-boot-uefi ? "UEFI boot ✓  " : "")
                           + (iso9660-volume-id != "" ? "Label: " + iso9660-volume-id : "");
@@ -483,28 +304,13 @@ export component StepCheck inherits Rectangle {
             }
         }
 
-        // ── Danger zone (reset) ───────────────────────────────────────────
-        Rectangle {
-            width: 150px;
-            height: 36px;
-            border-radius: Sizes.radius-sm;
-            background: rst-ta.has-hover && !running ? rgba(248, 81, 73, 0.10) : Palette.elevated;
-            animate background { duration: 100ms; }
-            animate border-color { duration: 100ms; }
-            border-width: 1px;
-            border-color: Palette.border;
-            Text {
-                text: "🗑 Reset All Forms";
-                font-size: Sizes.font-xs;
-                color: rst-ta.has-hover && !running ? Palette.red : Palette.muted;
-                vertical-alignment: center;
-                horizontal-alignment: center;
-            }
-            rst-ta := TouchArea {
-                enabled: !running;
-                mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                clicked => { clear-forms(); }
-            }
+        // ── Danger zone (reset) ──────────────────────────────────────
+        FButton {
+            label: "Reset All Forms";
+            icon: "🗑";
+            variant: "destructive";
+            enabled: !running;
+            clicked => { clear-forms(); }
         }
     }
 }
