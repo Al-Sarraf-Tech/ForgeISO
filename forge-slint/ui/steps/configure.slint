@@ -1,161 +1,7 @@
 import { Palette, Sizes } from "../theme.slint";
 import { ScrollView, CheckBox } from "std-widgets.slint";
-
-// ── Reusable field components ────────────────────────────────────────────────
-
-component FieldLabel inherits Text {
-    font-size: Sizes.font-2xs;
-    font-weight: 600;
-    color: Palette.muted;
-    letter-spacing: 0.5px;
-}
-
-component FieldHelp inherits Text {
-    font-size: Sizes.font-xs;
-    color: Palette.subtle;
-    wrap: word-wrap;
-}
-
-component FieldInput inherits Rectangle {
-    in-out property <string> value;
-    in property <string>     hint: "";
-    in property <bool>       password: false;
-    in property <bool>       enabled: true;
-    in property <bool>       error: false;
-    callback changed(string);
-
-    height: 42px;
-    border-radius: Sizes.radius-sm;
-    background: Palette.bg;
-    border-width: 1px;
-    border-color: error ? Palette.red
-                : field.has-focus ? Palette.border-focus
-                : Palette.border;
-    animate border-color { duration: 150ms; }
-
-    // Placeholder shown when empty and unfocused
-    if value == "" && !field.has-focus: Text {
-        x: 10px;
-        y: 0;
-        width: parent.width - 20px;
-        height: parent.height;
-        text: hint;
-        font-size: Sizes.font-sm;
-        color: Palette.subtle;
-        vertical-alignment: center;
-    }
-    field := TextInput {
-        x: 10px;
-        y: (parent.height - self.preferred-height) / 2;
-        width: parent.width - 20px;
-        text: value;
-        font-size: Sizes.font-sm;
-        color: Palette.text;
-        selection-background-color: Palette.accent;
-        selection-foreground-color: Palette.on-accent;
-        enabled: parent.enabled;
-        single-line: true;
-        input-type: password ? InputType.password : InputType.text;
-        edited => { value = field.text; changed(field.text); }
-    }
-}
-
-component FieldTextarea inherits Rectangle {
-    in-out property <string> value;
-    in property <string>     hint: "";
-    in property <bool>       enabled: true;
-    callback changed(string);
-
-    height: 104px;
-    border-radius: Sizes.radius-sm;
-    background: Palette.bg;
-    border-width: 1px;
-    border-color: editor.has-focus ? Palette.border-focus : Palette.border;
-    animate border-color { duration: 150ms; }
-
-    editor := TextInput {
-        x: 10px;
-        y: 8px;
-        width: parent.width - 20px;
-        height: parent.height - 16px;
-        text: value;
-        font-size: Sizes.font-sm;
-        color: Palette.text;
-        selection-background-color: Palette.accent;
-        selection-foreground-color: Palette.on-accent;
-        enabled: parent.enabled;
-        single-line: false;
-        wrap: word-wrap;
-        edited => { value = editor.text; changed(editor.text); }
-    }
-}
-
-component SectionHeader inherits Rectangle {
-    in property <string> title;
-    in property <bool>   open: true;
-    callback toggle();
-
-    height: 44px;
-    background: hov.has-hover ? rgba(255, 255, 255, 0.02) : transparent;
-    animate background { duration: 120ms; }
-
-    HorizontalLayout {
-        padding-left: 6px;
-        padding-right: 6px;
-        spacing: 10px;
-        alignment: space-between;
-
-        HorizontalLayout {
-            spacing: 10px;
-            alignment: start;
-            Rectangle {
-                width: 3px;
-                height: 18px;
-                border-radius: 1.5px;
-                background: Palette.accent;
-                y: (parent.height - self.height) / 2;
-            }
-            Text {
-                text: title;
-                font-size: Sizes.font-sm;
-                font-weight: 700;
-                color: Palette.text-secondary;
-                vertical-alignment: center;
-            }
-        }
-
-        Rectangle {
-            width: 28px;
-            height: 28px;
-            border-radius: 14px;
-            background: hov.has-hover ? Palette.active : Palette.surface;
-            border-width: 1px;
-            border-color: open ? rgba(47, 129, 247, 0.4) : Palette.border;
-            animate background { duration: 100ms; }
-            animate border-color { duration: 150ms; }
-            Text {
-                text: open ? "▾" : "▸";
-                font-size: Sizes.font-xs;
-                color: open ? Palette.accent : hov.has-hover ? Palette.text-secondary : Palette.subtle;
-                vertical-alignment: center;
-                horizontal-alignment: center;
-            }
-        }
-    }
-
-    // Hairline below
-    Rectangle {
-        y: parent.height - 1px;
-        height: 1px;
-        background: Palette.border;
-        opacity: 0.5;
-    }
-
-    hov := TouchArea {
-        mouse-cursor: MouseCursor.pointer;
-        clicked => { toggle(); }
-    }
-}
+import { TabRail } from "../components/tab_rail.slint";
+import { FTextInput, FTextarea, FSectionLabel, FFieldHelp, FSwitch } from "../components/design_system.slint";
 
 // ── Main configure step ──────────────────────────────────────────────────────
 
@@ -251,17 +97,8 @@ export component StepConfigure inherits Rectangle {
     // Unattended
     in-out property <bool>   no-user-interaction: false;
 
-    // Section open states (8 consolidated sections)
-    in-out property <bool> s-identity-open: true;
-    in-out property <bool> s-access-ssh-open: false;
-    in-out property <bool> s-network-open: false;
-    in-out property <bool> s-system-open: false;
-    in-out property <bool> s-packages-open: false;
-    in-out property <bool> s-advanced-open: false;
-    in-out property <bool> s-firewall-open: false;
-    in-out property <bool> s-services-containers-open: false;
-    in-out property <bool> s-storage-boot-open: false;
-    in-out property <bool> s-output-open: true;
+    // Active tab (replaces 10 s-*-open booleans)
+    in-out property <int> active-tab: 0;
 
     // Defaults
     in property <string>  defaults-summary;
@@ -279,664 +116,672 @@ export component StepConfigure inherits Rectangle {
 
     background: Palette.bg;
 
-    HorizontalLayout {
-        // ── Form (main) ───────────────────────────────────────────────────
-        ScrollView {
-            VerticalLayout {
-                padding-left: 40px;
-                padding-right: 40px;
-                padding-top: 32px;
-                padding-bottom: 40px;
-                spacing: 20px;
-                alignment: start;
+    VerticalLayout {
+        spacing: 0px;
 
-                // Title row
-                HorizontalLayout {
-                    spacing: 12px;
-                    alignment: space-between;
-                    VerticalLayout {
-                        spacing: 4px;
-                        Text {
-                            text: "Configure Installer";
-                            font-size: Sizes.font-xl;
-                            font-weight: 700;
-                            color: Palette.text;
-                        }
-                        Text {
-                            text: "Start with identity and output. The rest is optional and grouped below by task.";
-                            font-size: Sizes.font-sm;
-                            color: Palette.muted;
-                        }
+        // ── Title bar ────────────────────────────────────────────────────
+        VerticalLayout {
+            padding-left: 40px;
+            padding-right: 40px;
+            padding-top: 24px;
+            padding-bottom: 16px;
+            spacing: 12px;
+            alignment: start;
+
+            // Title row
+            HorizontalLayout {
+                spacing: 12px;
+                alignment: space-between;
+                VerticalLayout {
+                    spacing: 4px;
+                    Text {
+                        text: "Configure Installer";
+                        font-size: Sizes.font-xl;
+                        font-weight: 700;
+                        color: Palette.text;
                     }
-                    // Back link
-                    Rectangle {
-                        width: 110px;
-                        height: 32px;
-                        border-radius: Sizes.radius-sm;
-                        background: cfg-back-ta.has-hover ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        animate background { duration: 100ms; }
-                        Text {
-                            text: "← Change ISO";
-                            font-size: Sizes.font-xs;
-                            color: Palette.text;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        cfg-back-ta := TouchArea {
-                            mouse-cursor: MouseCursor.pointer;
-                            clicked => { back-clicked(); }
-                        }
+                    Text {
+                        text: "Start with Identity and Output. The rest is optional.";
+                        font-size: Sizes.font-sm;
+                        color: Palette.muted;
                     }
                 }
-
-                // Source display
+                // Back link
                 Rectangle {
-                    height: selected-preset-name != "" ? 62px : 44px;
+                    width: 110px;
+                    height: 32px;
                     border-radius: Sizes.radius-sm;
-                    background: rgba(47, 129, 247, 0.08);
+                    background: cfg-back-ta.has-hover ? Palette.active : Palette.elevated;
                     border-width: 1px;
-                    border-color: rgba(47, 129, 247, 0.3);
-                    VerticalLayout {
-                        padding-left: 14px;
-                        padding-right: 14px;
-                        padding-top: 10px;
-                        padding-bottom: 10px;
-                        spacing: 6px;
+                    border-color: Palette.border;
+                    animate background { duration: 100ms; }
+                    Text {
+                        text: "\u{2190} Change ISO";
+                        font-size: Sizes.font-xs;
+                        color: Palette.text;
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
+                    cfg-back-ta := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        clicked => { back-clicked(); }
+                    }
+                }
+            }
+
+            // Source display
+            Rectangle {
+                height: selected-preset-name != "" ? 62px : 44px;
+                border-radius: Sizes.radius-sm;
+                background: rgba(47, 129, 247, 0.08);
+                border-width: 1px;
+                border-color: rgba(47, 129, 247, 0.3);
+                VerticalLayout {
+                    padding-left: 14px;
+                    padding-right: 14px;
+                    padding-top: 10px;
+                    padding-bottom: 10px;
+                    spacing: 6px;
+                    alignment: start;
+                    HorizontalLayout {
+                        spacing: 8px;
                         alignment: start;
-                        HorizontalLayout {
-                            spacing: 8px;
-                            alignment: start;
-                            Text {
-                                text: "📀";
-                                font-size: 16px;
-                                vertical-alignment: center;
-                            }
-                            Text {
-                                text: source-display;
-                                font-size: Sizes.font-sm;
-                                color: Palette.text;
-                                vertical-alignment: center;
-                                overflow: elide;
-                            }
+                        Text {
+                            text: "\u{1F4C0}";
+                            font-size: 16px;
+                            vertical-alignment: center;
                         }
-                        if selected-preset-name != "": Text {
-                            text: "Preset: " + selected-preset-name + "  ·  " + distro-display;
-                            font-size: Sizes.font-xs;
-                            color: Palette.muted;
+                        Text {
+                            text: source-display;
+                            font-size: Sizes.font-sm;
+                            color: Palette.text;
+                            vertical-alignment: center;
                             overflow: elide;
                         }
                     }
+                    if selected-preset-name != "": Text {
+                        text: "Preset: " + selected-preset-name + "  \u{00B7}  " + distro-display;
+                        font-size: Sizes.font-xs;
+                        color: Palette.muted;
+                        overflow: elide;
+                    }
                 }
+            }
 
-                // ── Defaults banner ──────────────────────────────────────
-                if defaults-summary != "": Rectangle {
-                    height: 44px;
-                    border-radius: Sizes.radius-sm;
-                    background: rgba(63, 185, 80, 0.06);
-                    border-width: 1px;
-                    border-color: rgba(63, 185, 80, 0.25);
+            // Defaults banner
+            if defaults-summary != "": Rectangle {
+                height: 44px;
+                border-radius: Sizes.radius-sm;
+                background: rgba(63, 185, 80, 0.06);
+                border-width: 1px;
+                border-color: rgba(63, 185, 80, 0.25);
+                HorizontalLayout {
+                    padding-left: 14px;
+                    padding-right: 8px;
+                    spacing: 10px;
+                    alignment: space-between;
                     HorizontalLayout {
-                        padding-left: 14px;
-                        padding-right: 8px;
-                        spacing: 10px;
-                        alignment: space-between;
-                        HorizontalLayout {
-                            spacing: 6px;
-                            alignment: start;
+                        spacing: 6px;
+                        alignment: start;
+                        Text {
+                            text: "\u{2699}";
+                            font-size: 14px;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "Defaults: " + defaults-summary;
+                            font-size: Sizes.font-xs;
+                            color: Palette.muted;
+                            vertical-alignment: center;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        alignment: end;
+                        Rectangle {
+                            width: 116px;
+                            height: 28px;
+                            border-radius: Sizes.radius-sm;
+                            background: apply-ta.has-hover && !running
+                                ? rgba(63, 185, 80, 0.16)
+                                : rgba(63, 185, 80, 0.08);
+                            border-width: 1px;
+                            border-color: rgba(63, 185, 80, 0.35);
+                            animate background { duration: 100ms; }
                             Text {
-                                text: "⚙";
-                                font-size: 14px;
+                                text: "Apply Defaults";
+                                font-size: Sizes.font-xs;
+                                font-weight: 600;
+                                color: Palette.green;
                                 vertical-alignment: center;
+                                horizontal-alignment: center;
                             }
+                            apply-ta := TouchArea {
+                                enabled: !running;
+                                mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                                clicked => { apply-defaults(); }
+                            }
+                        }
+                        Rectangle {
+                            width: 72px;
+                            height: 28px;
+                            border-radius: Sizes.radius-sm;
+                            background: reset-ta.has-hover && !running ? Palette.active : Palette.elevated;
+                            border-width: 1px;
+                            border-color: Palette.border;
+                            animate background { duration: 100ms; }
                             Text {
-                                text: "Defaults: " + defaults-summary;
+                                text: "Reset";
                                 font-size: Sizes.font-xs;
                                 color: Palette.muted;
                                 vertical-alignment: center;
+                                horizontal-alignment: center;
                             }
-                        }
-                        HorizontalLayout {
-                            spacing: 6px;
-                            alignment: end;
-                            Rectangle {
-                                width: 116px;
-                                height: 28px;
-                                border-radius: Sizes.radius-sm;
-                                background: apply-ta.has-hover && !running
-                                    ? rgba(63, 185, 80, 0.16)
-                                    : rgba(63, 185, 80, 0.08);
-                                border-width: 1px;
-                                border-color: rgba(63, 185, 80, 0.35);
-                                animate background { duration: 100ms; }
-                                Text {
-                                    text: "Apply Defaults";
-                                    font-size: Sizes.font-xs;
-                                    font-weight: 600;
-                                    color: Palette.green;
-                                    vertical-alignment: center;
-                                    horizontal-alignment: center;
-                                }
-                                apply-ta := TouchArea {
-                                    enabled: !running;
-                                    mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                                    clicked => { apply-defaults(); }
-                                }
-                            }
-                            Rectangle {
-                                width: 72px;
-                                height: 28px;
-                                border-radius: Sizes.radius-sm;
-                                background: reset-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                                border-width: 1px;
-                                border-color: Palette.border;
-                                animate background { duration: 100ms; }
-                                Text {
-                                    text: "Reset";
-                                    font-size: Sizes.font-xs;
-                                    color: Palette.muted;
-                                    vertical-alignment: center;
-                                    horizontal-alignment: center;
-                                }
-                                reset-ta := TouchArea {
-                                    enabled: !running;
-                                    mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                                    clicked => { reset-defaults(); }
-                                }
+                            reset-ta := TouchArea {
+                                enabled: !running;
+                                mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                                clicked => { reset-defaults(); }
                             }
                         }
                     }
                 }
+            }
+        }
 
-                // ── IDENTITY ──────────────────────────────────────────────
-                SectionHeader {
-                    title: "Identity (required)";
-                    open: s-identity-open;
-                    toggle => { s-identity-open = !s-identity-open; }
-                }
-                if s-identity-open: VerticalLayout {
-                    spacing: 10px;
-                    HorizontalLayout {
-                        spacing: 16px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "HOSTNAME"; }
-                            FieldInput { value <=> hostname; hint: "myserver"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "USERNAME"; }
-                            FieldInput { value <=> username; hint: "admin"; enabled: !running; changed(t) => { username-changed(t); } }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "FULL NAME"; }
-                            FieldInput { value <=> realname; hint: "Admin User"; enabled: !running; }
-                        }
-                    }
-                    HorizontalLayout {
-                        spacing: 16px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "PASSWORD"; }
-                            FieldInput { value <=> password; password: true; hint: "••••••••"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "CONFIRM PASSWORD"; }
-                            FieldInput { value <=> password-confirm; password: true; hint: "••••••••"; enabled: !running; error: pw-live-mismatch; }
-                        }
-                    }
-                    if !passwords-match || pw-live-mismatch: Rectangle {
-                        height: 28px;
-                        border-radius: Sizes.radius-sm;
-                        background: rgba(248, 81, 73, 0.1);
-                        border-width: 1px;
-                        border-color: rgba(248, 81, 73, 0.4);
-                        Text {
-                            text: "⚠ Passwords do not match";
-                            font-size: Sizes.font-xs;
-                            color: Palette.red;
-                            vertical-alignment: center;
-                            horizontal-alignment: left;
-                            x: 12px;
-                        }
-                    }
-                }
+        // Separator below title area
+        Rectangle {
+            height: 1px;
+            background: Palette.border;
+            opacity: 0.5;
+        }
 
-                // ── ACCESS & SSH ─────────────────────────────────────────
-                SectionHeader {
-                    title: "Access & SSH";
-                    open: s-access-ssh-open;
-                    toggle => { s-access-ssh-open = !s-access-ssh-open; }
-                }
-                if !s-access-ssh-open && (ssh-install-server || user-groups != "" || user-shell != ""): Text {
-                    text: (ssh-install-server ? "SSH: on" : "SSH: off")
-                        + (user-groups != "" ? "  ·  groups: " + user-groups : "")
-                        + (user-shell != "" ? "  ·  shell: " + user-shell : "");
-                    font-size: Sizes.font-xs;
-                    color: Palette.text-secondary;
-                    overflow: elide;
-                }
-                if s-access-ssh-open: VerticalLayout {
-                    spacing: 10px;
-                    // SSH
-                    FieldLabel { text: "AUTHORIZED SSH KEYS  (one per line)"; }
-                    FieldTextarea { value <=> ssh-keys; hint: "ssh-ed25519 AAAA… user@host"; enabled: !running; }
-                    FieldHelp {
-                        text: "Paste one public key per line. Leave blank if you plan to log in another way.";
-                    }
-                    HorizontalLayout {
-                        spacing: 24px;
-                        CheckBox { text: "Install SSH server"; checked <=> ssh-install-server; enabled: !running; }
-                        CheckBox { text: "Allow password authentication"; checked <=> ssh-password-auth; enabled: !running; }
-                    }
-                    // User access
-                    HorizontalLayout {
-                        spacing: 16px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "GROUPS  (one per line)"; }
-                            FieldTextarea { value <=> user-groups; hint: "docker\nsudo"; enabled: !running; changed(_t) => { field-edited("user_groups"); } }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "LOGIN SHELL"; }
-                            FieldInput { value <=> user-shell; hint: "/bin/bash"; enabled: !running; changed(_t) => { field-edited("user_shell"); } }
-                        }
-                    }
-                    FieldHelp {
-                        text: "ForgeISO fills in your private group plus "
-                            + (distro == "fedora" || distro == "arch" ? "wheel" : "sudo")
-                            + " for admin access once you choose a username. Edit the list only if you need something custom.";
-                    }
-                    CheckBox { text: "Grant passwordless sudo (NOPASSWD:ALL)"; checked <=> sudo-nopasswd; enabled: !running; }
-                }
+        // ── TabRail + Content panel ──────────────────────────────────────
+        HorizontalLayout {
+            // Left: tab rail (fixed 200px)
+            TabRail {
+                active-index: active-tab;
+                identity-complete: hostname != "" && username != "" && password != "" && password-confirm != "" && !pw-live-mismatch;
+                output-complete: output-dir != "" && out-name != "";
+                tab-clicked(idx) => { active-tab = idx; }
+            }
 
-                // ── NETWORK ───────────────────────────────────────────────
-                SectionHeader {
-                    title: "Network";
-                    open: s-network-open;
-                    toggle => { s-network-open = !s-network-open; }
-                }
-                if !s-network-open && (dns-servers != "" || static-ip != "" || http-proxy != ""): Text {
-                    text: (static-ip != "" ? "IP: " + static-ip : "DHCP")
-                        + (dns-servers != "" ? "  ·  DNS: " + dns-servers : "")
-                        + (http-proxy != "" ? "  ·  proxy: on" : "");
-                    font-size: Sizes.font-xs;
-                    color: Palette.text-secondary;
-                    overflow: elide;
-                }
-                if s-network-open: VerticalLayout {
-                    spacing: 10px;
-                    HorizontalLayout {
-                        spacing: 16px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "DNS SERVERS"; }
-                            FieldInput { value <=> dns-servers; hint: "1.1.1.1, 8.8.8.8"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "NTP SERVERS"; }
-                            FieldInput { value <=> ntp-servers; hint: "pool.ntp.org"; enabled: !running; }
-                        }
-                    }
-                    HorizontalLayout {
-                        spacing: 16px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "STATIC IP / CIDR"; }
-                            FieldInput { value <=> static-ip; hint: "192.168.1.100/24  (blank = DHCP)"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "GATEWAY"; }
-                            FieldInput { value <=> gateway; hint: "192.168.1.1"; enabled: !running; }
-                        }
-                    }
-                    HorizontalLayout {
-                        spacing: 16px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "HTTP PROXY"; }
-                            FieldInput { value <=> http-proxy; hint: "http://proxy:3128"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "HTTPS PROXY"; }
-                            FieldInput { value <=> https-proxy; hint: "http://proxy:3128"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "NO PROXY"; }
-                            FieldInput { value <=> no-proxy; hint: "localhost,127.0.0.1"; enabled: !running; }
-                        }
-                    }
-                }
-
-                // ── SYSTEM ────────────────────────────────────────────────
-                SectionHeader {
-                    title: "System";
-                    open: s-system-open;
-                    toggle => { s-system-open = !s-system-open; }
-                }
-                if !s-system-open && (timezone != "" || locale != "" || keyboard-layout != ""): Text {
-                    text: (timezone != "" ? "tz: " + timezone : "")
-                        + (locale != "" ? (timezone != "" ? "  ·  " : "") + "locale: " + locale : "")
-                        + (keyboard-layout != "" ? "  ·  kbd: " + keyboard-layout : "");
-                    font-size: Sizes.font-xs;
-                    color: Palette.text-secondary;
-                    overflow: elide;
-                }
-                if s-system-open: VerticalLayout {
-                    spacing: 10px;
-                    HorizontalLayout {
-                        spacing: 16px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "TIMEZONE"; }
-                            FieldInput { value <=> timezone; hint: "America/New_York"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "LOCALE"; }
-                            FieldInput { value <=> locale; hint: "en_US.UTF-8"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "KEYBOARD LAYOUT"; }
-                            FieldInput { value <=> keyboard-layout; hint: "us"; enabled: !running; }
-                        }
-                    }
-                    HorizontalLayout {
-                        spacing: 16px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "STORAGE LAYOUT"; }
-                            FieldInput { value <=> storage-layout; hint: "lvm  /  direct"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "APT MIRROR"; }
-                            FieldInput { value <=> apt-mirror; hint: "https://mirror.example.com/ubuntu"; enabled: !running; }
-                        }
-                    }
-                }
-
-                // ── PACKAGES ──────────────────────────────────────────────
-                SectionHeader {
-                    title: "Packages";
-                    open: s-packages-open;
-                    toggle => { s-packages-open = !s-packages-open; }
-                }
-                if !s-packages-open && packages != "": Text {
-                    text: packages;
-                    font-size: Sizes.font-xs;
-                    color: Palette.text-secondary;
-                    overflow: elide;
-                }
-                if s-packages-open: VerticalLayout {
-                    spacing: 10px;
-                    FieldLabel { text: "PACKAGES  (space-separated)"; }
-                    FieldTextarea { value <=> packages; hint: "curl git vim htop"; enabled: !running; changed(_t) => { field-edited("packages"); } }
-                    FieldHelp { text: "Use a short list of must-have packages. You can add more later in the installed system."; }
-                    FieldLabel { text: "EXTRA APT / DNF / PACMAN REPOS  (one per line)"; }
-                    FieldTextarea { value <=> apt-repos; hint: "ppa:ondrej/php\ndeb https://…"; enabled: !running; }
-                }
-
-                // ── FIREWALL ──────────────────────────────────────────────
-                SectionHeader {
-                    title: "Firewall";
-                    open: s-firewall-open;
-                    toggle => { s-firewall-open = !s-firewall-open; }
-                }
-                if !s-firewall-open && firewall-enabled: Text {
-                    text: "Firewall: on"
-                        + (firewall-policy != "" ? "  ·  policy: " + firewall-policy : "")
-                        + (allow-ports != "" ? "  ·  allow: " + allow-ports : "");
-                    font-size: Sizes.font-xs;
-                    color: Palette.text-secondary;
-                    overflow: elide;
-                }
-                if s-firewall-open: VerticalLayout {
-                    spacing: 10px;
-                    CheckBox { text: "Enable firewall"; checked <=> firewall-enabled; enabled: !running; }
-                    if firewall-enabled: VerticalLayout {
-                        spacing: 10px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "DEFAULT POLICY"; }
-                            FieldInput { value <=> firewall-policy; hint: "deny  (or allow / reject)"; enabled: !running; changed(_t) => { field-edited("firewall_policy"); } }
-                        }
-                        HorizontalLayout {
-                            spacing: 16px;
-                            VerticalLayout {
-                                spacing: 4px;
-                                FieldLabel { text: "ALLOWED PORTS  (space-separated)"; }
-                                FieldInput { value <=> allow-ports; hint: "22 80 443"; enabled: !running; changed(_t) => { field-edited("allow_ports"); } }
-                            }
-                            VerticalLayout {
-                                spacing: 4px;
-                                FieldLabel { text: "DENIED PORTS"; }
-                                FieldInput { value <=> deny-ports; hint: "23 21"; enabled: !running; }
-                            }
-                        }
-                    }
-                }
-
-                // ── SERVICES & CONTAINERS ─────────────────────────────────
-                SectionHeader {
-                    title: "Services & Containers";
-                    open: s-services-containers-open;
-                    toggle => { s-services-containers-open = !s-services-containers-open; }
-                }
-                if !s-services-containers-open && (docker || podman || enable-services != ""): Text {
-                    text: (docker && podman ? "Docker + Podman" : docker ? "Docker" : podman ? "Podman" : "")
-                        + (enable-services != "" ? (docker || podman ? "  ·  " : "") + "enable: " + enable-services : "");
-                    font-size: Sizes.font-xs;
-                    color: Palette.text-secondary;
-                    overflow: elide;
-                }
-                if s-services-containers-open: VerticalLayout {
-                    spacing: 10px;
-                    // Services
-                    HorizontalLayout {
-                        spacing: 16px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "ENABLE  (one per line)"; }
-                            FieldTextarea { value <=> enable-services; hint: "docker\nnginx"; enabled: !running; changed(_t) => { field-edited("enable_services"); } }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "DISABLE  (one per line)"; }
-                            FieldTextarea { value <=> disable-services; hint: "snapd"; enabled: !running; changed(_t) => { field-edited("disable_services"); } }
-                        }
-                    }
-                    // Containers
-                    HorizontalLayout {
-                        spacing: 24px;
-                        CheckBox {
-                            text: "Install Docker";
-                            checked <=> docker;
-                            enabled: !running;
-                            toggled => { docker-changed(); }
-                        }
-                        CheckBox { text: "Install Podman"; checked <=> podman; enabled: !running; }
-                    }
-                    if docker: VerticalLayout {
-                        spacing: 4px;
-                        FieldLabel { text: "ADD USERS TO DOCKER GROUP  (one per line)"; }
-                        FieldInput { value <=> docker-users; hint: "admin"; enabled: !running; changed(_t) => { field-edited("docker_users"); } }
-                        FieldHelp {
-                            text: "When Docker is enabled, ForgeISO pre-fills this with the primary username unless you override it.";
-                        }
-                    }
-                }
-
-                // ── STORAGE & BOOT ────────────────────────────────────────
-                SectionHeader {
-                    title: "Storage & Boot";
-                    open: s-storage-boot-open;
-                    toggle => { s-storage-boot-open = !s-storage-boot-open; }
-                }
-                if !s-storage-boot-open && (encrypt || swap-size-mb != "" || storage-layout != ""): Text {
-                    text: (storage-layout != "" ? "layout: " + storage-layout : "")
-                        + (swap-size-mb != "" ? (storage-layout != "" ? "  ·  " : "") + "swap: " + swap-size-mb + " MB" : "")
-                        + (encrypt ? "  ·  LUKS: on" : "");
-                    font-size: Sizes.font-xs;
-                    color: Palette.text-secondary;
-                    overflow: elide;
-                }
-                if s-storage-boot-open: VerticalLayout {
-                    spacing: 10px;
-                    // Storage & encryption
-                    FieldLabel { text: "SWAP SIZE  (MB, blank = no swap)"; }
-                    FieldInput { value <=> swap-size-mb; hint: "2048"; enabled: !running; }
-                    CheckBox { text: "Enable LUKS disk encryption"; checked <=> encrypt; enabled: !running; }
-                    if encrypt: VerticalLayout {
-                        spacing: 4px;
-                        FieldLabel { text: "LUKS PASSPHRASE"; }
-                        FieldInput { value <=> encrypt-passphrase; password: true; hint: "••••••••"; enabled: !running; }
-                    }
+            // Right: content panel (fills remaining space)
+            VerticalLayout {
+                // Tab content with scroll
+                ScrollView {
                     VerticalLayout {
-                        spacing: 4px;
-                        FieldLabel { text: "CUSTOM MOUNTS  (one fstab entry per line)"; }
-                        FieldTextarea { value <=> mounts; hint: "/dev/sdb1  /data  ext4  defaults  0 2"; enabled: !running; }
-                    }
-                    // GRUB bootloader
-                    HorizontalLayout {
-                        spacing: 16px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "GRUB TIMEOUT  (seconds)"; }
-                            FieldInput { value <=> grub-timeout; hint: "5"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "EXTRA KERNEL ARGS"; }
-                            FieldInput { value <=> grub-cmdline; hint: "quiet splash"; enabled: !running; }
-                        }
-                    }
-                }
+                        padding-left: 32px;
+                        padding-right: 32px;
+                        padding-top: 24px;
+                        padding-bottom: 24px;
+                        spacing: 14px;
+                        alignment: start;
 
-                // ── ADVANCED ──────────────────────────────────────────────
-                SectionHeader {
-                    title: "Advanced";
-                    open: s-advanced-open;
-                    toggle => { s-advanced-open = !s-advanced-open; }
-                }
-                if !s-advanced-open && (run-commands != "" || late-commands != "" || no-user-interaction): Text {
-                    text: (no-user-interaction ? "unattended  " : "")
-                        + (run-commands != "" ? "run-commands: on" : "")
-                        + (late-commands != "" ? (run-commands != "" ? "  ·  " : "") + "late-commands: on" : "");
-                    font-size: Sizes.font-xs;
-                    color: Palette.text-secondary;
-                    overflow: elide;
-                }
-                if s-advanced-open: VerticalLayout {
-                    spacing: 10px;
-                    // Custom commands
-                    FieldLabel { text: "RUN COMMANDS  (before install)"; }
-                    FieldTextarea { value <=> run-commands; hint: "echo 'setup starting'"; enabled: !running; }
-                    FieldHelp { text: "Use for simple pre-install tasks. Leave blank unless you need custom behavior."; }
-                    FieldLabel { text: "LATE COMMANDS  (after install, in chroot)"; }
-                    FieldTextarea { value <=> late-commands; hint: "curtin in-target -- apt-get install -y vim"; enabled: !running; }
-                    // Sysctl
-                    FieldLabel { text: "SYSCTL PAIRS  (key=value, one per line)"; }
-                    FieldTextarea { value <=> sysctl-pairs; hint: "vm.swappiness=10\nnet.ipv4.ip_forward=1"; enabled: !running; }
-                    CheckBox { text: "Unattended installation (no user interaction at all)"; checked <=> no-user-interaction; enabled: !running; }
-                }
+                        // ── TAB 0: Identity ──────────────────────────────
+                        if active-tab == 0: VerticalLayout {
+                            spacing: 14px;
 
-                // ── OUTPUT ────────────────────────────────────────────────
-                SectionHeader {
-                    title: "Output (required)";
-                    open: s-output-open;
-                    toggle => { s-output-open = !s-output-open; }
-                }
-                if s-output-open: VerticalLayout {
-                    spacing: 10px;
-                    HorizontalLayout {
-                        spacing: 8px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "OUTPUT DIRECTORY"; }
-                            Rectangle {
-                                height: 38px;
+                            Text {
+                                text: "Machine Identity";
+                                font-size: Sizes.font-lg;
+                                font-weight: 700;
+                                color: Palette.text;
+                            }
+                            FFieldHelp {
+                                text: "Required fields. Set the hostname, login user, and password for the installed system.";
+                            }
+
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "HOSTNAME"; }
+                                    FTextInput { value <=> hostname; hint: "myserver"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "USERNAME"; }
+                                    FTextInput { value <=> username; hint: "admin"; enabled: !running; changed(t) => { username-changed(t); } }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "FULL NAME"; }
+                                    FTextInput { value <=> realname; hint: "Admin User"; enabled: !running; }
+                                }
+                            }
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "PASSWORD"; }
+                                    FTextInput { value <=> password; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "CONFIRM PASSWORD"; }
+                                    FTextInput { value <=> password-confirm; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; error: pw-live-mismatch; }
+                                }
+                            }
+                            if !passwords-match || pw-live-mismatch: Rectangle {
+                                height: 28px;
                                 border-radius: Sizes.radius-sm;
-                                background: Palette.surface;
+                                background: rgba(248, 81, 73, 0.1);
                                 border-width: 1px;
-                                border-color: Palette.border;
+                                border-color: rgba(248, 81, 73, 0.4);
+                                Text {
+                                    text: "\u{26A0} Passwords do not match";
+                                    font-size: Sizes.font-xs;
+                                    color: Palette.red;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: left;
+                                    x: 12px;
+                                }
+                            }
+                        }
+
+                        // ── TAB 1: Access & SSH ──────────────────────────
+                        if active-tab == 1: VerticalLayout {
+                            spacing: 14px;
+
+                            Text {
+                                text: "Access & SSH";
+                                font-size: Sizes.font-lg;
+                                font-weight: 700;
+                                color: Palette.text;
+                            }
+
+                            FSectionLabel { text: "AUTHORIZED SSH KEYS  (one per line)"; }
+                            FTextarea { value <=> ssh-keys; hint: "ssh-ed25519 AAAA\u{2026} user@host"; enabled: !running; }
+                            FFieldHelp {
+                                text: "Paste one public key per line. Leave blank if you plan to log in another way.";
+                            }
+                            HorizontalLayout {
+                                spacing: 24px;
+                                CheckBox { text: "Install SSH server"; checked <=> ssh-install-server; enabled: !running; }
+                                CheckBox { text: "Allow password authentication"; checked <=> ssh-password-auth; enabled: !running; }
+                            }
+
+                            // User access
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "GROUPS  (one per line)"; }
+                                    FTextarea { value <=> user-groups; hint: "docker\nsudo"; enabled: !running; changed(_t) => { field-edited("user_groups"); } }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "LOGIN SHELL"; }
+                                    FTextInput { value <=> user-shell; hint: "/bin/bash"; enabled: !running; changed(_t) => { field-edited("user_shell"); } }
+                                }
+                            }
+                            FFieldHelp {
+                                text: "ForgeISO fills in your private group plus "
+                                    + (distro == "fedora" || distro == "arch" ? "wheel" : "sudo")
+                                    + " for admin access once you choose a username. Edit the list only if you need something custom.";
+                            }
+                            CheckBox { text: "Grant passwordless sudo (NOPASSWD:ALL)"; checked <=> sudo-nopasswd; enabled: !running; }
+                        }
+
+                        // ── TAB 2: Network ───────────────────────────────
+                        if active-tab == 2: VerticalLayout {
+                            spacing: 14px;
+
+                            Text {
+                                text: "Network";
+                                font-size: Sizes.font-lg;
+                                font-weight: 700;
+                                color: Palette.text;
+                            }
+
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "DNS SERVERS"; }
+                                    FTextInput { value <=> dns-servers; hint: "1.1.1.1, 8.8.8.8"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "NTP SERVERS"; }
+                                    FTextInput { value <=> ntp-servers; hint: "pool.ntp.org"; enabled: !running; }
+                                }
+                            }
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "STATIC IP / CIDR"; }
+                                    FTextInput { value <=> static-ip; hint: "192.168.1.100/24  (blank = DHCP)"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "GATEWAY"; }
+                                    FTextInput { value <=> gateway; hint: "192.168.1.1"; enabled: !running; }
+                                }
+                            }
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "HTTP PROXY"; }
+                                    FTextInput { value <=> http-proxy; hint: "http://proxy:3128"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "HTTPS PROXY"; }
+                                    FTextInput { value <=> https-proxy; hint: "http://proxy:3128"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "NO PROXY"; }
+                                    FTextInput { value <=> no-proxy; hint: "localhost,127.0.0.1"; enabled: !running; }
+                                }
+                            }
+                        }
+
+                        // ── TAB 3: System ────────────────────────────────
+                        if active-tab == 3: VerticalLayout {
+                            spacing: 14px;
+
+                            Text {
+                                text: "System";
+                                font-size: Sizes.font-lg;
+                                font-weight: 700;
+                                color: Palette.text;
+                            }
+
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "TIMEZONE"; }
+                                    FTextInput { value <=> timezone; hint: "America/New_York"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "LOCALE"; }
+                                    FTextInput { value <=> locale; hint: "en_US.UTF-8"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "KEYBOARD LAYOUT"; }
+                                    FTextInput { value <=> keyboard-layout; hint: "us"; enabled: !running; }
+                                }
+                            }
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "STORAGE LAYOUT"; }
+                                    FTextInput { value <=> storage-layout; hint: "lvm  /  direct"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "APT MIRROR"; }
+                                    FTextInput { value <=> apt-mirror; hint: "https://mirror.example.com/ubuntu"; enabled: !running; }
+                                }
+                            }
+                        }
+
+                        // ── TAB 4: Packages ──────────────────────────────
+                        if active-tab == 4: VerticalLayout {
+                            spacing: 14px;
+
+                            Text {
+                                text: "Packages";
+                                font-size: Sizes.font-lg;
+                                font-weight: 700;
+                                color: Palette.text;
+                            }
+
+                            FSectionLabel { text: "PACKAGES  (space-separated)"; }
+                            FTextarea { value <=> packages; hint: "curl git vim htop"; enabled: !running; changed(_t) => { field-edited("packages"); } }
+                            FFieldHelp { text: "Use a short list of must-have packages. You can add more later in the installed system."; }
+                            FSectionLabel { text: "EXTRA APT / DNF / PACMAN REPOS  (one per line)"; }
+                            FTextarea { value <=> apt-repos; hint: "ppa:ondrej/php\ndeb https://\u{2026}"; enabled: !running; }
+                        }
+
+                        // ── TAB 5: Firewall ──────────────────────────────
+                        if active-tab == 5: VerticalLayout {
+                            spacing: 14px;
+
+                            Text {
+                                text: "Firewall";
+                                font-size: Sizes.font-lg;
+                                font-weight: 700;
+                                color: Palette.text;
+                            }
+
+                            CheckBox { text: "Enable firewall"; checked <=> firewall-enabled; enabled: !running; }
+                            if firewall-enabled: VerticalLayout {
+                                spacing: 14px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "DEFAULT POLICY"; }
+                                    FTextInput { value <=> firewall-policy; hint: "deny  (or allow / reject)"; enabled: !running; changed(_t) => { field-edited("firewall_policy"); } }
+                                }
                                 HorizontalLayout {
-                                    padding-left: 10px;
-                                    Text {
-                                        text: output-dir;
-                                        font-size: Sizes.font-sm;
-                                        color: Palette.text;
-                                        vertical-alignment: center;
-                                        overflow: elide;
+                                    spacing: 16px;
+                                    VerticalLayout {
+                                        spacing: 4px;
+                                        FSectionLabel { text: "ALLOWED PORTS  (space-separated)"; }
+                                        FTextInput { value <=> allow-ports; hint: "22 80 443"; enabled: !running; changed(_t) => { field-edited("allow_ports"); } }
+                                    }
+                                    VerticalLayout {
+                                        spacing: 4px;
+                                        FSectionLabel { text: "DENIED PORTS"; }
+                                        FTextInput { value <=> deny-ports; hint: "23 21"; enabled: !running; }
                                     }
                                 }
                             }
                         }
-                        VerticalLayout {
-                            alignment: end;
-                            Rectangle {
-                                width: 90px;
-                                height: 38px;
-                                border-radius: Sizes.radius-sm;
-                                background: out-brw-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                                border-width: 1px;
-                                border-color: Palette.border;
-                                opacity: running ? 0.5 : 1.0;
-                                animate background { duration: 100ms; }
-                                Text {
-                                    text: "Browse…";
-                                    font-size: Sizes.font-sm;
-                                    color: Palette.text;
-                                    vertical-alignment: center;
-                                    horizontal-alignment: center;
+
+                        // ── TAB 6: Services & Containers ─────────────────
+                        if active-tab == 6: VerticalLayout {
+                            spacing: 14px;
+
+                            Text {
+                                text: "Services & Containers";
+                                font-size: Sizes.font-lg;
+                                font-weight: 700;
+                                color: Palette.text;
+                            }
+
+                            // Services
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "ENABLE  (one per line)"; }
+                                    FTextarea { value <=> enable-services; hint: "docker\nnginx"; enabled: !running; changed(_t) => { field-edited("enable_services"); } }
                                 }
-                                out-brw-ta := TouchArea {
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "DISABLE  (one per line)"; }
+                                    FTextarea { value <=> disable-services; hint: "snapd"; enabled: !running; changed(_t) => { field-edited("disable_services"); } }
+                                }
+                            }
+                            // Containers
+                            HorizontalLayout {
+                                spacing: 24px;
+                                CheckBox {
+                                    text: "Install Docker";
+                                    checked <=> docker;
                                     enabled: !running;
-                                    mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                                    clicked => { browse-output-dir(); }
+                                    toggled => { docker-changed(); }
+                                }
+                                CheckBox { text: "Install Podman"; checked <=> podman; enabled: !running; }
+                            }
+                            if docker: VerticalLayout {
+                                spacing: 4px;
+                                FSectionLabel { text: "ADD USERS TO DOCKER GROUP  (one per line)"; }
+                                FTextInput { value <=> docker-users; hint: "admin"; enabled: !running; changed(_t) => { field-edited("docker_users"); } }
+                                FFieldHelp {
+                                    text: "When Docker is enabled, ForgeISO pre-fills this with the primary username unless you override it.";
+                                }
+                            }
+                        }
+
+                        // ── TAB 7: Storage & Boot ────────────────────────
+                        if active-tab == 7: VerticalLayout {
+                            spacing: 14px;
+
+                            Text {
+                                text: "Storage & Boot";
+                                font-size: Sizes.font-lg;
+                                font-weight: 700;
+                                color: Palette.text;
+                            }
+
+                            // Storage & encryption
+                            FSectionLabel { text: "SWAP SIZE  (MB, blank = no swap)"; }
+                            FTextInput { value <=> swap-size-mb; hint: "2048"; enabled: !running; }
+                            CheckBox { text: "Enable LUKS disk encryption"; checked <=> encrypt; enabled: !running; }
+                            if encrypt: VerticalLayout {
+                                spacing: 4px;
+                                FSectionLabel { text: "LUKS PASSPHRASE"; }
+                                FTextInput { value <=> encrypt-passphrase; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; }
+                            }
+                            VerticalLayout {
+                                spacing: 4px;
+                                FSectionLabel { text: "CUSTOM MOUNTS  (one fstab entry per line)"; }
+                                FTextarea { value <=> mounts; hint: "/dev/sdb1  /data  ext4  defaults  0 2"; enabled: !running; }
+                            }
+                            // GRUB bootloader
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "GRUB TIMEOUT  (seconds)"; }
+                                    FTextInput { value <=> grub-timeout; hint: "5"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "EXTRA KERNEL ARGS"; }
+                                    FTextInput { value <=> grub-cmdline; hint: "quiet splash"; enabled: !running; }
+                                }
+                            }
+                        }
+
+                        // ── TAB 8: Advanced ──────────────────────────────
+                        if active-tab == 8: VerticalLayout {
+                            spacing: 14px;
+
+                            Text {
+                                text: "Advanced";
+                                font-size: Sizes.font-lg;
+                                font-weight: 700;
+                                color: Palette.text;
+                            }
+
+                            // Custom commands
+                            FSectionLabel { text: "RUN COMMANDS  (before install)"; }
+                            FTextarea { value <=> run-commands; hint: "echo 'setup starting'"; enabled: !running; }
+                            FFieldHelp { text: "Use for simple pre-install tasks. Leave blank unless you need custom behavior."; }
+                            FSectionLabel { text: "LATE COMMANDS  (after install, in chroot)"; }
+                            FTextarea { value <=> late-commands; hint: "curtin in-target -- apt-get install -y vim"; enabled: !running; }
+                            // Sysctl
+                            FSectionLabel { text: "SYSCTL PAIRS  (key=value, one per line)"; }
+                            FTextarea { value <=> sysctl-pairs; hint: "vm.swappiness=10\nnet.ipv4.ip_forward=1"; enabled: !running; }
+                            CheckBox { text: "Unattended installation (no user interaction at all)"; checked <=> no-user-interaction; enabled: !running; }
+                        }
+
+                        // ── TAB 9: Output ────────────────────────────────
+                        if active-tab == 9: VerticalLayout {
+                            spacing: 14px;
+
+                            Text {
+                                text: "Output";
+                                font-size: Sizes.font-lg;
+                                font-weight: 700;
+                                color: Palette.text;
+                            }
+                            FFieldHelp {
+                                text: "ForgeISO writes the finished ISO here. Verification is optional and can be run after the build succeeds.";
+                            }
+
+                            HorizontalLayout {
+                                spacing: 8px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "OUTPUT DIRECTORY"; }
+                                    Rectangle {
+                                        height: 38px;
+                                        border-radius: Sizes.radius-sm;
+                                        background: Palette.surface;
+                                        border-width: 1px;
+                                        border-color: Palette.border;
+                                        HorizontalLayout {
+                                            padding-left: 10px;
+                                            Text {
+                                                text: output-dir;
+                                                font-size: Sizes.font-sm;
+                                                color: Palette.text;
+                                                vertical-alignment: center;
+                                                overflow: elide;
+                                            }
+                                        }
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: end;
+                                    Rectangle {
+                                        width: 90px;
+                                        height: 38px;
+                                        border-radius: Sizes.radius-sm;
+                                        background: out-brw-ta.has-hover && !running ? Palette.active : Palette.elevated;
+                                        border-width: 1px;
+                                        border-color: Palette.border;
+                                        opacity: running ? 0.5 : 1.0;
+                                        animate background { duration: 100ms; }
+                                        Text {
+                                            text: "Browse\u{2026}";
+                                            font-size: Sizes.font-sm;
+                                            color: Palette.text;
+                                            vertical-alignment: center;
+                                            horizontal-alignment: center;
+                                        }
+                                        out-brw-ta := TouchArea {
+                                            enabled: !running;
+                                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                                            clicked => { browse-output-dir(); }
+                                        }
+                                    }
+                                }
+                            }
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "OUTPUT FILENAME"; }
+                                    FTextInput { value <=> out-name; hint: "forgeiso-local.iso"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "VOLUME LABEL  (max 32 chars)"; }
+                                    FTextInput { value <=> output-label; hint: "MYISO"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "EXPECTED SHA-256  (optional)"; }
+                                    FTextInput { value <=> expected-sha256; hint: "a1b2c3\u{2026}"; enabled: !running; }
                                 }
                             }
                         }
                     }
-                    FieldHelp {
-                        text: "ForgeISO writes the finished ISO here. Verification is optional and can be run after the build succeeds.";
-                    }
-                    HorizontalLayout {
-                        spacing: 16px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "OUTPUT FILENAME"; }
-                            FieldInput { value <=> out-name; hint: "forgeiso-local.iso"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "VOLUME LABEL  (max 32 chars)"; }
-                            FieldInput { value <=> output-label; hint: "MYISO"; enabled: !running; }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            FieldLabel { text: "EXPECTED SHA-256  (optional)"; }
-                            FieldInput { value <=> expected-sha256; hint: "a1b2c3…"; enabled: !running; }
-                        }
-                    }
                 }
 
-                // ── Continue button ───────────────────────────────────────
+                // ── Continue button (always visible at bottom) ───────────
                 Rectangle {
                     height: 1px;
                     background: Palette.border;
                     opacity: 0.5;
                 }
                 HorizontalLayout {
+                    padding-left: 32px;
+                    padding-top: 12px;
+                    padding-bottom: 16px;
                     alignment: start;
                     Rectangle {
                         width: 280px;
@@ -950,7 +795,7 @@ export component StepConfigure inherits Rectangle {
                         animate background { duration: 120ms; }
                         animate opacity  { duration: 180ms; }
                         Text {
-                            text: "Continue to Build Summary →";
+                            text: "Continue to Build Summary \u{2192}";
                             font-size: Sizes.font-sm;
                             font-weight: 700;
                             color: btn-active ? Palette.on-accent : Palette.subtle;

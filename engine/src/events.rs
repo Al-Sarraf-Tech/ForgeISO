@@ -31,10 +31,11 @@ pub enum EventPhase {
 
 /// Semantic event kind — allows UI consumers to react to structured lifecycle
 /// events without parsing message strings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum EventKind {
     /// Default: a plain log message.
+    #[default]
     Log,
     /// Progress update (percent, bytes, substage already on EngineEvent).
     Progress,
@@ -51,11 +52,6 @@ pub enum EventKind {
     },
 }
 
-impl Default for EventKind {
-    fn default() -> Self {
-        Self::Log
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EngineEvent {

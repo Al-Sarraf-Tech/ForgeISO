@@ -1,0 +1,125 @@
+// ── Tab Rail ────────────────────────────────────────────────────────────────
+// Vertical navigation rail for the Configure step.
+// Each tab item shows an icon, label, and optional completion indicator.
+
+import { Palette, Sizes } from "../theme.slint";
+
+component TabRailItem inherits Rectangle {
+    in property <string>  icon;
+    in property <string>  label;
+    in property <bool>    active: false;
+    in property <bool>    complete: false;
+    callback clicked();
+
+    height: 44px;
+    background: active ? rgba(77, 142, 247, 0.08)
+              : ta.has-hover ? rgba(255, 255, 255, 0.02)
+              : transparent;
+    animate background { duration: 120ms; }
+
+    // Active accent bar
+    Rectangle {
+        x: 0;
+        width: active ? 3px : 0px;
+        height: parent.height;
+        background: Palette.accent;
+        animate width { duration: 150ms; easing: ease-out; }
+    }
+
+    HorizontalLayout {
+        padding-left: Sizes.space-4;
+        padding-right: Sizes.space-3;
+        spacing: Sizes.space-3;
+        alignment: start;
+
+        // Icon
+        Text {
+            text: icon;
+            font-size: Sizes.font-md;
+            color: active ? Palette.accent : Palette.muted;
+            vertical-alignment: center;
+            width: 20px;
+            horizontal-alignment: center;
+            animate color { duration: 150ms; }
+        }
+
+        // Label
+        Text {
+            text: label;
+            font-size: Sizes.font-sm;
+            font-weight: active ? 700 : 400;
+            color: active ? Palette.text : ta.has-hover ? Palette.text-secondary : Palette.muted;
+            vertical-alignment: center;
+            overflow: elide;
+            animate color { duration: 150ms; }
+        }
+
+        // Completion indicator
+        if complete: Rectangle {
+            width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            background: rgba(69, 194, 107, 0.15);
+            y: (parent.height - self.height) / 2;
+            Text {
+                text: "\u{2713}";
+                font-size: 10px;
+                color: Palette.green;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component TabRail inherits Rectangle {
+    in property <int>  active-index: 0;
+
+    // Completion flags per tab
+    in property <bool> identity-complete: false;
+    in property <bool> output-complete: false;
+
+    callback tab-clicked(int);
+
+    width: 200px;
+    background: Palette.panel;
+
+    // Right separator
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        height: parent.height;
+        background: Palette.border;
+    }
+
+    VerticalLayout {
+        padding-top: Sizes.space-3;
+        spacing: 2px;
+
+        TabRailItem { icon: "\u{1D4D8}"; label: "Identity";          active: active-index == 0; complete: identity-complete;
+            clicked => { tab-clicked(0); } }
+        TabRailItem { icon: "\u{1F511}"; label: "Access & SSH";      active: active-index == 1;
+            clicked => { tab-clicked(1); } }
+        TabRailItem { icon: "\u{1F310}"; label: "Network";           active: active-index == 2;
+            clicked => { tab-clicked(2); } }
+        TabRailItem { icon: "\u{2699}";  label: "System";            active: active-index == 3;
+            clicked => { tab-clicked(3); } }
+        TabRailItem { icon: "\u{1F4E6}"; label: "Packages";          active: active-index == 4;
+            clicked => { tab-clicked(4); } }
+        TabRailItem { icon: "\u{1F6E1}"; label: "Firewall";          active: active-index == 5;
+            clicked => { tab-clicked(5); } }
+        TabRailItem { icon: "\u{26A1}";  label: "Services";          active: active-index == 6;
+            clicked => { tab-clicked(6); } }
+        TabRailItem { icon: "\u{1F4BE}"; label: "Storage & Boot";    active: active-index == 7;
+            clicked => { tab-clicked(7); } }
+        TabRailItem { icon: "\u{1F527}"; label: "Advanced";          active: active-index == 8;
+            clicked => { tab-clicked(8); } }
+        TabRailItem { icon: "\u{1F4C1}"; label: "Output";            active: active-index == 9; complete: output-complete;
+            clicked => { tab-clicked(9); } }
+    }
+}
