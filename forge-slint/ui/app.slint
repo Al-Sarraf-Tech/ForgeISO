@@ -193,8 +193,12 @@ export component AppWindow inherits Window {
 
         // ── Main body ────────────────────────────────────────────────────
         HorizontalLayout {
-            // Content area — show one step at a time
-            if current-step == 1: StepSource {
+            // Content area — show one step at a time with fade-in
+            if current-step == 1: Rectangle {
+                opacity: 0.0;
+                init => { self.opacity = 1.0; }
+                animate opacity { duration: 200ms; easing: ease-out; }
+                StepSource {
                 presets-row1: root.presets-row1;
                 presets-row2: root.presets-row2;
                 source-path: root.source-path;
@@ -207,9 +211,13 @@ export component AppWindow inherits Window {
                 source-changed(t) => { root.source-changed(t); }
                 continue-clicked => { root.source-continue(); }
                 clear-clicked => { root.clear-source(); }
-            }
+            }}
 
-            if current-step == 2: StepConfigure {
+            if current-step == 2: Rectangle {
+                opacity: 0.0;
+                init => { self.opacity = 1.0; }
+                animate opacity { duration: 200ms; easing: ease-out; }
+                StepConfigure {
                 source-display: root.source-path;
                 distro: root.distro;
                 selected-preset-name: root.selected-preset-name;
@@ -277,9 +285,13 @@ export component AppWindow inherits Window {
                 field-edited(name) => { root.field-edited(name); }
                 username-changed(u) => { root.username-changed(u); }
                 docker-changed => { root.docker-changed(); }
-            }
+            }}
 
-            if current-step == 3: StepBuild {
+            if current-step == 3: Rectangle {
+                opacity: 0.0;
+                init => { self.opacity = 1.0; }
+                animate opacity { duration: 200ms; easing: ease-out; }
+                StepBuild {
                 distro-display: root.distro-display;
                 admin-group: root.distro == "fedora" || root.distro == "arch" ? "wheel" : "sudo";
                 source: root.source-path;
@@ -335,9 +347,13 @@ export component AppWindow inherits Window {
                 view-results => { root.build-view-results(); }
                 open-folder => { root.open-folder(); }
                 start-over => { root.clear-forms(); }
-            }
+            }}
 
-            if current-step == 4: StepCheck {
+            if current-step == 4: Rectangle {
+                opacity: 0.0;
+                init => { self.opacity = 1.0; }
+                animate opacity { duration: 200ms; easing: ease-out; }
+                StepCheck {
                 verify-source <=> root.verify-source;
                 sums-url <=> root.sums-url;
                 artifact-path: root.artifact-path;
@@ -358,7 +374,7 @@ export component AppWindow inherits Window {
                 copy-sha256 => { root.copy-sha256(); }
                 open-folder => { root.open-folder(); }
                 clear-forms => { root.clear-forms(); }
-            }
+            }}
 
             // Log panel (collapsible)
             if log-open: LogPanel {
