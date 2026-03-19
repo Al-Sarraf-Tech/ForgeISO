@@ -1,7 +1,7 @@
-use crate::AppWindow;
+use crate::{AppState, AppWindow};
 /// Spawn zenity file pickers that deliver results via `slint::invoke_from_event_loop`.
 /// Spawns zenity file pickers and delivers results via `slint::invoke_from_event_loop`.
-use slint::Weak;
+use slint::{ComponentHandle, Weak};
 use std::ffi::OsStr;
 use std::process::Output;
 
@@ -136,8 +136,9 @@ fn report_picker_error(win: Weak<AppWindow>, msg: &str) {
     let msg = msg.to_string();
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(w) = win.upgrade() {
-            w.set_status_text(msg.into());
-            w.set_status_is_error(true);
+            let gs = w.global::<AppState>();
+            gs.set_status_text(msg.into());
+            gs.set_status_is_error(true);
         }
     });
 }

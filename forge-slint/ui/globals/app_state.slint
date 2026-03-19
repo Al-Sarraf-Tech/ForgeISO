@@ -1,0 +1,53 @@
+// ── AppState global ─────────────────────────────────────────────────────────
+// Navigation, job lifecycle, step-done flags, doctor panel, log panel state,
+// and build/check result properties.  Step components import this directly
+// instead of receiving navigation/state props from AppWindow.
+
+export global AppState {
+    // ── Navigation ─────────────────────────────────────────────────────────
+    in-out property <int>    current-step: 1;
+
+    // ── Job state ──────────────────────────────────────────────────────────
+    in-out property <string> job-phase;
+    in-out property <float>  job-percent: -1.0;
+    in-out property <bool>   job-running: false;
+    in-out property <string> status-text;
+    in-out property <bool>   status-is-error: false;
+
+    // ── Log ────────────────────────────────────────────────────────────────
+    in-out property <bool>   log-open: false;
+    in-out property <int>    log-error-count: 0;
+    in-out property <bool>   log-errors-only: false;
+
+    // ── Doctor ─────────────────────────────────────────────────────────────
+    in-out property <bool>   doctor-open: false;
+    in-out property <bool>   doctor-loading: false;
+    in-out property <string> doctor-text;
+
+    // ── Step done flags ────────────────────────────────────────────────────
+    in-out property <bool>   step1-done: false;
+    in-out property <bool>   step2-done: false;
+    in-out property <bool>   step3-done: false;
+
+    // ── Build artifacts ────────────────────────────────────────────────────
+    in-out property <string> artifact-path;
+    in-out property <string> artifact-sha256;
+
+    // ── Verify / ISO-9660 results ──────────────────────────────────────────
+    in-out property <string> verify-source;
+    in-out property <string> sums-url;
+    in-out property <bool>   verify-done: false;
+    in-out property <bool>   verify-matched: false;
+    in-out property <string> verify-hash-display;
+    in-out property <bool>   iso9660-done: false;
+    in-out property <bool>   iso9660-compliant: false;
+    in-out property <bool>   iso9660-boot-bios: false;
+    in-out property <bool>   iso9660-boot-uefi: false;
+    in-out property <string> iso9660-volume-id;
+
+    // ── Defaults ───────────────────────────────────────────────────────────
+    in-out property <string> defaults-summary;
+
+    // ── Derived: password match ────────────────────────────────────────────
+    in-out property <bool>   passwords-match: true;
+}
