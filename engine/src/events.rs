@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -28,12 +29,43 @@ pub enum EventPhase {
     Complete,
 }
 
+/// Semantic event kind — allows UI consumers to react to structured lifecycle
+/// events without parsing message strings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum EventKind {
+    /// Default: a plain log message.
+    Log,
+    /// Progress update (percent, bytes, substage already on EngineEvent).
+    Progress,
+    /// A phase is starting — UI can show a transition.
+    PhaseStart { label: String },
+    /// A phase completed.
+    PhaseEnd { success: bool },
+    /// An artifact (ISO, report, etc.) is ready at the given path.
+    ArtifactReady { path: PathBuf },
+    /// A config field passed or failed validation.
+    ValidationResult {
+        field: String,
+        error: Option<String>,
+    },
+}
+
+impl Default for EventKind {
+    fn default() -> Self {
+        Self::Log
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EngineEvent {
     pub ts: DateTime<Utc>,
     pub level: EventLevel,
     pub phase: EventPhase,
     pub message: String,
+    /// Semantic event kind for structured UI handling.
+    #[serde(default)]
+    pub kind: EventKind,
     /// Current operation label shown in the progress panel.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub substage: Option<String>,
@@ -55,6 +87,7 @@ impl EngineEvent {
             level: EventLevel::Debug,
             phase,
             message: message.into(),
+            kind: EventKind::Log,
             substage: None,
             percent: None,
             bytes_done: None,
@@ -68,6 +101,7 @@ impl EngineEvent {
             level: EventLevel::Info,
             phase,
             message: message.into(),
+            kind: EventKind::Log,
             substage: None,
             percent: None,
             bytes_done: None,
@@ -81,6 +115,7 @@ impl EngineEvent {
             level: EventLevel::Warn,
             phase,
             message: message.into(),
+            kind: EventKind::Log,
             substage: None,
             percent: None,
             bytes_done: None,
@@ -94,6 +129,7 @@ impl EngineEvent {
             level: EventLevel::Error,
             phase,
             message: message.into(),
+            kind: EventKind::Log,
             substage: None,
             percent: None,
             bytes_done: None,
@@ -139,11 +175,76 @@ impl EngineEvent {
             level: EventLevel::Info,
             phase,
             message: message.into(),
+            kind: EventKind::Progress,
             substage: Some(substage.into()),
             percent,
             bytes_done: None,
             bytes_total: None,
         }
+    }
+
+    // ── Lifecycle event constructors ────────────────────────────────────
+
+    /// Signal that a phase is starting — UI can show transitions.
+    pub fn phase_start(phase: EventPhase, label: impl Into<String>) -> Self {
+        let label_str = label.into();
+        Self {
+            ts: Utc::now(),
+            level: EventLevel::Info,
+            phase,
+            message: format!("Starting: {label_str}"),
+            kind: EventKind::PhaseStart { label: label_str },
+            substage: None,
+            percent: None,
+            bytes_done: None,
+            bytes_total: None,
+        }
+    }
+
+    /// Signal that a phase completed.
+    pub fn phase_end(phase: EventPhase, success: bool) -> Self {
+        Self {
+            ts: Utc::now(),
+            level: if success {
+                EventLevel::Info
+            } else {
+                EventLevel::Error
+            },
+            phase,
+            message: if success {
+                "Phase complete".to_string()
+            } else {
+                "Phase failed".to_string()
+            },
+            kind: EventKind::PhaseEnd { success },
+            substage: None,
+            percent: None,
+            bytes_done: None,
+            bytes_total: None,
+        }
+    }
+
+    /// Signal that an artifact (ISO, report, etc.) is ready.
+    pub fn artifact(phase: EventPhase, path: impl Into<PathBuf>) -> Self {
+        let p = path.into();
+        Self {
+            ts: Utc::now(),
+            level: EventLevel::Info,
+            phase,
+            message: format!("Artifact ready: {}", p.display()),
+            kind: EventKind::ArtifactReady { path: p },
+            substage: None,
+            percent: None,
+            bytes_done: None,
+            bytes_total: None,
+        }
+    }
+
+    /// Attach a semantic event kind (fluent builder).
+    #[must_use]
+    pub fn with_kind(mut self, kind: EventKind) -> Self {
+        self.kind = kind;
+        self
     }
 }
 

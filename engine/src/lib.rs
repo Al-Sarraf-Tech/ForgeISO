@@ -22,7 +22,7 @@ pub use config::{
     ToolStatus, UserConfig,
 };
 pub use error::{EngineError, EngineResult};
-pub use events::{EngineEvent, EventLevel, EventPhase};
+pub use events::{EngineEvent, EventKind, EventLevel, EventPhase};
 pub use iso::{BootSupport, IsoMetadata, SourceKind};
 pub use kickstart::generate_kickstart_cfg;
 pub use mint_preseed::generate_mint_preseed;
