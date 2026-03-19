@@ -10,36 +10,43 @@ component StepBadge inherits Rectangle {
     in property <bool>   locked: false;
     callback clicked();
 
-    width: 174px;
-    height: 64px;
-    border-radius: Sizes.radius-lg;
-    background: current ? rgba(47, 129, 247, 0.08) : transparent;
+    property <bool> hovered: ta.has-hover;
+
+    width: 170px;
+    height: 56px;
+    border-radius: Sizes.radius-md;
+    background: current ? rgba(77, 142, 247, 0.06)
+              : clickable && hovered ? rgba(255, 255, 255, 0.015)
+              : transparent;
     border-width: current ? 1px : 0px;
-    border-color: current ? rgba(47, 129, 247, 0.25) : transparent;
+    border-color: current ? rgba(77, 142, 247, 0.20) : transparent;
+    animate background { duration: 150ms; }
+    animate border-color { duration: 150ms; }
 
     HorizontalLayout {
-        spacing: 10px;
+        spacing: Sizes.space-3;
         alignment: start;
-        padding-left: 12px;
-        padding-right: 12px;
+        padding-left: Sizes.space-3;
+        padding-right: Sizes.space-3;
 
         // Badge circle
         Rectangle {
-            width: 30px;
-            height: 30px;
-            border-radius: 15px;
-            background: done ? Palette.green : current ? Palette.accent : Palette.surface;
-            border-width: 1.5px;
-            border-color: done ? Palette.green : current ? Palette.accent : Palette.border;
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            background: done ? Palette.green
+                      : current ? Palette.accent
+                      : Palette.elevated;
+            border-width: done || current ? 0px : 1px;
+            border-color: Palette.border;
             y: (parent.height - self.height) / 2;
             animate background { duration: 200ms; }
-            animate border-color { duration: 200ms; }
 
             Text {
-                text: done ? "✓" : locked ? "🔒" : num;
-                font-size: locked ? Sizes.font-2xs : Sizes.font-sm;
+                text: done ? "\u{2713}" : locked ? "\u{1F512}" : num;
+                font-size: locked ? Sizes.font-2xs : Sizes.font-xs;
                 font-weight: 700;
-                color: done ? #0d1117 : current ? #ffffff : Palette.muted;
+                color: done ? Palette.bg : current ? Palette.on-accent : Palette.muted;
                 vertical-alignment: center;
                 horizontal-alignment: center;
             }
@@ -47,24 +54,28 @@ component StepBadge inherits Rectangle {
 
         VerticalLayout {
             alignment: center;
-            spacing: 2px;
+            spacing: 1px;
             Text {
                 text: label;
                 font-size: Sizes.font-sm;
-                font-weight: current ? 700 : 400;
-                color: done ? Palette.green : current ? Palette.text : clickable ? Palette.text-secondary : Palette.muted;
+                font-weight: current ? 600 : 400;
+                color: done ? Palette.green
+                     : current ? Palette.text
+                     : clickable ? Palette.text-secondary
+                     : Palette.muted;
                 animate color { duration: 200ms; }
             }
             Text {
                 text: sublabel;
-                font-size: Sizes.font-xs;
+                font-size: Sizes.font-2xs;
                 color: current ? Palette.muted : Palette.subtle;
             }
         }
     }
 
-    if clickable && !locked: TouchArea {
-        mouse-cursor: MouseCursor.pointer;
+    ta := TouchArea {
+        enabled: clickable && !locked;
+        mouse-cursor: clickable && !locked ? MouseCursor.pointer : MouseCursor.default;
         clicked => { root.clicked(); }
     }
 }
@@ -78,78 +89,76 @@ export component StepBar inherits Rectangle {
     in property <bool> job-running: false;
     callback step-clicked(int);
 
-    height: 84px;
+    height: 72px;
     background: Palette.panel;
 
-    // Bottom separator
+    // Bottom border
     Rectangle {
         y: parent.height - 1px;
         height: 1px;
-        background: Palette.border;
+        background: Palette.border-subtle;
     }
 
     HorizontalLayout {
         alignment: center;
         spacing: 0px;
-        padding-top: 8px;
-        padding-bottom: 8px;
+        padding-top: Sizes.space-2;
+        padding-bottom: Sizes.space-2;
 
         StepBadge {
-            num: "1"; label: "Choose ISO"; sublabel: "Pick your source image";
+            num: "1"; label: "Choose ISO"; sublabel: "Source image";
             done: step1-done; current: current-step == 1;
             clickable: !job-running && current-step != 1;
             locked: job-running && current-step != 1;
             clicked => { step-clicked(1); }
         }
 
-        // Connector 1→2
+        // Connector
         Rectangle {
-            width: 72px;
+            width: 48px;
             height: 2px;
             y: (parent.height - self.height) / 2;
             border-radius: 1px;
-            background: step1-done ? Palette.accent : Palette.border;
+            background: step1-done ? Palette.accent : Palette.border-subtle;
             animate background { duration: 300ms; }
         }
 
         StepBadge {
-            num: "2"; label: "Configure"; sublabel: "Set up your install";
+            num: "2"; label: "Configure"; sublabel: "Installer settings";
             done: step2-done; current: current-step == 2;
             clickable: !job-running && step1-done && current-step != 2;
             locked: job-running && current-step != 2;
             clicked => { step-clicked(2); }
         }
 
-        // Connector 2→3
         Rectangle {
-            width: 72px;
+            width: 48px;
             height: 2px;
             y: (parent.height - self.height) / 2;
             border-radius: 1px;
-            background: step2-done ? Palette.accent : Palette.border;
+            background: step2-done ? Palette.accent : Palette.border-subtle;
             animate background { duration: 300ms; }
         }
 
         StepBadge {
-            num: "3"; label: "Review & Build"; sublabel: "Confirm and create";
+            num: "3"; label: "Build"; sublabel: "Review and create";
             done: step3-done; current: current-step == 3;
             clickable: !job-running && step2-done && current-step != 3;
             locked: job-running && current-step != 3;
             clicked => { step-clicked(3); }
         }
 
-        // Connector 3→4
         Rectangle {
-            width: 72px;
+            width: 48px;
             height: 2px;
             y: (parent.height - self.height) / 2;
             border-radius: 1px;
-            background: step3-done ? Palette.accent : Palette.border;
+            background: step3-done ? Palette.accent : Palette.border-subtle;
             animate background { duration: 300ms; }
         }
 
         StepBadge {
-            num: "4"; label: "Optional Checks"; sublabel: "Extra validation";
+            num: "4"; label: "Checks"; sublabel: "Optional validation";
             done: step4-done; current: current-step == 4;
             clickable: !job-running && step3-done && current-step != 4;
             locked: job-running && current-step != 4;

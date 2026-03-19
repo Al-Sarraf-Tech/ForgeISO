@@ -1,6 +1,7 @@
 mod build;
 mod components;
 mod inject;
+mod inject_builder;
 pub(crate) mod validation;
 
 pub use build::{BuildConfig, ScanPolicy, TestingPolicy};
@@ -9,6 +10,7 @@ pub use components::{
     UserConfig,
 };
 pub use inject::InjectConfig;
+pub use inject_builder::InjectConfigBuilder;
 
 use std::path::PathBuf;
 

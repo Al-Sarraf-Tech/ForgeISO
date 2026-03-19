@@ -52,7 +52,6 @@ pub enum EventKind {
     },
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EngineEvent {
     pub ts: DateTime<Utc>,

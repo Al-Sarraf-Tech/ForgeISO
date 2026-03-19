@@ -371,45 +371,41 @@ export component AppWindow inherits Window {
         }
     }
 
-    // ── Log toggle button (bottom-right corner) ──────────────────────────
+    // ── Log toggle button (bottom-right, floating) ────────────────────────
     Rectangle {
-        x: parent.width - 114px;
-        y: parent.height - 46px;
-        width: 104px;
-        height: 36px;
-        border-radius: Sizes.radius-md;
-        background: log-btn-ta.has-hover ? Palette.active : Palette.surface;
+        x: parent.width - 110px;
+        y: parent.height - 44px;
+        width: 100px;
+        height: 32px;
+        border-radius: 16px;
+        background: log-btn-ta.has-hover ? Palette.active : Palette.elevated;
         border-width: 1px;
         border-color: log-btn-ta.has-hover ? Palette.border-focus : Palette.border;
-        drop-shadow-blur: 8px;
-        drop-shadow-color: rgba(0, 0, 0, 0.4);
+        drop-shadow-blur: 12px;
+        drop-shadow-color: Palette.shadow-md;
         drop-shadow-offset-y: -2px;
-        animate background { duration: 100ms; }
-        animate border-color { duration: 100ms; }
+        animate background { duration: 120ms; }
+        animate border-color { duration: 120ms; }
         HorizontalLayout {
-            spacing: 6px;
+            spacing: Sizes.space-2;
             alignment: center;
             Text {
-                text: "📋";
-                font-size: 13px;
-                vertical-alignment: center;
-            }
-            Text {
-                text: log-open ? "Hide Log" : "Show Log";
+                text: log-open ? "Hide Log" : "Activity";
                 font-size: Sizes.font-xs;
+                font-weight: 500;
                 color: log-btn-ta.has-hover ? Palette.text : Palette.muted;
                 vertical-alignment: center;
             }
             if log-error-count > 0 && !log-open: Rectangle {
-                width: 18px;
-                height: 14px;
-                border-radius: 7px;
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
                 background: Palette.red;
                 Text {
-                    text: log-error-count > 99 ? "99+" : log-error-count;
+                    text: log-error-count > 99 ? "+" : log-error-count;
                     font-size: 9px;
                     font-weight: 700;
-                    color: #ffffff;
+                    color: Palette.on-accent;
                     vertical-alignment: center;
                     horizontal-alignment: center;
                 }
@@ -425,44 +421,43 @@ export component AppWindow inherits Window {
     if doctor-open: Rectangle {
         x: parent.width - 384px;
         y: 72px;
-        width: 368px;
+        width: 360px;
         height: 380px;
         border-radius: Sizes.radius-lg;
-        background: Palette.elevated;
+        background: Palette.surface;
         border-width: 1px;
         border-color: Palette.border;
-        drop-shadow-blur: 32px;
-        drop-shadow-color: rgba(0, 0, 0, 0.6);
-        drop-shadow-offset-x: 0px;
-        drop-shadow-offset-y: 8px;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: Palette.shadow-lg;
+        drop-shadow-offset-y: 6px;
         clip: true;
 
         VerticalLayout {
-            // Header (fixed)
+            // Header
             Rectangle {
-                height: 52px;
-                background: Palette.elevated;
+                height: 48px;
+                background: Palette.surface;
                 HorizontalLayout {
-                    padding-left: 20px;
-                    padding-right: 14px;
+                    padding-left: Sizes.space-5;
+                    padding-right: Sizes.space-3;
                     alignment: space-between;
                     Text {
-                        text: "🩺 Dependency Check";
-                        font-size: Sizes.font-md;
-                        font-weight: 700;
+                        text: "Dependency Check";
+                        font-size: Sizes.font-sm;
+                        font-weight: 600;
                         color: Palette.text;
                         vertical-alignment: center;
                     }
                     Rectangle {
-                        width: 28px;
-                        height: 28px;
-                        border-radius: 14px;
-                        background: doc-close-ta.has-hover ? Palette.active : Palette.surface;
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 12px;
+                        background: doc-close-ta.has-hover ? Palette.active : transparent;
                         animate background { duration: 100ms; }
                         y: (parent.height - self.height) / 2;
                         Text {
-                            text: "×";
-                            font-size: 16px;
+                            text: "\u{2715}";
+                            font-size: 11px;
                             color: Palette.muted;
                             vertical-alignment: center;
                             horizontal-alignment: center;
@@ -473,33 +468,27 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
-                // Divider
                 Rectangle {
                     y: parent.height - 1px;
                     height: 1px;
-                    background: Palette.border;
+                    background: Palette.border-subtle;
                 }
             }
 
-            // Scrollable content
+            // Content
             ScrollView {
                 VerticalLayout {
-                    padding: 20px;
-                    spacing: 10px;
+                    padding: Sizes.space-5;
+                    spacing: Sizes.space-3;
 
-                    if doctor-loading: Rectangle {
-                        height: 40px;
-                        Text {
-                            text: "Checking dependencies…";
-                            font-size: Sizes.font-sm;
-                            color: Palette.muted;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
+                    if doctor-loading: Text {
+                        text: "Scanning host tools\u{2026}";
+                        font-size: Sizes.font-sm;
+                        color: Palette.muted;
                     }
 
                     if !doctor-loading && doctor-text == "": Text {
-                        text: "No check results yet. ForgeISO runs a dependency scan when this panel opens.";
+                        text: "Open this panel to scan for required host tools (xorriso, mtools, qemu, etc.)";
                         font-size: Sizes.font-sm;
                         color: Palette.subtle;
                         wrap: word-wrap;
