@@ -1,40 +1,60 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0b0f14"/>
-      <stop offset="100%" stop-color="#12171e"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#141a24"/>
+      <stop offset="100%" stop-color="#0b0f14"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#6ba1fa"/>
-      <stop offset="100%" stop-color="#4d8ef7"/>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c8d0da"/>
+      <stop offset="100%" stop-color="#8a95a5"/>
     </linearGradient>
-    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#4d8ef7" stop-opacity="0.3"/>
-      <stop offset="100%" stop-color="#4d8ef7" stop-opacity="0"/>
+    <linearGradient id="handle" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6b4c2a"/>
+      <stop offset="100%" stop-color="#4a3520"/>
+    </linearGradient>
+    <linearGradient id="ember" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7834d"/>
+      <stop offset="50%" stop-color="#e3582c"/>
+      <stop offset="100%" stop-color="#c0331e"/>
+    </linearGradient>
+    <linearGradient id="anvil" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5a6470"/>
+      <stop offset="100%" stop-color="#3a424e"/>
     </linearGradient>
   </defs>
-  <!-- Background rounded square -->
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <!-- Subtle inner border -->
-  <rect x="4" y="4" width="504" height="504" rx="92" fill="none" stroke="#252d38" stroke-width="2"/>
-  <!-- Disc (ISO) -->
-  <circle cx="256" cy="240" r="140" fill="none" stroke="url(#accent)" stroke-width="8"/>
-  <circle cx="256" cy="240" r="40" fill="none" stroke="#4d8ef7" stroke-width="4" opacity="0.6"/>
-  <circle cx="256" cy="240" r="90" fill="none" stroke="#4d8ef7" stroke-width="1.5" opacity="0.2"/>
-  <!-- Center dot -->
-  <circle cx="256" cy="240" r="8" fill="#4d8ef7"/>
-  <!-- Hammer/forge symbol overlaid -->
-  <g transform="translate(256,240)" opacity="0.9">
-    <!-- Anvil base -->
-    <rect x="-60" y="40" width="120" height="16" rx="4" fill="#45c26b"/>
-    <!-- Hammer head -->
-    <rect x="-20" y="-80" width="40" height="24" rx="4" fill="#e8edf4"/>
-    <!-- Hammer handle -->
-    <rect x="-4" y="-56" width="8" height="80" rx="3" fill="#a3adb8"/>
-  </g>
-  <!-- Glow effect under disc -->
-  <ellipse cx="256" cy="400" rx="120" ry="20" fill="url(#glow)"/>
-  <!-- "ForgeISO" text -->
-  <text x="256" y="440" text-anchor="middle" font-family="sans-serif" font-size="48" font-weight="700" fill="#e8edf4" letter-spacing="-1">ForgeISO</text>
-  <text x="256" y="470" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="400" fill="#7a8696">Linux ISO Builder</text>
+  <!-- Background -->
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <!-- Inner border -->
+  <rect x="3" y="3" width="506" height="506" rx="105" fill="none" stroke="#252d38" stroke-width="1.5"/>
+
+  <!-- Anvil body -->
+  <path d="M160,340 L352,340 L370,310 L380,290 L340,290 L172,290 L132,290 L142,310 Z" fill="url(#anvil)" stroke="#3a424e" stroke-width="1"/>
+  <!-- Anvil face (top flat surface) -->
+  <rect x="172" y="275" width="168" height="18" rx="3" fill="url(#steel)" opacity="0.9"/>
+  <!-- Anvil horn (left point) -->
+  <path d="M172,284 L120,280 L118,286 L172,293 Z" fill="url(#anvil)"/>
+  <!-- Anvil base -->
+  <rect x="180" y="340" width="152" height="24" rx="4" fill="#2a313c"/>
+  <rect x="200" y="364" width="112" height="12" rx="3" fill="#1e2530"/>
+
+  <!-- Hammer handle (diagonal) -->
+  <rect x="236" y="118" width="14" height="150" rx="5" fill="url(#handle)" transform="rotate(-30, 256, 200)"/>
+  <!-- Hammer head -->
+  <rect x="208" y="100" width="72" height="32" rx="5" fill="url(#steel)" transform="rotate(-30, 256, 200)"/>
+  <!-- Hammer face highlight -->
+  <rect x="210" y="104" width="68" height="4" rx="2" fill="#e8edf4" opacity="0.4" transform="rotate(-30, 256, 200)"/>
+
+  <!-- Sparks / embers -->
+  <circle cx="230" cy="268" r="4" fill="url(#ember)" opacity="0.9"/>
+  <circle cx="260" cy="260" r="3" fill="#f7834d" opacity="0.7"/>
+  <circle cx="285" cy="265" r="3.5" fill="url(#ember)" opacity="0.8"/>
+  <circle cx="245" cy="255" r="2" fill="#ffc266" opacity="0.6"/>
+  <circle cx="272" cy="252" r="2.5" fill="#f7834d" opacity="0.5"/>
+
+  <!-- Subtle ember glow on anvil surface -->
+  <ellipse cx="256" cy="275" rx="50" ry="6" fill="#e3582c" opacity="0.12"/>
+
+  <!-- Text -->
+  <text x="256" y="428" text-anchor="middle" font-family="sans-serif" font-size="44" font-weight="700" fill="#e8edf4" letter-spacing="-0.5">ForgeISO</text>
+  <text x="256" y="458" text-anchor="middle" font-family="sans-serif" font-size="16" font-weight="400" fill="#5a6470" letter-spacing="2">LINUX ISO BUILDER</text>
 </svg>
