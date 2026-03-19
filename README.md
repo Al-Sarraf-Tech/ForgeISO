@@ -4,7 +4,6 @@
 
 [![CI](https://github.com/jalsarraf0/ForgeISO/actions/workflows/ci.yml/badge.svg)](https://github.com/jalsarraf0/ForgeISO/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jalsarraf0/ForgeISO)](https://github.com/jalsarraf0/ForgeISO/releases/latest)
-[![Security](https://github.com/jalsarraf0/ForgeISO/actions/workflows/ci.yml/badge.svg?label=security)](https://github.com/jalsarraf0/ForgeISO/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 **Current version: v0.2.1**
