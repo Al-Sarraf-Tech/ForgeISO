@@ -1,0 +1,392 @@
+// ── ForgeISO Design System Components ────────────────────────────────────────
+// Reusable, consistent UI primitives. Import and use these instead of
+// hand-coding Rectangle + TouchArea patterns.
+
+import { Palette, Sizes } from "../theme.slint";
+
+// ── FButton ─────────────────────────────────────────────────────────────────
+// Unified button with variant support.
+// variant: "primary" | "secondary" | "destructive" | "ghost"
+
+export component FButton inherits Rectangle {
+    in property <string>  label;
+    in property <string>  variant: "primary";
+    in property <bool>    enabled: true;
+    in property <string>  icon: "";
+    callback clicked();
+
+    min-width: 80px;
+    height: 38px;
+    border-radius: Sizes.radius-sm;
+    opacity: enabled ? 1.0 : 0.5;
+
+    background: variant == "primary"
+        ? (ta.pressed && enabled ? Palette.pressed
+          : ta.has-hover && enabled ? Palette.accent-hover
+          : Palette.accent)
+      : variant == "destructive"
+        ? (ta.pressed && enabled ? rgba(240, 82, 75, 0.24)
+          : ta.has-hover && enabled ? rgba(240, 82, 75, 0.16)
+          : rgba(240, 82, 75, 0.08))
+      : variant == "ghost"
+        ? (ta.has-hover && enabled ? Palette.active : transparent)
+      : /* secondary */
+        (ta.pressed && enabled ? Palette.pressed
+          : ta.has-hover && enabled ? Palette.active
+          : Palette.elevated);
+
+    border-width: variant == "primary" ? 0px
+               : variant == "destructive" ? 1px
+               : variant == "ghost" ? 0px
+               : 1px;
+    border-color: variant == "destructive"
+        ? (ta.has-hover && enabled ? rgba(240, 82, 75, 0.5) : rgba(240, 82, 75, 0.3))
+        : Palette.border;
+
+    drop-shadow-blur: variant == "primary" && enabled ? 8px : 0px;
+    drop-shadow-color: variant == "primary" && enabled ? rgba(77, 142, 247, 0.15) : transparent;
+
+    animate background { duration: 120ms; }
+    animate border-color { duration: 120ms; }
+    animate drop-shadow-blur { duration: 200ms; }
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: Sizes.space-2;
+        padding-left: Sizes.space-4;
+        padding-right: Sizes.space-4;
+
+        if icon != "": Text {
+            text: icon;
+            font-size: Sizes.font-md;
+            vertical-alignment: center;
+        }
+        Text {
+            text: label;
+            font-size: Sizes.font-sm;
+            font-weight: 600;
+            color: variant == "primary" ? Palette.on-accent
+                 : variant == "destructive" ? (ta.has-hover && enabled ? Palette.red : Palette.red)
+                 : variant == "ghost" ? (ta.has-hover && enabled ? Palette.text : Palette.muted)
+                 : Palette.text;
+            vertical-alignment: center;
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => { root.clicked(); }
+    }
+}
+
+// ── FIconButton ─────────────────────────────────────────────────────────────
+// Square icon button for toolbar actions (doctor, cancel, close, etc.)
+
+export component FIconButton inherits Rectangle {
+    in property <string> icon;
+    in property <bool>   enabled: true;
+    in property <bool>   active: false;
+    in property <string> variant: "default";  // "default" | "destructive"
+    callback clicked();
+
+    width: 36px;
+    height: 36px;
+    border-radius: Sizes.radius-sm;
+    opacity: enabled ? 1.0 : 0.5;
+
+    background: active ? Palette.accent
+              : variant == "destructive"
+                ? (ta.has-hover && enabled ? rgba(240, 82, 75, 0.16) : rgba(240, 82, 75, 0.08))
+              : (ta.has-hover && enabled ? Palette.active : Palette.elevated);
+    border-width: 1px;
+    border-color: active ? Palette.accent
+                : variant == "destructive"
+                  ? rgba(240, 82, 75, 0.5)
+                : ta.has-hover && enabled ? Palette.border-focus : Palette.border;
+
+    animate background { duration: 120ms; }
+    animate border-color { duration: 120ms; }
+
+    Text {
+        text: icon;
+        font-size: Sizes.font-md;
+        color: active ? Palette.on-accent
+             : variant == "destructive" ? Palette.red
+             : ta.has-hover && enabled ? Palette.text
+             : Palette.muted;
+        vertical-alignment: center;
+        horizontal-alignment: center;
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => { root.clicked(); }
+    }
+}
+
+// ── FTextInput ──────────────────────────────────────────────────────────────
+// Text input with label, placeholder, error state, and help text.
+
+export component FTextInput inherits Rectangle {
+    in-out property <string> value;
+    in property <string>     hint: "";
+    in property <bool>       password: false;
+    in property <bool>       enabled: true;
+    in property <bool>       error: false;
+    callback changed(string);
+
+    height: 40px;
+    border-radius: Sizes.radius-sm;
+    background: Palette.bg;
+    border-width: 1px;
+    border-color: error ? Palette.red
+                : field.has-focus ? Palette.border-focus
+                : Palette.border;
+    animate border-color { duration: 150ms; }
+
+    // Placeholder
+    if value == "" && !field.has-focus: Text {
+        x: Sizes.space-3;
+        y: 0;
+        width: parent.width - Sizes.space-6;
+        height: parent.height;
+        text: hint;
+        font-size: Sizes.font-sm;
+        color: Palette.subtle;
+        vertical-alignment: center;
+    }
+    field := TextInput {
+        x: Sizes.space-3;
+        y: (parent.height - self.preferred-height) / 2;
+        width: parent.width - Sizes.space-6;
+        text: value;
+        font-size: Sizes.font-sm;
+        color: Palette.text;
+        selection-background-color: Palette.accent;
+        selection-foreground-color: Palette.on-accent;
+        enabled: parent.enabled;
+        single-line: true;
+        input-type: password ? InputType.password : InputType.text;
+        edited => { value = field.text; changed(field.text); }
+    }
+}
+
+// ── FTextarea ───────────────────────────────────────────────────────────────
+// Multi-line text area.
+
+export component FTextarea inherits Rectangle {
+    in-out property <string> value;
+    in property <string>     hint: "";
+    in property <bool>       enabled: true;
+    callback changed(string);
+
+    height: 100px;
+    border-radius: Sizes.radius-sm;
+    background: Palette.bg;
+    border-width: 1px;
+    border-color: editor.has-focus ? Palette.border-focus : Palette.border;
+    animate border-color { duration: 150ms; }
+
+    editor := TextInput {
+        x: Sizes.space-3;
+        y: Sizes.space-2;
+        width: parent.width - Sizes.space-6;
+        height: parent.height - Sizes.space-4;
+        text: value;
+        font-size: Sizes.font-sm;
+        color: Palette.text;
+        selection-background-color: Palette.accent;
+        selection-foreground-color: Palette.on-accent;
+        enabled: parent.enabled;
+        single-line: false;
+        wrap: word-wrap;
+        edited => { value = editor.text; changed(editor.text); }
+    }
+}
+
+// ── FSwitch ─────────────────────────────────────────────────────────────────
+// Toggle switch replacing CheckBox for boolean options.
+
+export component FSwitch inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <string>   label: "";
+    in property <bool>     enabled: true;
+    callback toggled();
+
+    height: 24px;
+
+    HorizontalLayout {
+        spacing: Sizes.space-3;
+        alignment: start;
+
+        // Track
+        Rectangle {
+            width: 40px;
+            height: 22px;
+            border-radius: 11px;
+            background: checked ? Palette.accent : Palette.elevated;
+            border-width: 1px;
+            border-color: checked ? Palette.accent : Palette.border;
+            animate background { duration: 180ms; }
+            animate border-color { duration: 180ms; }
+
+            // Thumb
+            Rectangle {
+                x: checked ? parent.width - self.width - 2px : 2px;
+                y: (parent.height - self.height) / 2;
+                width: 18px;
+                height: 18px;
+                border-radius: 9px;
+                background: checked ? Palette.on-accent : Palette.muted;
+                animate x { duration: 180ms; easing: ease-out; }
+                animate background { duration: 180ms; }
+            }
+
+            TouchArea {
+                enabled: root.enabled;
+                mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+                clicked => {
+                    checked = !checked;
+                    root.toggled();
+                }
+            }
+        }
+
+        if label != "": Text {
+            text: label;
+            font-size: Sizes.font-sm;
+            color: root.enabled ? Palette.text : Palette.muted;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// ── FBadge ──────────────────────────────────────────────────────────────────
+// Status/count badge indicator.
+
+export component FBadge inherits Rectangle {
+    in property <string> text;
+    in property <string> variant: "default";  // "default" | "success" | "error" | "warning"
+
+    height: 20px;
+    border-radius: 10px;
+    background: variant == "success" ? rgba(69, 194, 107, 0.15)
+              : variant == "error"   ? rgba(240, 82, 75, 0.15)
+              : variant == "warning" ? rgba(227, 166, 44, 0.15)
+              : rgba(122, 134, 150, 0.15);
+    border-width: 1px;
+    border-color: variant == "success" ? rgba(69, 194, 107, 0.3)
+               : variant == "error"   ? rgba(240, 82, 75, 0.3)
+               : variant == "warning" ? rgba(227, 166, 44, 0.3)
+               : Palette.border;
+
+    HorizontalLayout {
+        padding-left: Sizes.space-2;
+        padding-right: Sizes.space-2;
+        alignment: center;
+        Text {
+            text: root.text;
+            font-size: Sizes.font-2xs;
+            font-weight: 600;
+            color: variant == "success" ? Palette.green
+                 : variant == "error"   ? Palette.red
+                 : variant == "warning" ? Palette.amber
+                 : Palette.muted;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// ── FCard ───────────────────────────────────────────────────────────────────
+// Container with optional title bar and @children content.
+
+export component FCard inherits Rectangle {
+    in property <string> title: "";
+
+    border-radius: Sizes.radius-lg;
+    background: Palette.surface;
+    border-width: 1px;
+    border-color: Palette.border;
+    drop-shadow-blur: 4px;
+    drop-shadow-color: Palette.shadow-sm;
+
+    VerticalLayout {
+        if title != "": Rectangle {
+            height: 40px;
+            HorizontalLayout {
+                padding-left: Sizes.space-5;
+                padding-right: Sizes.space-5;
+                alignment: start;
+                Text {
+                    text: title;
+                    font-size: Sizes.font-2xs;
+                    font-weight: 700;
+                    color: Palette.subtle;
+                    letter-spacing: 1.4px;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        if title != "": Rectangle {
+            height: 1px;
+            background: Palette.border;
+            opacity: 0.5;
+        }
+        @children
+    }
+}
+
+// ── FSectionLabel ───────────────────────────────────────────────────────────
+// Uppercase muted label for form sections.
+
+export component FSectionLabel inherits Text {
+    font-size: Sizes.font-2xs;
+    font-weight: 600;
+    color: Palette.muted;
+    letter-spacing: 0.5px;
+}
+
+// ── FDivider ────────────────────────────────────────────────────────────────
+// Horizontal separator with optional center label.
+
+export component FDivider inherits Rectangle {
+    in property <string> label: "";
+
+    height: label != "" ? 20px : 1px;
+
+    if label == "": Rectangle {
+        height: 1px;
+        background: Palette.border;
+        opacity: 0.5;
+    }
+
+    if label != "": HorizontalLayout {
+        spacing: Sizes.space-3;
+        VerticalLayout {
+            alignment: center;
+            Rectangle { height: 1px; background: Palette.border; opacity: 0.5; }
+        }
+        Text {
+            text: label;
+            font-size: Sizes.font-xs;
+            color: Palette.subtle;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+        }
+        VerticalLayout {
+            alignment: center;
+            Rectangle { height: 1px; background: Palette.border; opacity: 0.5; }
+        }
+    }
+}
+
+// ── FFieldHelp ──────────────────────────────────────────────────────────────
+// Help text below form fields.
+
+export component FFieldHelp inherits Text {
+    font-size: Sizes.font-xs;
+    color: Palette.subtle;
+    wrap: word-wrap;
+}

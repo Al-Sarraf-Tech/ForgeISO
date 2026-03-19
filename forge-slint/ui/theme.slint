@@ -1,45 +1,66 @@
-// ── ForgeISO dark palette ────────────────────────────────────────────────────
-// All colours are centralised here. Import this file in every component.
+// ── ForgeISO Design System ───────────────────────────────────────────────────
+// Refined dark palette + spacing tokens.  Import in every component.
 
 export global Palette {
-    // Backgrounds
-    out property <color> bg:       #0d1117;
-    out property <color> surface:  #161b22;
-    out property <color> panel:    #0a0e14;
-    out property <color> elevated: #21262d;
+    // Backgrounds — deeper, richer dark with subtle blue undertone
+    out property <color> bg:       #0b0f14;
+    out property <color> surface:  #12171e;
+    out property <color> panel:    #0e1319;
+    out property <color> elevated: #1a2029;
 
     // Borders
-    out property <color> border:       #30363d;
-    out property <color> border-focus: #388bfd;
+    out property <color> border:       #252d38;
+    out property <color> border-focus: #4d8ef7;
+    out property <color> border-subtle: #1e2530;
 
     // Semantic
-    out property <color> accent: #2f81f7;
-    out property <color> green:  #3fb950;
-    out property <color> red:    #f85149;
-    out property <color> amber:  #d29922;
+    out property <color> accent:       #4d8ef7;
+    out property <color> accent-hover: #6ba1fa;
+    out property <color> green:        #45c26b;
+    out property <color> red:          #f0524b;
+    out property <color> amber:        #e3a62c;
 
     // Text
-    out property <color> text:          #e6edf3;
-    out property <color> text-secondary: #b1bac4;
-    out property <color> muted:         #8b949e;
-    out property <color> subtle:        #6e7681;
-    out property <color> on-accent:     #ffffff;
+    out property <color> text:           #e8edf4;
+    out property <color> text-secondary: #a3adb8;
+    out property <color> muted:          #7a8696;
+    out property <color> subtle:         #5a6470;
+    out property <color> on-accent:      #ffffff;
 
     // Interactive states
-    out property <color> active: #2d333b;
+    out property <color> active:  #1f2937;
+    out property <color> pressed: #172033;
+
+    // Depth
+    out property <color> shadow-sm: rgba(0, 0, 0, 0.12);
+    out property <color> shadow-md: rgba(0, 0, 0, 0.20);
+    out property <color> shadow-lg: rgba(0, 0, 0, 0.32);
 }
 
 export global Sizes {
+    // Border radii
     out property <length> radius-sm:  6px;
     out property <length> radius-md:  10px;
     out property <length> radius-lg:  14px;
     out property <length> radius-xl:  18px;
 
+    // 8px grid spacing
+    out property <length> space-1:  4px;
+    out property <length> space-2:  8px;
+    out property <length> space-3:  12px;
+    out property <length> space-4:  16px;
+    out property <length> space-5:  20px;
+    out property <length> space-6:  24px;
+    out property <length> space-8:  32px;
+    out property <length> space-10: 40px;
+
+    // Legacy gap aliases (for existing components during migration)
     out property <length> gap-xs: 4px;
     out property <length> gap-sm: 8px;
     out property <length> gap-md: 14px;
     out property <length> gap-lg: 24px;
 
+    // Typography scale
     out property <length> font-2xs: 10px;
     out property <length> font-xs:  11px;
     out property <length> font-sm:  12px;
@@ -47,4 +68,5 @@ export global Sizes {
     out property <length> font-lg:  16px;
     out property <length> font-xl:  20px;
     out property <length> font-2xl: 26px;
+    out property <length> font-3xl: 32px;
 }
