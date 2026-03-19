@@ -91,7 +91,7 @@ Build all packages locally before tagging:
 
 ```bash
 # Build release binaries first
-cargo build --release -p forgeiso-cli -p forgeiso-tui -p forge-slint -p forge-gui
+cargo build --release -p forgeiso-cli -p forgeiso-tui -p forge-slint
 
 # Build RPM + DEB + pacman + tarball + checksums
 bash scripts/release/make-packages.sh 0.2.1
@@ -131,7 +131,7 @@ git push origin v0.2.1
 
 The release job will:
 1. Install fpm + syft
-2. Build CLI, TUI, `forge-slint`, and `forge-gui`
+2. Build CLI, TUI, and `forge-slint`
 3. Run `make-packages.sh` (RPM + DEB + pacman + tarball)
 4. Generate `sbom.cdx.json` and `sbom.spdx.json`
 5. Verify checksums
@@ -185,7 +185,6 @@ If you tested a tarball before installing a distro package, clear old
 sudo rm -f /usr/local/bin/forgeiso \
   /usr/local/bin/forgeiso-tui \
   /usr/local/bin/forge-slint \
-  /usr/local/bin/forge-gui \
   /usr/local/bin/forgeiso-desktop
 ```
 

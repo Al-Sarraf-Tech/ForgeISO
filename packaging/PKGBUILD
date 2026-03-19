@@ -30,9 +30,6 @@ package() {
   if [[ -f "bin/forge-slint" ]]; then
     install -Dm755 "bin/forge-slint" "${pkgdir}/usr/bin/forge-slint"
   fi
-  if [[ -f "bin/forge-gui" ]]; then
-    install -Dm755 "bin/forge-gui" "${pkgdir}/usr/bin/forge-gui"
-  fi
   install -Dm644 "README.md"        "${pkgdir}/usr/share/doc/${pkgname}/README.md"
 
   if [[ -f "VERSION" ]]; then

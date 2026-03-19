@@ -474,6 +474,7 @@ pub fn emit_launch(spec: &VmLaunchSpec) -> VmLaunchOutput {
                 FirmwareMode::Uefi => qemu_uefi_args(spec),
             };
             let args = maybe_remove_kvm(base_args);
+            notes.push("Requires QEMU (qemu-system-x86_64) installed on the host.".to_string());
             if !kvm_available {
                 notes.push(
                     "KVM is not available; running in software emulation (slow).".to_string(),

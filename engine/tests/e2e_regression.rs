@@ -1242,7 +1242,7 @@ fn iso_source_from_raw_empty_is_path() {
 // 13. GUI helper functions — tested via equivalent Rust logic
 // ─────────────────────────────────────────────────────────────────────────────
 
-// These mirror the `lines()` and `opt()` functions from forge-gui/src/state.rs.
+// These mirror the `lines()` and `opt()` helper patterns used in GUI state parsing.
 // Tested here to ensure no panics on edge-case inputs.
 
 fn lines_helper(s: &str) -> Vec<String> {

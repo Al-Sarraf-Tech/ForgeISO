@@ -1,6 +1,6 @@
 use crate::AppWindow;
 /// Spawn zenity file pickers that deliver results via `slint::invoke_from_event_loop`.
-/// This is the Slint-native equivalent of the mpsc-based worker in forge-gui.
+/// Spawns zenity file pickers and delivers results via `slint::invoke_from_event_loop`.
 use slint::Weak;
 use std::ffi::OsStr;
 use std::process::Output;

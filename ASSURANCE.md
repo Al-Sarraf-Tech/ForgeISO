@@ -15,7 +15,7 @@ containers. Every stage must pass before the release job can proceed.
 |---|---|---|
 | C1 | Rust (fmt, clippy, test) | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test --workspace` |
 | C2 | SBOM + Audit | `cargo-deny check`, `cargo-audit`, `syft` SBOM generation |
-| C3 | GUI | Builds `forge-gui` (egui) and legacy Tauri GUI (`npm ci`, `npm run build`) |
+| C3 | GUI | Builds `forge-slint` (Slint desktop GUI) |
 | C4 | Security | Container image scanning with `trivy`, `syft`, and `grype` |
 | C5 | Integration | Full `cargo build --release`, inject smoke test with real ISO logic |
 | C6 | E2E Smoke | QEMU boot test of a generated ISO (when KVM is available) |
