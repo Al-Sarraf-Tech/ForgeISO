@@ -1,0 +1,106 @@
+// ── Tab Rail ────────────────────────────────────────────────────────────────
+// Vertical navigation rail for the Configure step.
+// Each tab item shows an icon, label, and optional completion indicator.
+
+import { Palette, Sizes } from "../theme.slint";
+
+component TabRailItem inherits Rectangle {
+    in property <string>  label;
+    in property <bool>    active: false;
+    in property <bool>    complete: false;
+    callback clicked();
+
+    height: 44px;
+    background: active ? rgba(77, 142, 247, 0.08)
+              : ta.has-hover ? rgba(255, 255, 255, 0.02)
+              : transparent;
+    animate background { duration: 120ms; }
+
+    // Active accent bar
+    Rectangle {
+        x: 0;
+        width: active ? 3px : 0px;
+        height: parent.height;
+        background: Palette.accent;
+        animate width { duration: 150ms; easing: ease-out; }
+    }
+
+    HorizontalLayout {
+        padding-left: Sizes.space-5;
+        padding-right: Sizes.space-3;
+        spacing: Sizes.space-3;
+        alignment: start;
+
+        // Label
+        Text {
+            text: label;
+            font-size: Sizes.font-sm;
+            font-weight: active ? 600 : 400;
+            color: active ? Palette.text : ta.has-hover ? Palette.text-secondary : Palette.muted;
+            vertical-alignment: center;
+            overflow: elide;
+            animate color { duration: 150ms; }
+        }
+
+        // Completion dot
+        if complete && !active: Rectangle {
+            width: 6px;
+            height: 6px;
+            border-radius: 3px;
+            background: Palette.green;
+            y: (parent.height - self.height) / 2;
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component TabRail inherits Rectangle {
+    in property <int>  active-index: 0;
+
+    // Completion flags per tab
+    in property <bool> identity-complete: false;
+    in property <bool> output-complete: false;
+
+    callback tab-clicked(int);
+
+    width: 200px;
+    background: Palette.panel;
+
+    // Right separator
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        height: parent.height;
+        background: Palette.border;
+    }
+
+    VerticalLayout {
+        padding-top: Sizes.space-3;
+        spacing: 2px;
+
+        TabRailItem { label: "Identity";          active: active-index == 0; complete: identity-complete;
+            clicked => { tab-clicked(0); } }
+        TabRailItem { label: "Access & SSH";      active: active-index == 1;
+            clicked => { tab-clicked(1); } }
+        TabRailItem { label: "Network";           active: active-index == 2;
+            clicked => { tab-clicked(2); } }
+        TabRailItem { label: "System";            active: active-index == 3;
+            clicked => { tab-clicked(3); } }
+        TabRailItem { label: "Packages";          active: active-index == 4;
+            clicked => { tab-clicked(4); } }
+        TabRailItem { label: "Firewall";          active: active-index == 5;
+            clicked => { tab-clicked(5); } }
+        TabRailItem { label: "Services";          active: active-index == 6;
+            clicked => { tab-clicked(6); } }
+        TabRailItem { label: "Storage & Boot";    active: active-index == 7;
+            clicked => { tab-clicked(7); } }
+        TabRailItem { label: "Advanced";          active: active-index == 8;
+            clicked => { tab-clicked(8); } }
+        TabRailItem { label: "Output";            active: active-index == 9; complete: output-complete;
+            clicked => { tab-clicked(9); } }
+    }
+}

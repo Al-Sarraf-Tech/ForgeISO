@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ForgeISO desktop launcher — shipped in all release packages.
-# Prefers forge-slint (Slint GUI, primary) when a display is available,
-# falls back to forge-gui (egui, alternate), then TUI, then CLI.
+# Prefers forge-slint (Slint GUI) when a display is available,
+# falls back to TUI, then CLI.
 #
 # Installation path: /usr/bin/forgeiso-desktop
 # The .desktop file (Exec=forgeiso-desktop) points here so that
@@ -34,15 +34,11 @@ _resolve_binary() {
 }
 
 slint_bin="$(_resolve_binary forge-slint)"
-gui_bin="$(_resolve_binary forge-gui)"
 tui_bin="$(_resolve_binary forgeiso-tui)"
 cli_bin="$(_resolve_binary forgeiso)"
 
 if _has_display && [ -n "${slint_bin}" ]; then
     exec "${slint_bin}" "$@"
-elif _has_display && [ -n "${gui_bin}" ]; then
-    _note "forge-slint not found; starting forge-gui instead"
-    exec "${gui_bin}" "$@"
 elif [ -n "${tui_bin}" ]; then
     if ! _has_display; then
         _note "no graphical display detected; falling back to forgeiso-tui"

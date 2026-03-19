@@ -58,13 +58,9 @@ forgeiso_build_staging() {
 
   install -Dm755 "${bin_dir}/forgeiso"     "${staging}/usr/bin/forgeiso"
   install -Dm755 "${bin_dir}/forgeiso-tui" "${staging}/usr/bin/forgeiso-tui"
-  # Slint GUI (primary) — optional, only staged if built
+  # Slint GUI — optional, only staged if built
   if [[ -f "${bin_dir}/forge-slint" ]]; then
     install -Dm755 "${bin_dir}/forge-slint" "${staging}/usr/bin/forge-slint"
-  fi
-  # egui GUI (alternate) — optional, only staged if built
-  if [[ -f "${bin_dir}/forge-gui" ]]; then
-    install -Dm755 "${bin_dir}/forge-gui" "${staging}/usr/bin/forge-gui"
   fi
   install -Dm755 "${root_dir}/scripts/release/forgeiso-desktop" \
     "${staging}/usr/bin/forgeiso-desktop"
@@ -90,7 +86,7 @@ DESKTOP
   for size in 32 128 256 512; do
     icon_src=""
     for candidate in \
-      "${root_dir}/forge-gui/assets/icon_${size}.png" \
+      "${root_dir}/forge-slint/assets/icon_${size}.png" \
       "${root_dir}/gui/src-tauri/icons/${size}x${size}.png"; do
       if [[ -f "${candidate}" ]]; then
         icon_src="${candidate}"

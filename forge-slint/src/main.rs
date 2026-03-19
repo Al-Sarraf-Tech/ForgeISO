@@ -84,10 +84,11 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_doctor_toggle(move || {
             if let Some(w) = weak.upgrade() {
-                if w.get_doctor_open() {
-                    w.set_doctor_open(false);
+                let g = w.global::<AppState>();
+                if g.get_doctor_open() {
+                    g.set_doctor_open(false);
                 } else {
-                    w.set_doctor_open(true);
+                    g.set_doctor_open(true);
                     with_app(|a| a.spawn_doctor());
                 }
             }
@@ -99,7 +100,8 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_step_bar_clicked(move |step| {
             if let Some(w) = weak.upgrade() {
-                if w.get_job_running() {
+                let g = w.global::<AppState>();
+                if g.get_job_running() {
                     return;
                 }
                 // Allow backward navigation freely. Forward navigation
@@ -107,13 +109,13 @@ fn main() -> anyhow::Result<()> {
                 let target = step;
                 let allowed = match target {
                     1 => true,
-                    2 => w.get_step1_done(),
-                    3 => w.get_step2_done(),
-                    4 => w.get_step3_done(),
+                    2 => g.get_step1_done(),
+                    3 => g.get_step2_done(),
+                    4 => g.get_step3_done(),
                     _ => false,
                 };
                 if allowed {
-                    w.set_current_step(target);
+                    g.set_current_step(target);
                 }
             }
         });
@@ -138,13 +140,15 @@ fn main() -> anyhow::Result<()> {
                 // This closure is Send + 'static. It is called on the event loop
                 // thread (inside invoke_from_event_loop in handle_zenity).
                 |w, path| {
-                    w.set_source_path(path.clone().into());
-                    w.set_selected_preset("".into());
-                    w.set_selected_preset_name("".into());
-                    w.set_detected_distro("".into());
-                    w.set_defaults_summary("".into());
-                    w.set_step1_done(true);
-                    w.set_step2_done(false);
+                    let fs = w.global::<FormState>();
+                    fs.set_source_path(path.clone().into());
+                    fs.set_selected_preset("".into());
+                    fs.set_selected_preset_name("".into());
+                    fs.set_detected_distro("".into());
+                    let gs = w.global::<AppState>();
+                    gs.set_defaults_summary("".into());
+                    gs.set_step1_done(true);
+                    gs.set_step2_done(false);
                     clear_build_results(&w);
                     // Access ForgeApp via thread-local — no Rc captured.
                     with_app(|a| {
@@ -163,12 +167,14 @@ fn main() -> anyhow::Result<()> {
             let t: String = text.into();
             let not_empty = !t.trim().is_empty();
             if let Some(w) = weak.upgrade() {
-                w.set_selected_preset("".into());
-                w.set_selected_preset_name("".into());
-                w.set_detected_distro("".into());
-                w.set_defaults_summary("".into());
-                w.set_step1_done(not_empty);
-                w.set_step2_done(false);
+                let fs = w.global::<FormState>();
+                fs.set_selected_preset("".into());
+                fs.set_selected_preset_name("".into());
+                fs.set_detected_distro("".into());
+                let gs = w.global::<AppState>();
+                gs.set_defaults_summary("".into());
+                gs.set_step1_done(not_empty);
+                gs.set_step2_done(false);
                 clear_build_results(&w);
             }
             with_app(|a| a.clear_defaults_state());
@@ -183,9 +189,10 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_source_continue(move || {
             if let Some(w) = weak.upgrade() {
-                if !w.get_source_path().is_empty() {
-                    w.set_step1_done(true);
-                    w.set_current_step(2);
+                if !w.global::<FormState>().get_source_path().is_empty() {
+                    let gs = w.global::<AppState>();
+                    gs.set_step1_done(true);
+                    gs.set_current_step(2);
                 }
             }
         });
@@ -196,18 +203,20 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_clear_source(move || {
             if let Some(w) = weak.upgrade() {
-                w.set_source_path("".into());
-                w.set_selected_preset("".into());
-                w.set_selected_preset_name("".into());
-                w.set_detected_distro("".into());
-                w.set_defaults_summary("".into());
-                w.set_step1_done(false);
-                w.set_step2_done(false);
+                let fs = w.global::<FormState>();
+                fs.set_source_path("".into());
+                fs.set_selected_preset("".into());
+                fs.set_selected_preset_name("".into());
+                fs.set_detected_distro("".into());
+                let gs = w.global::<AppState>();
+                gs.set_defaults_summary("".into());
+                gs.set_step1_done(false);
+                gs.set_step2_done(false);
                 clear_build_results(&w);
-                w.set_current_step(1);
-                w.set_status_text("".into());
-                w.set_status_is_error(false);
-                w.set_passwords_match(true);
+                gs.set_current_step(1);
+                gs.set_status_text("".into());
+                gs.set_status_is_error(false);
+                gs.set_passwords_match(true);
             }
             with_app(|a| {
                 if let Some(h) = a.detect_task.take() {
@@ -230,7 +239,7 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_browse_output_dir(move || {
             worker::pick_folder(weak.clone(), |w, path| {
-                w.set_output_dir(path.into());
+                w.global::<FormState>().set_output_dir(path.into());
             });
         });
     }
@@ -240,42 +249,44 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_configure_continue(move || {
             if let Some(w) = weak.upgrade() {
-                if w.get_job_running() {
+                let gs = w.global::<AppState>();
+                if gs.get_job_running() {
                     return;
                 }
 
-                let pw: String = w.get_password().into();
-                let pc: String = w.get_password_confirm().into();
-                if w.get_hostname().trim().is_empty() {
-                    w.set_status_text("Hostname is required".into());
-                    w.set_status_is_error(true);
+                let fs = w.global::<FormState>();
+                let pw: String = fs.get_password().into();
+                let pc: String = fs.get_password_confirm().into();
+                if fs.get_hostname().trim().is_empty() {
+                    gs.set_status_text("Hostname is required".into());
+                    gs.set_status_is_error(true);
                     return;
                 }
-                if w.get_username().trim().is_empty() {
-                    w.set_status_text("Username is required".into());
-                    w.set_status_is_error(true);
+                if fs.get_username().trim().is_empty() {
+                    gs.set_status_text("Username is required".into());
+                    gs.set_status_is_error(true);
                     return;
                 }
                 let match_ok = pw.is_empty() || pw == pc;
-                w.set_passwords_match(match_ok);
+                gs.set_passwords_match(match_ok);
                 if !match_ok {
-                    w.set_status_text("Passwords do not match".into());
-                    w.set_status_is_error(true);
+                    gs.set_status_text("Passwords do not match".into());
+                    gs.set_status_is_error(true);
                     return;
                 }
 
                 let validation = with_app_result(|a| a.validate_inject_form())
                     .unwrap_or_else(|| Err("application state is unavailable".to_string()));
                 if let Err(msg) = validation {
-                    w.set_status_text(msg.into());
-                    w.set_status_is_error(true);
+                    gs.set_status_text(msg.into());
+                    gs.set_status_is_error(true);
                     return;
                 }
 
-                w.set_status_text("".into());
-                w.set_status_is_error(false);
-                w.set_step2_done(true);
-                w.set_current_step(3);
+                gs.set_status_text("".into());
+                gs.set_status_is_error(false);
+                gs.set_step2_done(true);
+                gs.set_current_step(3);
             }
         });
     }
@@ -285,7 +296,7 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_configure_back(move || {
             if let Some(w) = weak.upgrade() {
-                w.set_current_step(1);
+                w.global::<AppState>().set_current_step(1);
             }
         });
     }
@@ -341,8 +352,9 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_build_back(move || {
             if let Some(w) = weak.upgrade() {
-                if !w.get_job_running() {
-                    w.set_current_step(2);
+                let gs = w.global::<AppState>();
+                if !gs.get_job_running() {
+                    gs.set_current_step(2);
                 }
             }
         });
@@ -353,8 +365,9 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_build_back_to_source(move || {
             if let Some(w) = weak.upgrade() {
-                if !w.get_job_running() {
-                    w.set_current_step(1);
+                let gs = w.global::<AppState>();
+                if !gs.get_job_running() {
+                    gs.set_current_step(1);
                 }
             }
         });
@@ -370,8 +383,9 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_build_view_results(move || {
             if let Some(w) = weak.upgrade() {
-                if w.get_step3_done() {
-                    w.set_current_step(4);
+                let gs = w.global::<AppState>();
+                if gs.get_step3_done() {
+                    gs.set_current_step(4);
                 }
             }
         });
@@ -382,8 +396,9 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_check_back(move || {
             if let Some(w) = weak.upgrade() {
-                if !w.get_job_running() && w.get_step3_done() {
-                    w.set_current_step(3);
+                let gs = w.global::<AppState>();
+                if !gs.get_job_running() && gs.get_step3_done() {
+                    gs.set_current_step(3);
                 }
             }
         });
@@ -401,7 +416,7 @@ fn main() -> anyhow::Result<()> {
                 a.finish_job();
             });
             worker::pick_iso(weak.clone(), |w, path| {
-                w.set_verify_source(path.into());
+                w.global::<AppState>().set_verify_source(path.into());
                 clear_optional_checks(&w);
             });
         });
@@ -422,16 +437,17 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_copy_sha256(move || {
             if let Some(w) = weak.upgrade() {
-                let hash: String = w.get_artifact_sha256().into();
+                let hash: String = w.global::<AppState>().get_artifact_sha256().into();
                 if !hash.is_empty() {
+                    let gs = w.global::<AppState>();
                     match copy_to_clipboard(&hash) {
                         Ok(()) => {
-                            w.set_status_text("SHA-256 copied to clipboard".into());
-                            w.set_status_is_error(false);
+                            gs.set_status_text("SHA-256 copied to clipboard".into());
+                            gs.set_status_is_error(false);
                         }
                         Err(msg) => {
-                            w.set_status_text(msg.into());
-                            w.set_status_is_error(true);
+                            gs.set_status_text(msg.into());
+                            gs.set_status_is_error(true);
                         }
                     }
                 }
@@ -444,20 +460,21 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_open_folder(move || {
             if let Some(w) = weak.upgrade() {
-                let path: String = w.get_artifact_path().into();
+                let path: String = w.global::<AppState>().get_artifact_path().into();
                 if !path.is_empty() {
                     let dir = std::path::Path::new(&path)
                         .parent()
                         .map(|p| p.to_string_lossy().into_owned())
                         .unwrap_or(path);
+                    let gs = w.global::<AppState>();
                     match open_in_file_manager(&dir) {
                         Ok(()) => {
-                            w.set_status_text("Opened artifact folder".into());
-                            w.set_status_is_error(false);
+                            gs.set_status_text("Opened artifact folder".into());
+                            gs.set_status_is_error(false);
                         }
                         Err(msg) => {
-                            w.set_status_text(msg.into());
-                            w.set_status_is_error(true);
+                            gs.set_status_text(msg.into());
+                            gs.set_status_is_error(true);
                         }
                     }
                 }
@@ -485,14 +502,15 @@ fn main() -> anyhow::Result<()> {
             if let Some(w) = weak.upgrade() {
                 restore_inject(&w, &InjectState::default());
                 restore_verify(&w, &VerifyState::default());
-                w.set_defaults_summary("".into());
-                w.set_step1_done(false);
-                w.set_step2_done(false);
+                let gs = w.global::<AppState>();
+                gs.set_defaults_summary("".into());
+                gs.set_step1_done(false);
+                gs.set_step2_done(false);
                 clear_build_results(&w);
-                w.set_current_step(1);
-                w.set_status_text("".into());
-                w.set_status_is_error(false);
-                w.set_passwords_match(true);
+                gs.set_current_step(1);
+                gs.set_status_text("".into());
+                gs.set_status_is_error(false);
+                gs.set_passwords_match(true);
             }
         });
     }
@@ -502,8 +520,9 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_log_toggle(move || {
             if let Some(w) = weak.upgrade() {
-                let open = w.get_log_open();
-                w.set_log_open(!open);
+                let gs = w.global::<AppState>();
+                let open = gs.get_log_open();
+                gs.set_log_open(!open);
             }
         });
     }
@@ -513,8 +532,9 @@ fn main() -> anyhow::Result<()> {
         let weak = win.as_weak();
         win.on_log_filter_toggle(move || {
             if let Some(w) = weak.upgrade() {
-                let errors_only = w.get_log_errors_only();
-                w.set_log_errors_only(!errors_only);
+                let gs = w.global::<AppState>();
+                let errors_only = gs.get_log_errors_only();
+                gs.set_log_errors_only(!errors_only);
             }
         });
     }
@@ -549,102 +569,107 @@ fn main() -> anyhow::Result<()> {
 // ── Restore helpers ───────────────────────────────────────────────────────────
 
 fn restore_inject(w: &AppWindow, s: &InjectState) {
-    w.set_source_path(s.source.clone().into());
-    w.set_selected_preset(s.source_preset.clone().into());
-    w.set_selected_preset_name(
+    let fs = w.global::<FormState>();
+    fs.set_source_path(s.source.clone().into());
+    fs.set_selected_preset(s.source_preset.clone().into());
+    fs.set_selected_preset_name(
         preset_display_name(&s.source_preset)
             .unwrap_or_default()
             .into(),
     );
-    w.set_output_dir(s.output_dir.clone().into());
-    w.set_out_name(s.out_name.clone().into());
-    w.set_output_label(s.output_label.clone().into());
-    w.set_distro(s.distro.clone().into());
-    w.set_hostname(s.hostname.clone().into());
-    w.set_username(s.username.clone().into());
+    fs.set_output_dir(s.output_dir.clone().into());
+    fs.set_out_name(s.out_name.clone().into());
+    fs.set_output_label(s.output_label.clone().into());
+    fs.set_distro(s.distro.clone().into());
+    fs.set_hostname(s.hostname.clone().into());
+    fs.set_username(s.username.clone().into());
     // passwords intentionally NOT restored (#[serde(skip)])
-    w.set_password("".into());
-    w.set_password_confirm("".into());
-    w.set_realname(s.realname.clone().into());
-    w.set_ssh_keys(s.ssh_keys.clone().into());
-    w.set_ssh_password_auth(s.ssh_password_auth);
-    w.set_ssh_install_server(s.ssh_install_server);
-    w.set_dns_servers(s.dns_servers.clone().into());
-    w.set_ntp_servers(s.ntp_servers.clone().into());
-    w.set_static_ip(s.static_ip.clone().into());
-    w.set_gateway(s.gateway.clone().into());
-    w.set_http_proxy(s.http_proxy.clone().into());
-    w.set_https_proxy(s.https_proxy.clone().into());
-    w.set_no_proxy(s.no_proxy.clone().into());
-    w.set_timezone(s.timezone.clone().into());
-    w.set_locale(s.locale.clone().into());
-    w.set_keyboard_layout(s.keyboard_layout.clone().into());
-    w.set_storage_layout(s.storage_layout.clone().into());
-    w.set_apt_mirror(s.apt_mirror.clone().into());
-    w.set_packages(s.packages.clone().into());
-    w.set_apt_repos(s.apt_repos.clone().into());
-    w.set_dnf_repos(s.dnf_repos.clone().into());
-    w.set_run_commands(s.run_commands.clone().into());
-    w.set_late_commands(s.late_commands.clone().into());
-    w.set_firewall_enabled(s.firewall_enabled);
-    w.set_firewall_policy(s.firewall_policy.clone().into());
-    w.set_allow_ports(s.allow_ports.clone().into());
-    w.set_deny_ports(s.deny_ports.clone().into());
-    w.set_user_groups(s.user_groups.clone().into());
-    w.set_user_shell(s.user_shell.clone().into());
-    w.set_sudo_nopasswd(s.sudo_nopasswd);
-    w.set_enable_services(s.enable_services.clone().into());
-    w.set_disable_services(s.disable_services.clone().into());
-    w.set_docker(s.docker);
-    w.set_podman(s.podman);
-    w.set_docker_users(s.docker_users.clone().into());
-    w.set_swap_size_mb(s.swap_size_mb.clone().into());
-    w.set_encrypt(s.encrypt);
+    fs.set_password("".into());
+    fs.set_password_confirm("".into());
+    fs.set_realname(s.realname.clone().into());
+    fs.set_ssh_keys(s.ssh_keys.clone().into());
+    fs.set_ssh_password_auth(s.ssh_password_auth);
+    fs.set_ssh_install_server(s.ssh_install_server);
+    fs.set_dns_servers(s.dns_servers.clone().into());
+    fs.set_ntp_servers(s.ntp_servers.clone().into());
+    fs.set_static_ip(s.static_ip.clone().into());
+    fs.set_gateway(s.gateway.clone().into());
+    fs.set_http_proxy(s.http_proxy.clone().into());
+    fs.set_https_proxy(s.https_proxy.clone().into());
+    fs.set_no_proxy(s.no_proxy.clone().into());
+    fs.set_timezone(s.timezone.clone().into());
+    fs.set_locale(s.locale.clone().into());
+    fs.set_keyboard_layout(s.keyboard_layout.clone().into());
+    fs.set_storage_layout(s.storage_layout.clone().into());
+    fs.set_apt_mirror(s.apt_mirror.clone().into());
+    fs.set_packages(s.packages.clone().into());
+    fs.set_apt_repos(s.apt_repos.clone().into());
+    fs.set_dnf_repos(s.dnf_repos.clone().into());
+    fs.set_run_commands(s.run_commands.clone().into());
+    fs.set_late_commands(s.late_commands.clone().into());
+    fs.set_firewall_enabled(s.firewall_enabled);
+    fs.set_firewall_policy(s.firewall_policy.clone().into());
+    fs.set_allow_ports(s.allow_ports.clone().into());
+    fs.set_deny_ports(s.deny_ports.clone().into());
+    fs.set_user_groups(s.user_groups.clone().into());
+    fs.set_user_shell(s.user_shell.clone().into());
+    fs.set_sudo_nopasswd(s.sudo_nopasswd);
+    fs.set_enable_services(s.enable_services.clone().into());
+    fs.set_disable_services(s.disable_services.clone().into());
+    fs.set_docker(s.docker);
+    fs.set_podman(s.podman);
+    fs.set_docker_users(s.docker_users.clone().into());
+    fs.set_swap_size_mb(s.swap_size_mb.clone().into());
+    fs.set_encrypt(s.encrypt);
     // encrypt_passphrase intentionally NOT restored (#[serde(skip)])
-    w.set_encrypt_passphrase("".into());
-    w.set_mounts(s.mounts.clone().into());
-    w.set_grub_timeout(s.grub_timeout.clone().into());
-    w.set_grub_cmdline(s.grub_cmdline.clone().into());
-    w.set_sysctl_pairs(s.sysctl_pairs.clone().into());
-    w.set_no_user_interaction(s.no_user_interaction);
-    w.set_expected_sha256(s.expected_sha256.clone().into());
+    fs.set_encrypt_passphrase("".into());
+    fs.set_mounts(s.mounts.clone().into());
+    fs.set_grub_timeout(s.grub_timeout.clone().into());
+    fs.set_grub_cmdline(s.grub_cmdline.clone().into());
+    fs.set_sysctl_pairs(s.sysctl_pairs.clone().into());
+    fs.set_no_user_interaction(s.no_user_interaction);
+    fs.set_expected_sha256(s.expected_sha256.clone().into());
     let defaults_summary = if s.source_preset.is_empty() {
         String::new()
     } else {
         defaults::summary_for(&defaults::defaults_for(&s.distro, &s.source_preset))
     };
-    w.set_defaults_summary(defaults_summary.into());
+    let gs = w.global::<AppState>();
+    gs.set_defaults_summary(defaults_summary.into());
 
     // Mark step 1 done if source path was restored.
-    w.set_step1_done(!s.source.is_empty());
-    w.set_passwords_match(true);
+    gs.set_step1_done(!s.source.is_empty());
+    gs.set_passwords_match(true);
 }
 
 fn restore_verify(w: &AppWindow, s: &VerifyState) {
-    w.set_verify_source(s.source.clone().into());
-    w.set_sums_url(s.sums_url.clone().into());
+    let gs = w.global::<AppState>();
+    gs.set_verify_source(s.source.clone().into());
+    gs.set_sums_url(s.sums_url.clone().into());
 }
 
 pub(crate) fn clear_optional_checks(w: &AppWindow) {
-    w.set_verify_done(false);
-    w.set_verify_matched(false);
-    w.set_verify_hash_display("".into());
-    w.set_iso9660_done(false);
-    w.set_iso9660_compliant(false);
-    w.set_iso9660_boot_bios(false);
-    w.set_iso9660_boot_uefi(false);
-    w.set_iso9660_volume_id("".into());
+    let gs = w.global::<AppState>();
+    gs.set_verify_done(false);
+    gs.set_verify_matched(false);
+    gs.set_verify_hash_display("".into());
+    gs.set_iso9660_done(false);
+    gs.set_iso9660_compliant(false);
+    gs.set_iso9660_boot_bios(false);
+    gs.set_iso9660_boot_uefi(false);
+    gs.set_iso9660_volume_id("".into());
 }
 
 pub(crate) fn clear_build_results(w: &AppWindow) {
-    let artifact: String = w.get_artifact_path().into();
-    let verify_source: String = w.get_verify_source().into();
+    let gs = w.global::<AppState>();
+    let artifact: String = gs.get_artifact_path().into();
+    let verify_source: String = gs.get_verify_source().into();
     if !artifact.is_empty() && verify_source == artifact {
-        w.set_verify_source("".into());
+        gs.set_verify_source("".into());
     }
-    w.set_step3_done(false);
-    w.set_artifact_path("".into());
-    w.set_artifact_sha256("".into());
+    gs.set_step3_done(false);
+    gs.set_artifact_path("".into());
+    gs.set_artifact_sha256("".into());
     clear_optional_checks(w);
 }
 

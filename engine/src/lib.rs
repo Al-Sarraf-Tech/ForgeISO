@@ -17,12 +17,12 @@ pub use autoinstall::{
     build_feature_late_commands, generate_autoinstall_yaml, hash_password, merge_autoinstall_yaml,
 };
 pub use config::{
-    BuildConfig, ContainerConfig, Distro, FirewallConfig, GrubConfig, InjectConfig, IsoSource,
-    NetworkConfig, ProfileKind, ProxyConfig, ScanPolicy, SshConfig, SwapConfig, TestingPolicy,
-    ToolStatus, UserConfig,
+    BuildConfig, ContainerConfig, Distro, FirewallConfig, GrubConfig, InjectConfig,
+    InjectConfigBuilder, IsoSource, NetworkConfig, ProfileKind, ProxyConfig, ScanPolicy, SshConfig,
+    SwapConfig, TestingPolicy, ToolStatus, UserConfig,
 };
 pub use error::{EngineError, EngineResult};
-pub use events::{EngineEvent, EventLevel, EventPhase};
+pub use events::{EngineEvent, EventKind, EventLevel, EventPhase};
 pub use iso::{BootSupport, IsoMetadata, SourceKind};
 pub use kickstart::generate_kickstart_cfg;
 pub use mint_preseed::generate_mint_preseed;

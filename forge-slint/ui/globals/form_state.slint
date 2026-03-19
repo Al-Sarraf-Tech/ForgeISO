@@ -1,0 +1,65 @@
+// ── FormState global ────────────────────────────────────────────────────────
+// All configure-step form fields live here so that step components can import
+// this global directly instead of receiving 50+ props from AppWindow.
+
+export global FormState {
+    // ── Source step ────────────────────────────────────────────────────────
+    in-out property <string>  source-path;
+    in-out property <string>  selected-preset;
+    in-out property <string>  selected-preset-name;
+    in-out property <string>  detected-distro;
+
+    // ── Configure step ─────────────────────────────────────────────────────
+    in-out property <string>  distro;
+    in-out property <string>  hostname;
+    in-out property <string>  username;
+    in-out property <string>  password;
+    in-out property <string>  password-confirm;
+    in-out property <string>  realname;
+    in-out property <string>  ssh-keys;
+    in-out property <bool>    ssh-password-auth: false;
+    in-out property <bool>    ssh-install-server: true;
+    in-out property <string>  dns-servers;
+    in-out property <string>  ntp-servers;
+    in-out property <string>  static-ip;
+    in-out property <string>  gateway;
+    in-out property <string>  http-proxy;
+    in-out property <string>  https-proxy;
+    in-out property <string>  no-proxy;
+    in-out property <string>  timezone;
+    in-out property <string>  locale;
+    in-out property <string>  keyboard-layout;
+    in-out property <string>  storage-layout;
+    in-out property <string>  apt-mirror;
+    in-out property <string>  packages;
+    in-out property <string>  apt-repos;
+    in-out property <string>  dnf-repos;
+    in-out property <string>  run-commands;
+    in-out property <string>  late-commands;
+    in-out property <bool>    firewall-enabled: false;
+    in-out property <string>  firewall-policy;
+    in-out property <string>  allow-ports;
+    in-out property <string>  deny-ports;
+    in-out property <string>  user-groups;
+    in-out property <string>  user-shell;
+    in-out property <bool>    sudo-nopasswd: false;
+    in-out property <string>  enable-services;
+    in-out property <string>  disable-services;
+    in-out property <bool>    docker: false;
+    in-out property <bool>    podman: false;
+    in-out property <string>  docker-users;
+    in-out property <string>  swap-size-mb;
+    in-out property <bool>    encrypt: false;
+    in-out property <string>  encrypt-passphrase;
+    in-out property <string>  mounts;
+    in-out property <string>  grub-timeout;
+    in-out property <string>  grub-cmdline;
+    in-out property <string>  sysctl-pairs;
+
+    // ── Output ─────────────────────────────────────────────────────────────
+    in-out property <string>  output-dir;
+    in-out property <string>  out-name;
+    in-out property <string>  output-label;
+    in-out property <string>  expected-sha256;
+    in-out property <bool>    no-user-interaction: false;
+}

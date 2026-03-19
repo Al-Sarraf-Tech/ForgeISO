@@ -1,4 +1,5 @@
 import { Palette, Sizes } from "../theme.slint";
+import { FIconButton } from "design_system.slint";
 
 export component Header inherits Rectangle {
     in property <string>  job-phase;
@@ -10,50 +11,51 @@ export component Header inherits Rectangle {
     callback cancel();
     callback doctor-toggled();
 
-    height: 64px;
+    height: 60px;
     background: Palette.panel;
 
-    // Bottom separator
-    Rectangle {
-        y: parent.height - 1px;
-        height: 1px;
-        background: Palette.border;
-    }
+    // Bottom shadow — subtle depth instead of hard border
+    drop-shadow-blur: 8px;
+    drop-shadow-color: Palette.shadow-sm;
+    drop-shadow-offset-y: 2px;
 
     HorizontalLayout {
-        padding-left: 24px;
-        padding-right: 24px;
-        padding-top: 12px;
-        padding-bottom: 12px;
-        spacing: 16px;
+        padding-left: Sizes.space-6;
+        padding-right: Sizes.space-6;
+        padding-top: Sizes.space-3;
+        padding-bottom: Sizes.space-3;
+        spacing: Sizes.space-4;
         alignment: space-between;
 
         // Left: logo + wordmark
         HorizontalLayout {
-            spacing: 12px;
+            spacing: Sizes.space-3;
             alignment: start;
             VerticalLayout {
                 alignment: center;
                 Rectangle {
-                    width: 6px;
-                    height: 36px;
-                    border-radius: 3px;
-                    background: @linear-gradient(180deg, Palette.accent 0%, #1a5cdb 100%);
+                    width: 4px;
+                    height: 32px;
+                    border-radius: 2px;
+                    background: @linear-gradient(180deg, Palette.accent 0%, #3366cc 100%);
                 }
             }
             VerticalLayout {
                 alignment: center;
-                spacing: 2px;
+                spacing: 1px;
                 Text {
                     text: "ForgeISO";
                     font-size: Sizes.font-xl;
                     font-weight: 700;
                     color: Palette.text;
+                    letter-spacing: -0.3px;
                 }
                 Text {
-                    text: "ISO Pipeline Wizard";
-                    font-size: Sizes.font-xs;
-                    color: Palette.muted;
+                    text: "Linux ISO Builder";
+                    font-size: Sizes.font-2xs;
+                    font-weight: 500;
+                    color: Palette.subtle;
+                    letter-spacing: 0.8px;
                 }
             }
         }
@@ -61,40 +63,40 @@ export component Header inherits Rectangle {
         // Centre: status / progress
         HorizontalLayout {
             alignment: center;
-            spacing: 10px;
+            spacing: Sizes.space-2;
             VerticalLayout {
                 alignment: center;
 
                 // Determinate progress bar
                 if job-running && job-percent >= 0.0: Rectangle {
-                    width: 320px;
-                    height: 6px;
-                    border-radius: 3px;
-                    background: Palette.border;
+                    width: 280px;
+                    height: 4px;
+                    border-radius: 2px;
+                    background: Palette.border-subtle;
                     Rectangle {
                         width: parent.width * job-percent;
                         height: parent.height;
                         border-radius: parent.border-radius;
-                        background: @linear-gradient(90deg, Palette.accent, #56a0f5);
+                        background: @linear-gradient(90deg, Palette.accent, Palette.accent-hover);
                         animate width { duration: 200ms; easing: ease-out; }
                     }
                 }
 
-                // Indeterminate sweep — init triggers animation on creation
+                // Indeterminate sweep
                 if job-running && job-percent < 0.0: Rectangle {
-                    width: 320px;
-                    height: 6px;
-                    border-radius: 3px;
-                    background: Palette.border;
+                    width: 280px;
+                    height: 4px;
+                    border-radius: 2px;
+                    background: Palette.border-subtle;
                     clip: true;
 
                     property <float> sweep: 0.0;
                     init => { sweep = 1.0; }
-                    animate sweep { duration: 1600ms; easing: ease-in-out; iteration-count: -1; }
+                    animate sweep { duration: 1400ms; easing: ease-in-out; iteration-count: -1; }
 
                     Rectangle {
-                        x: (parent.width + 100px) * sweep - 100px;
-                        width: 100px;
+                        x: (parent.width + 80px) * sweep - 80px;
+                        width: 80px;
                         height: parent.height;
                         border-radius: parent.border-radius;
                         background: @linear-gradient(90deg, transparent, Palette.accent, transparent);
@@ -103,69 +105,33 @@ export component Header inherits Rectangle {
 
                 if status-text != "" && !job-running: Text {
                     text: status-text;
-                    font-size: Sizes.font-sm;
+                    font-size: Sizes.font-xs;
+                    font-weight: 500;
                     color: status-is-error ? Palette.red : Palette.green;
                 }
                 if job-running && job-phase != "": Text {
                     text: job-phase;
-                    font-size: Sizes.font-sm;
+                    font-size: Sizes.font-xs;
                     color: Palette.muted;
                 }
             }
         }
 
-        // Right: cancel + doctor
+        // Right: doctor + cancel
         HorizontalLayout {
-            spacing: 8px;
+            spacing: Sizes.space-2;
             alignment: end;
 
-            // Doctor button
-            Rectangle {
-                width: 36px;
-                height: 36px;
-                border-radius: 8px;
-                background: doctor-open ? Palette.accent
-                          : doc-ta.has-hover ? Palette.active
-                          : Palette.elevated;
-                border-width: 1px;
-                border-color: doctor-open ? Palette.accent
-                            : doc-ta.has-hover ? Palette.border-focus
-                            : Palette.border;
-                animate background { duration: 120ms; }
-                animate border-color { duration: 120ms; }
-                Text {
-                    text: "🩺";
-                    font-size: 16px;
-                    vertical-alignment: center;
-                    horizontal-alignment: center;
-                }
-                doc-ta := TouchArea {
-                    mouse-cursor: MouseCursor.pointer;
-                    clicked => { root.doctor-toggled(); }
-                }
+            FIconButton {
+                icon: "+";
+                active: doctor-open;
+                clicked => { root.doctor-toggled(); }
             }
 
-            // Cancel button (only when running)
-            if job-running: Rectangle {
-                width: 90px;
-                height: 36px;
-                border-radius: 8px;
-                background: cancel-ta.has-hover ? rgba(248, 81, 73, 0.16) : rgba(248, 81, 73, 0.08);
-                border-width: 1px;
-                border-color: rgba(248, 81, 73, 0.5);
-                animate background { duration: 100ms; }
-                Text {
-                    text: "✕  Cancel";
-                    font-size: Sizes.font-sm;
-                    font-weight: 600;
-                    color: Palette.red;
-                    vertical-alignment: center;
-                    horizontal-alignment: center;
-                }
-                cancel-ta := TouchArea {
-                    mouse-cursor: MouseCursor.pointer;
-                    clicked => { root.cancel(); }
-                }
+            if job-running: FIconButton {
+                icon: "\u{2715}";
+                variant: "destructive";
+                clicked => { root.cancel(); }
             }
         }
     }

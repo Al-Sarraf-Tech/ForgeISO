@@ -17,7 +17,7 @@ use std::collections::HashSet;
 
 use crate::defaults;
 use crate::state::{lines, opt, tokens, InjectState, VerifyState};
-use crate::{clear_build_results, AppWindow, LogEntry, PresetCard};
+use crate::{clear_build_results, AppState, AppWindow, FormState, LogEntry, PresetCard};
 
 // ── Thread-local app handle ───────────────────────────────────────────────────
 //
@@ -161,25 +161,28 @@ impl ForgeApp {
     fn start_job(&mut self, phase: &str) {
         self.download_idx.clear();
         if let Some(w) = self.win.upgrade() {
-            w.set_job_running(true);
-            w.set_job_phase(phase.into());
-            w.set_job_percent(-1.0);
-            w.set_status_text("".into());
+            let gs = w.global::<AppState>();
+            gs.set_job_running(true);
+            gs.set_job_phase(phase.into());
+            gs.set_job_percent(-1.0);
+            gs.set_status_text("".into());
         }
     }
 
     pub fn finish_job(&self) {
         if let Some(w) = self.win.upgrade() {
-            w.set_job_running(false);
-            w.set_job_phase("".into());
-            w.set_job_percent(-1.0);
+            let gs = w.global::<AppState>();
+            gs.set_job_running(false);
+            gs.set_job_phase("".into());
+            gs.set_job_percent(-1.0);
         }
     }
 
     pub fn set_status_ok(&self, msg: impl Into<String>) {
         if let Some(w) = self.win.upgrade() {
-            w.set_status_text(msg.into().into());
-            w.set_status_is_error(false);
+            let gs = w.global::<AppState>();
+            gs.set_status_text(msg.into().into());
+            gs.set_status_is_error(false);
         }
     }
 
@@ -193,8 +196,9 @@ impl ForgeApp {
             .take(200)
             .collect::<String>();
         if let Some(w) = self.win.upgrade() {
-            w.set_status_text(first.into());
-            w.set_status_is_error(true);
+            let gs = w.global::<AppState>();
+            gs.set_status_text(first.into());
+            gs.set_status_is_error(true);
         }
     }
 
@@ -267,7 +271,8 @@ impl ForgeApp {
         // Update error badge count.
         if level == 2 {
             if let Some(w) = self.win.upgrade() {
-                w.set_log_error_count(w.get_log_error_count() + 1);
+                let gs = w.global::<AppState>();
+                gs.set_log_error_count(gs.get_log_error_count() + 1);
             }
         }
     }
@@ -290,75 +295,77 @@ impl ForgeApp {
 
     pub fn snap_inject(&self) -> Option<InjectState> {
         let w = self.win.upgrade()?;
+        let fs = w.global::<FormState>();
         Some(InjectState {
-            source: w.get_source_path().into(),
-            source_preset: w.get_selected_preset().into(),
-            output_dir: w.get_output_dir().into(),
-            out_name: w.get_out_name().into(),
-            output_label: w.get_output_label().into(),
-            distro: w.get_distro().into(),
-            hostname: w.get_hostname().into(),
-            username: w.get_username().into(),
-            password: w.get_password().into(),
-            password_confirm: w.get_password_confirm().into(),
-            realname: w.get_realname().into(),
-            ssh_keys: w.get_ssh_keys().into(),
-            ssh_password_auth: w.get_ssh_password_auth(),
-            ssh_install_server: w.get_ssh_install_server(),
-            dns_servers: w.get_dns_servers().into(),
-            ntp_servers: w.get_ntp_servers().into(),
-            static_ip: w.get_static_ip().into(),
-            gateway: w.get_gateway().into(),
-            http_proxy: w.get_http_proxy().into(),
-            https_proxy: w.get_https_proxy().into(),
-            no_proxy: w.get_no_proxy().into(),
-            timezone: w.get_timezone().into(),
-            locale: w.get_locale().into(),
-            keyboard_layout: w.get_keyboard_layout().into(),
-            storage_layout: w.get_storage_layout().into(),
-            apt_mirror: w.get_apt_mirror().into(),
-            packages: w.get_packages().into(),
-            apt_repos: w.get_apt_repos().into(),
-            dnf_repos: w.get_dnf_repos().into(),
+            source: fs.get_source_path().into(),
+            source_preset: fs.get_selected_preset().into(),
+            output_dir: fs.get_output_dir().into(),
+            out_name: fs.get_out_name().into(),
+            output_label: fs.get_output_label().into(),
+            distro: fs.get_distro().into(),
+            hostname: fs.get_hostname().into(),
+            username: fs.get_username().into(),
+            password: fs.get_password().into(),
+            password_confirm: fs.get_password_confirm().into(),
+            realname: fs.get_realname().into(),
+            ssh_keys: fs.get_ssh_keys().into(),
+            ssh_password_auth: fs.get_ssh_password_auth(),
+            ssh_install_server: fs.get_ssh_install_server(),
+            dns_servers: fs.get_dns_servers().into(),
+            ntp_servers: fs.get_ntp_servers().into(),
+            static_ip: fs.get_static_ip().into(),
+            gateway: fs.get_gateway().into(),
+            http_proxy: fs.get_http_proxy().into(),
+            https_proxy: fs.get_https_proxy().into(),
+            no_proxy: fs.get_no_proxy().into(),
+            timezone: fs.get_timezone().into(),
+            locale: fs.get_locale().into(),
+            keyboard_layout: fs.get_keyboard_layout().into(),
+            storage_layout: fs.get_storage_layout().into(),
+            apt_mirror: fs.get_apt_mirror().into(),
+            packages: fs.get_packages().into(),
+            apt_repos: fs.get_apt_repos().into(),
+            dnf_repos: fs.get_dnf_repos().into(),
             dnf_mirror: String::new(),
             pacman_repos: String::new(),
             pacman_mirror: String::new(),
-            run_commands: w.get_run_commands().into(),
-            late_commands: w.get_late_commands().into(),
-            firewall_enabled: w.get_firewall_enabled(),
-            firewall_policy: w.get_firewall_policy().into(),
-            allow_ports: w.get_allow_ports().into(),
-            deny_ports: w.get_deny_ports().into(),
-            user_groups: w.get_user_groups().into(),
-            user_shell: w.get_user_shell().into(),
-            sudo_nopasswd: w.get_sudo_nopasswd(),
+            run_commands: fs.get_run_commands().into(),
+            late_commands: fs.get_late_commands().into(),
+            firewall_enabled: fs.get_firewall_enabled(),
+            firewall_policy: fs.get_firewall_policy().into(),
+            allow_ports: fs.get_allow_ports().into(),
+            deny_ports: fs.get_deny_ports().into(),
+            user_groups: fs.get_user_groups().into(),
+            user_shell: fs.get_user_shell().into(),
+            sudo_nopasswd: fs.get_sudo_nopasswd(),
             sudo_commands: String::new(),
-            enable_services: w.get_enable_services().into(),
-            disable_services: w.get_disable_services().into(),
-            docker: w.get_docker(),
-            podman: w.get_podman(),
-            docker_users: w.get_docker_users().into(),
-            swap_size_mb: w.get_swap_size_mb().into(),
+            enable_services: fs.get_enable_services().into(),
+            disable_services: fs.get_disable_services().into(),
+            docker: fs.get_docker(),
+            podman: fs.get_podman(),
+            docker_users: fs.get_docker_users().into(),
+            swap_size_mb: fs.get_swap_size_mb().into(),
             swap_filename: String::new(),
             swap_swappiness: String::new(),
-            encrypt: w.get_encrypt(),
-            encrypt_passphrase: w.get_encrypt_passphrase().into(),
-            mounts: w.get_mounts().into(),
-            grub_timeout: w.get_grub_timeout().into(),
-            grub_cmdline: w.get_grub_cmdline().into(),
+            encrypt: fs.get_encrypt(),
+            encrypt_passphrase: fs.get_encrypt_passphrase().into(),
+            mounts: fs.get_mounts().into(),
+            grub_timeout: fs.get_grub_timeout().into(),
+            grub_cmdline: fs.get_grub_cmdline().into(),
             grub_default: String::new(),
-            sysctl_pairs: w.get_sysctl_pairs().into(),
-            no_user_interaction: w.get_no_user_interaction(),
+            sysctl_pairs: fs.get_sysctl_pairs().into(),
+            no_user_interaction: fs.get_no_user_interaction(),
             wallpaper_path: String::new(),
-            expected_sha256: w.get_expected_sha256().into(),
+            expected_sha256: fs.get_expected_sha256().into(),
         })
     }
 
     pub fn snap_verify(&self) -> Option<VerifyState> {
         let w = self.win.upgrade()?;
+        let gs = w.global::<AppState>();
         Some(VerifyState {
-            source: w.get_verify_source().into(),
-            sums_url: w.get_sums_url().into(),
+            source: gs.get_verify_source().into(),
+            sums_url: gs.get_sums_url().into(),
         })
     }
 
@@ -368,12 +375,13 @@ impl ForgeApp {
             .upgrade()
             .ok_or_else(|| "application window is no longer available".to_string())?;
 
-        let source = w.get_source_path().to_string();
+        let fs = w.global::<FormState>();
+        let source = fs.get_source_path().to_string();
         if source.trim().is_empty() {
             return Err("Source ISO is required".to_string());
         }
 
-        let output_dir = w.get_output_dir().to_string();
+        let output_dir = fs.get_output_dir().to_string();
         if output_dir.trim().is_empty() {
             return Err("Output directory is required".to_string());
         }
@@ -383,13 +391,13 @@ impl ForgeApp {
                 .map_err(|e| format!("Failed to create output directory: {e}"))?;
         }
 
-        let password: String = w.get_password().into();
-        let password_confirm: String = w.get_password_confirm().into();
+        let password: String = fs.get_password().into();
+        let password_confirm: String = fs.get_password_confirm().into();
         if !password.is_empty() && !password_confirm.is_empty() && password != password_confirm {
             return Err("Passwords do not match".to_string());
         }
 
-        let label: String = w.get_output_label().into();
+        let label: String = fs.get_output_label().into();
         if !label.is_empty() && label.chars().count() > 32 {
             return Err("Volume label exceeds 32 characters".to_string());
         }
@@ -411,12 +419,13 @@ impl ForgeApp {
 
     /// Apply distro defaults to unedited fields and update the summary.
     pub fn apply_distro_defaults(&mut self, w: &AppWindow) {
-        let distro: String = w.get_distro().into();
-        let preset: String = w.get_selected_preset().into();
+        let fs = w.global::<FormState>();
+        let distro: String = fs.get_distro().into();
+        let preset: String = fs.get_selected_preset().into();
         let defs = defaults::defaults_for(&distro, &preset);
 
-        let username: String = w.get_username().into();
-        let docker_enabled = w.get_docker();
+        let username: String = fs.get_username().into();
+        let docker_enabled = fs.get_docker();
         let changes = defaults::apply_defaults(
             &defs,
             &self.edited_fields,
@@ -427,21 +436,21 @@ impl ForgeApp {
 
         for (field, value) in &changes {
             match *field {
-                "packages" => w.set_packages(value.clone().into()),
-                "user_groups" => w.set_user_groups(value.clone().into()),
-                "user_shell" => w.set_user_shell(value.clone().into()),
-                "enable_services" => w.set_enable_services(value.clone().into()),
-                "disable_services" => w.set_disable_services(value.clone().into()),
-                "firewall_policy" => w.set_firewall_policy(value.clone().into()),
-                "allow_ports" => w.set_allow_ports(value.clone().into()),
-                "docker_users" => w.set_docker_users(value.clone().into()),
+                "packages" => fs.set_packages(value.clone().into()),
+                "user_groups" => fs.set_user_groups(value.clone().into()),
+                "user_shell" => fs.set_user_shell(value.clone().into()),
+                "enable_services" => fs.set_enable_services(value.clone().into()),
+                "disable_services" => fs.set_disable_services(value.clone().into()),
+                "firewall_policy" => fs.set_firewall_policy(value.clone().into()),
+                "allow_ports" => fs.set_allow_ports(value.clone().into()),
+                "docker_users" => fs.set_docker_users(value.clone().into()),
                 _ => {}
             }
         }
 
         // Update summary display
         let summary = defaults::summary_for(&defs);
-        w.set_defaults_summary(summary.into());
+        w.global::<AppState>().set_defaults_summary(summary.into());
     }
 
     /// Reset edit tracking and reapply all defaults.
@@ -460,11 +469,12 @@ impl ForgeApp {
     }
 
     pub fn seed_default_edit_tracking(&mut self, w: &AppWindow) {
-        let distro: String = w.get_distro().into();
-        let preset: String = w.get_selected_preset().into();
+        let fs = w.global::<FormState>();
+        let distro: String = fs.get_distro().into();
+        let preset: String = fs.get_selected_preset().into();
         let defs = defaults::defaults_for(&distro, &preset);
-        let username: String = w.get_username().into();
-        let docker_enabled = w.get_docker();
+        let username: String = fs.get_username().into();
+        let docker_enabled = fs.get_docker();
 
         let expected =
             defaults::apply_defaults(&defs, &HashSet::new(), &distro, &username, docker_enabled);
@@ -473,14 +483,14 @@ impl ForgeApp {
 
         for (field, value) in expected {
             let current = match field {
-                "packages" => w.get_packages().to_string(),
-                "user_groups" => w.get_user_groups().to_string(),
-                "user_shell" => w.get_user_shell().to_string(),
-                "enable_services" => w.get_enable_services().to_string(),
-                "disable_services" => w.get_disable_services().to_string(),
-                "firewall_policy" => w.get_firewall_policy().to_string(),
-                "allow_ports" => w.get_allow_ports().to_string(),
-                "docker_users" => w.get_docker_users().to_string(),
+                "packages" => fs.get_packages().to_string(),
+                "user_groups" => fs.get_user_groups().to_string(),
+                "user_shell" => fs.get_user_shell().to_string(),
+                "enable_services" => fs.get_enable_services().to_string(),
+                "disable_services" => fs.get_disable_services().to_string(),
+                "firewall_policy" => fs.get_firewall_policy().to_string(),
+                "allow_ports" => fs.get_allow_ports().to_string(),
+                "docker_users" => fs.get_docker_users().to_string(),
                 _ => continue,
             };
 
@@ -491,19 +501,20 @@ impl ForgeApp {
     }
 
     fn sync_auto_managed_access(&self, w: &AppWindow) {
-        let username: String = w.get_username().into();
-        let distro: String = w.get_distro().into();
+        let fs = w.global::<FormState>();
+        let username: String = fs.get_username().into();
+        let distro: String = fs.get_distro().into();
 
         if !self.edited_fields.contains("user_groups") {
             let groups = defaults::auto_user_groups(&distro, &username);
-            w.set_user_groups(groups.into());
+            fs.set_user_groups(groups.into());
         }
 
         if !self.edited_fields.contains("docker_users") {
-            if w.get_docker() && !username.is_empty() {
-                w.set_docker_users(username.into());
+            if fs.get_docker() && !username.is_empty() {
+                fs.set_docker_users(username.into());
             } else {
-                w.set_docker_users("".into());
+                fs.set_docker_users("".into());
             }
         }
     }
@@ -527,7 +538,7 @@ impl ForgeApp {
             None => return,
         };
 
-        if w.get_job_running() {
+        if w.global::<AppState>().get_job_running() {
             return;
         }
 
@@ -550,7 +561,7 @@ impl ForgeApp {
         // Reset build/check state while preserving completed configuration.
         clear_build_results(&w);
 
-        self.start_job("Injecting…");
+        self.start_job("Injecting\u{2026}");
 
         let engine = Arc::clone(&self.engine);
         let win2 = self.win.clone();
@@ -569,16 +580,18 @@ impl ForgeApp {
                     let win3 = win2.clone();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(w) = win2.upgrade() {
-                            w.set_job_running(false);
-                            w.set_job_phase("".into());
-                            w.set_step3_done(true);
-                            w.set_artifact_path(artifact.clone().into());
-                            w.set_verify_source(artifact.into());
-                            w.set_current_step(3);
-                            w.set_status_text(
-                                "ISO ready — optional checks are available if you want them".into(),
+                            let gs = w.global::<AppState>();
+                            gs.set_job_running(false);
+                            gs.set_job_phase("".into());
+                            gs.set_step3_done(true);
+                            gs.set_artifact_path(artifact.clone().into());
+                            gs.set_verify_source(artifact.into());
+                            gs.set_current_step(3);
+                            gs.set_status_text(
+                                "ISO ready \u{2014} optional checks are available if you want them"
+                                    .into(),
                             );
-                            w.set_status_is_error(false);
+                            gs.set_status_is_error(false);
                         }
                     });
 
@@ -595,12 +608,13 @@ impl ForgeApp {
                     let msg = e.to_string();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(w) = win2.upgrade() {
-                            w.set_job_running(false);
-                            w.set_job_phase("".into());
-                            w.set_status_text(
+                            let gs = w.global::<AppState>();
+                            gs.set_job_running(false);
+                            gs.set_job_phase("".into());
+                            gs.set_status_text(
                                 msg.as_str().chars().take(200).collect::<String>().into(),
                             );
-                            w.set_status_is_error(true);
+                            gs.set_status_is_error(true);
                         }
                     });
                 }
@@ -615,7 +629,8 @@ impl ForgeApp {
             Some(w) => w,
             None => return,
         };
-        if w.get_job_running() {
+        let gs = w.global::<AppState>();
+        if gs.get_job_running() {
             return;
         }
         // Abort any previous verify
@@ -623,18 +638,18 @@ impl ForgeApp {
             h.abort();
         }
 
-        let source: String = w.get_verify_source().into();
+        let source: String = gs.get_verify_source().into();
         if source.trim().is_empty() {
             self.set_status_err("Source ISO is required for verification");
             return;
         }
-        let sums: String = w.get_sums_url().into();
+        let sums: String = gs.get_sums_url().into();
         let sums_opt = opt(&sums);
 
-        w.set_verify_done(false);
-        w.set_verify_matched(false);
-        w.set_verify_hash_display("".into());
-        self.start_job("Verifying checksum…");
+        gs.set_verify_done(false);
+        gs.set_verify_matched(false);
+        gs.set_verify_hash_display("".into());
+        self.start_job("Verifying checksum\u{2026}");
 
         let engine = Arc::clone(&self.engine);
         let win2 = self.win.clone();
@@ -649,27 +664,28 @@ impl ForgeApp {
                         if matched {
                             "Match: "
                         } else {
-                            "Mismatch — actual: "
+                            "Mismatch \u{2014} actual: "
                         },
                         hash
                     );
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(w) = win2.upgrade() {
-                            w.set_job_running(false);
-                            w.set_job_phase("".into());
-                            w.set_verify_done(true);
-                            w.set_verify_matched(matched);
-                            w.set_verify_hash_display(display.into());
-                            w.set_step3_done(true);
-                            w.set_status_text(
+                            let gs = w.global::<AppState>();
+                            gs.set_job_running(false);
+                            gs.set_job_phase("".into());
+                            gs.set_verify_done(true);
+                            gs.set_verify_matched(matched);
+                            gs.set_verify_hash_display(display.into());
+                            gs.set_step3_done(true);
+                            gs.set_status_text(
                                 if matched {
-                                    "Integrity verified ✓"
+                                    "Integrity verified \u{2713}"
                                 } else {
                                     "Checksum mismatch"
                                 }
                                 .into(),
                             );
-                            w.set_status_is_error(!matched);
+                            gs.set_status_is_error(!matched);
                         }
                     });
                 }
@@ -677,12 +693,13 @@ impl ForgeApp {
                     let msg = e.to_string();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(w) = win2.upgrade() {
-                            w.set_job_running(false);
-                            w.set_job_phase("".into());
-                            w.set_status_text(
+                            let gs = w.global::<AppState>();
+                            gs.set_job_running(false);
+                            gs.set_job_phase("".into());
+                            gs.set_status_text(
                                 msg.as_str().chars().take(200).collect::<String>().into(),
                             );
-                            w.set_status_is_error(true);
+                            gs.set_status_is_error(true);
                         }
                     });
                 }
@@ -697,24 +714,25 @@ impl ForgeApp {
             Some(w) => w,
             None => return,
         };
-        if w.get_job_running() {
+        let gs = w.global::<AppState>();
+        if gs.get_job_running() {
             return;
         }
         if let Some(h) = self.current_task.take() {
             h.abort();
         }
 
-        let source: String = w.get_verify_source().into();
+        let source: String = gs.get_verify_source().into();
         if source.trim().is_empty() {
             self.set_status_err("Source ISO is required");
             return;
         }
-        w.set_iso9660_done(false);
-        w.set_iso9660_compliant(false);
-        w.set_iso9660_boot_bios(false);
-        w.set_iso9660_boot_uefi(false);
-        w.set_iso9660_volume_id("".into());
-        self.start_job("Validating ISO-9660…");
+        gs.set_iso9660_done(false);
+        gs.set_iso9660_compliant(false);
+        gs.set_iso9660_boot_bios(false);
+        gs.set_iso9660_boot_uefi(false);
+        gs.set_iso9660_volume_id("".into());
+        self.start_job("Validating ISO-9660\u{2026}");
 
         let engine = Arc::clone(&self.engine);
         let win2 = self.win.clone();
@@ -728,22 +746,23 @@ impl ForgeApp {
                     let vol = r.volume_id.clone().unwrap_or_default();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(w) = win2.upgrade() {
-                            w.set_job_running(false);
-                            w.set_job_phase("".into());
-                            w.set_iso9660_done(true);
-                            w.set_iso9660_compliant(compliant);
-                            w.set_iso9660_boot_bios(bios);
-                            w.set_iso9660_boot_uefi(uefi);
-                            w.set_iso9660_volume_id(vol.into());
-                            w.set_status_text(
+                            let gs = w.global::<AppState>();
+                            gs.set_job_running(false);
+                            gs.set_job_phase("".into());
+                            gs.set_iso9660_done(true);
+                            gs.set_iso9660_compliant(compliant);
+                            gs.set_iso9660_boot_bios(bios);
+                            gs.set_iso9660_boot_uefi(uefi);
+                            gs.set_iso9660_volume_id(vol.into());
+                            gs.set_status_text(
                                 if compliant {
-                                    "ISO-9660 compliant ✓"
+                                    "ISO-9660 compliant \u{2713}"
                                 } else {
                                     "ISO-9660 issues found"
                                 }
                                 .into(),
                             );
-                            w.set_status_is_error(!compliant);
+                            gs.set_status_is_error(!compliant);
                         }
                     });
                 }
@@ -751,12 +770,13 @@ impl ForgeApp {
                     let msg = e.to_string();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(w) = win2.upgrade() {
-                            w.set_job_running(false);
-                            w.set_job_phase("".into());
-                            w.set_status_text(
+                            let gs = w.global::<AppState>();
+                            gs.set_job_running(false);
+                            gs.set_job_phase("".into());
+                            gs.set_status_text(
                                 msg.as_str().chars().take(200).collect::<String>().into(),
                             );
-                            w.set_status_is_error(true);
+                            gs.set_status_is_error(true);
                         }
                     });
                 }
@@ -771,16 +791,17 @@ impl ForgeApp {
             Some(w) => w,
             None => return,
         };
-        if w.get_job_running() {
+        let gs = w.global::<AppState>();
+        if gs.get_job_running() {
             return;
         }
         if let Some(h) = self.current_task.take() {
             h.abort();
         }
 
-        w.set_doctor_loading(true);
-        w.set_doctor_text("".into());
-        self.start_job("Checking dependencies…");
+        gs.set_doctor_loading(true);
+        gs.set_doctor_text("".into());
+        self.start_job("Checking dependencies\u{2026}");
 
         let engine = Arc::clone(&self.engine);
         let win2 = self.win.clone();
@@ -790,22 +811,23 @@ impl ForgeApp {
             // Build a human-readable text from BTreeMap<tool, ok>.
             let mut lines_out = Vec::new();
             for (tool, ok) in &report.tooling {
-                let mark = if *ok { "✓" } else { "✗" };
+                let mark = if *ok { "\u{2713}" } else { "\u{2717}" };
                 lines_out.push(format!("  {mark}  {tool}"));
             }
             if !report.warnings.is_empty() {
                 lines_out.push(String::new());
                 for w in &report.warnings {
-                    lines_out.push(format!("  ⚠  {w}"));
+                    lines_out.push(format!("  \u{26A0}  {w}"));
                 }
             }
             let text = lines_out.join("\n");
             let _ = slint::invoke_from_event_loop(move || {
                 if let Some(w) = win2.upgrade() {
-                    w.set_job_running(false);
-                    w.set_job_phase("".into());
-                    w.set_doctor_loading(false);
-                    w.set_doctor_text(text.into());
+                    let gs = w.global::<AppState>();
+                    gs.set_job_running(false);
+                    gs.set_job_phase("".into());
+                    gs.set_doctor_loading(false);
+                    gs.set_doctor_text(text.into());
                 }
             });
         }));
@@ -835,9 +857,10 @@ impl ForgeApp {
                 let distro = distro_str.to_string();
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(w) = win2.upgrade() {
+                        let fs = w.global::<FormState>();
                         if !distro.is_empty() {
-                            w.set_distro(distro.clone().into());
-                            w.set_detected_distro(
+                            fs.set_distro(distro.clone().into());
+                            fs.set_detected_distro(
                                 match distro.as_str() {
                                     "fedora" => "Fedora / RHEL",
                                     "arch" => "Arch Linux",
@@ -847,8 +870,8 @@ impl ForgeApp {
                                 .into(),
                             );
                         }
-                        if !label.is_empty() && w.get_output_label().is_empty() {
-                            w.set_output_label(label.into());
+                        if !label.is_empty() && fs.get_output_label().is_empty() {
+                            fs.set_output_label(label.into());
                         }
                     }
                 });
@@ -864,7 +887,7 @@ pub fn spawn_sha256(win: Weak<AppWindow>, path: String) {
         let hash = compute_sha256(&path);
         let _ = slint::invoke_from_event_loop(move || {
             if let Some(w) = win.upgrade() {
-                w.set_artifact_sha256(hash.into());
+                w.global::<AppState>().set_artifact_sha256(hash.into());
             }
         });
     });
@@ -886,25 +909,27 @@ fn compute_sha256(path: &str) -> String {
 
 pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut ForgeApp) {
     if let Some(p) = find_preset_by_str(id) {
-        w.set_selected_preset(p.id.as_str().into());
-        w.set_selected_preset_name(p.name.into());
-        w.set_distro(p.distro.into());
+        let fs = w.global::<FormState>();
+        fs.set_selected_preset(p.id.as_str().into());
+        fs.set_selected_preset_name(p.name.into());
+        fs.set_distro(p.distro.into());
         // Clear stale build state
-        w.set_step2_done(false);
+        let gs = w.global::<AppState>();
+        gs.set_step2_done(false);
         clear_build_results(w);
 
         if p.strategy == AcquisitionStrategy::DirectUrl {
             if let Ok(Some(url)) = resolve_url(p) {
-                w.set_source_path(url.into());
+                fs.set_source_path(url.into());
                 // Trigger ISO detection on URL-resolved presets
-                app.spawn_detect_iso(w.get_source_path().into());
+                app.spawn_detect_iso(fs.get_source_path().into());
             }
         }
 
         // Apply distro-aware defaults for this preset.
         app.apply_distro_defaults(w);
 
-        w.set_current_step(2);
+        gs.set_current_step(2);
     }
 }
 

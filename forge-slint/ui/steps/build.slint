@@ -1,16 +1,17 @@
 import { Palette, Sizes } from "../theme.slint";
 import { ScrollView } from "std-widgets.slint";
+import { FButton, FCard, FBadge, FDivider } from "../components/design_system.slint";
 
 component SummaryRow inherits Rectangle {
     in property <string> label;
     in property <string> value;
     in property <bool>   set: true;
 
-    height: value-text.preferred-height + 24px;
+    height: value-text.preferred-height + Sizes.space-6;
     background: transparent;
 
     VerticalLayout {
-        spacing: 4px;
+        spacing: Sizes.space-1;
         Text {
             text: label;
             font-size: Sizes.font-2xs;
@@ -25,34 +26,6 @@ component SummaryRow inherits Rectangle {
             font-weight: set ? 600 : 400;
             wrap: word-wrap;
         }
-    }
-}
-
-component SummaryCard inherits Rectangle {
-    in property <string> title;
-
-    border-radius: Sizes.radius-lg;
-    background: Palette.surface;
-    border-width: 1px;
-    border-color: Palette.border;
-
-    VerticalLayout {
-        HorizontalLayout {
-            height: 40px;
-            padding-left: 20px;
-            padding-right: 20px;
-            alignment: start;
-            Text {
-                text: title;
-                font-size: Sizes.font-2xs;
-                font-weight: 700;
-                color: Palette.subtle;
-                letter-spacing: 1.4px;
-                vertical-alignment: center;
-            }
-        }
-        Rectangle { height: 1px; background: Palette.border; opacity: 0.5; }
-        @children
     }
 }
 
@@ -114,14 +87,15 @@ export component StepBuild inherits Rectangle {
 
     ScrollView {
         VerticalLayout {
-            padding: 40px;
-            spacing: 20px;
+            padding: Sizes.space-10;
+            spacing: Sizes.space-5;
             alignment: start;
 
+            // ── Header ──────────────────────────────────────────────────
             HorizontalLayout {
                 alignment: space-between;
                 VerticalLayout {
-                    spacing: 4px;
+                    spacing: Sizes.space-1;
                     Text {
                         text: artifact-path == "" ? "Review & Build" : "ISO Ready";
                         font-size: Sizes.font-2xl;
@@ -137,62 +111,32 @@ export component StepBuild inherits Rectangle {
                     }
                 }
                 if artifact-path == "": HorizontalLayout {
-                    spacing: 8px;
+                    spacing: Sizes.space-2;
                     alignment: end;
-                    Rectangle {
-                        width: 120px;
-                        height: 34px;
-                        border-radius: Sizes.radius-sm;
-                        background: bts-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        animate background { duration: 100ms; }
-                        Text {
-                            text: "← Choose ISO";
-                            font-size: Sizes.font-xs;
-                            color: Palette.text;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        bts-ta := TouchArea {
-                            enabled: !running;
-                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                            clicked => { back-to-source(); }
-                        }
+                    FButton {
+                        label: "← Choose ISO";
+                        variant: "secondary";
+                        enabled: !running;
+                        clicked => { back-to-source(); }
                     }
-                    Rectangle {
-                        width: 130px;
-                        height: 34px;
-                        border-radius: Sizes.radius-sm;
-                        background: bld-back-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        animate background { duration: 100ms; }
-                        Text {
-                            text: "← Edit Settings";
-                            font-size: Sizes.font-xs;
-                            color: Palette.text;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        bld-back-ta := TouchArea {
-                            enabled: !running;
-                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                            clicked => { back-clicked(); }
-                        }
+                    FButton {
+                        label: "← Edit Settings";
+                        variant: "secondary";
+                        enabled: !running;
+                        clicked => { back-clicked(); }
                     }
                 }
             }
 
-            if artifact-path == "": Rectangle {
-                border-radius: Sizes.radius-sm;
-                background: rgba(47, 129, 247, 0.08);
-                border-width: 1px;
-                border-color: rgba(47, 129, 247, 0.30);
+            // ── Confirmation banner ─────────────────────────────────────
+            if artifact-path == "": FCard {
+                border-color: rgba(77, 142, 247, 0.25);
+                background: rgba(77, 142, 247, 0.06);
+                drop-shadow-blur: 0px;
 
                 VerticalLayout {
-                    padding: 16px;
-                    spacing: 6px;
+                    padding: Sizes.space-4;
+                    spacing: Sizes.space-2;
                     Text {
                         text: "CONFIRMATION STAGE";
                         font-size: Sizes.font-2xs;
@@ -209,65 +153,71 @@ export component StepBuild inherits Rectangle {
                 }
             }
 
-            if artifact-path == "": SummaryCard {
-                title: "Source & Output";
+            // ── Source & Output ──────────────────────────────────────────
+            if artifact-path == "": FCard {
+                title: "SOURCE & OUTPUT";
                 VerticalLayout {
-                    padding: 20px;
-                    spacing: 10px;
-                    SummaryRow { label: "Installer format"; value: distro-display; }
-                    SummaryRow { label: "Source ISO"; value: source; }
-                    if expected-sha256 != "": SummaryRow { label: "Expected source SHA-256"; value: expected-sha256; }
-                    SummaryRow { label: "Output directory"; value: output-dir; }
-                    SummaryRow { label: "Output filename"; value: out-name; }
-                    if output-label != "": SummaryRow { label: "Volume label"; value: output-label; }
+                    padding: Sizes.space-5;
+                    spacing: Sizes.space-3;
+                    SummaryRow { label: "INSTALLER FORMAT"; value: distro-display; }
+                    SummaryRow { label: "SOURCE ISO"; value: source; }
+                    if expected-sha256 != "": SummaryRow { label: "EXPECTED SOURCE SHA-256"; value: expected-sha256; }
+                    SummaryRow { label: "OUTPUT DIRECTORY"; value: output-dir; }
+                    SummaryRow { label: "OUTPUT FILENAME"; value: out-name; }
+                    if output-label != "": SummaryRow { label: "VOLUME LABEL"; value: output-label; }
                 }
             }
 
-            if artifact-path == "": SummaryCard {
-                title: "Identity & Access";
+            // ── Identity & Access ───────────────────────────────────────
+            if artifact-path == "": FCard {
+                title: "IDENTITY & ACCESS";
                 VerticalLayout {
-                    padding: 20px;
-                    spacing: 10px;
-                    SummaryRow { label: "Hostname"; value: hostname; set: hostname != ""; }
-                    SummaryRow { label: "Username"; value: username; set: username != ""; }
-                    if realname != "": SummaryRow { label: "Full name"; value: realname; }
-                    SummaryRow { label: "Password"; value: password-set ? "Configured" : "Not set"; set: password-set; }
+                    padding: Sizes.space-5;
+                    spacing: Sizes.space-3;
+                    SummaryRow { label: "HOSTNAME"; value: hostname; set: hostname != ""; }
+                    SummaryRow { label: "USERNAME"; value: username; set: username != ""; }
+                    if realname != "": SummaryRow { label: "FULL NAME"; value: realname; }
+                    SummaryRow { label: "PASSWORD"; value: password-set ? "Configured" : "Not set"; set: password-set; }
                     SummaryRow {
-                        label: "Admin access";
+                        label: "ADMIN ACCESS";
                         value: sudo-nopasswd ? admin-group + " + passwordless sudo" : admin-group;
                         set: admin-group != "";
                     }
-                    if user-groups != "": SummaryRow { label: "Groups"; value: user-groups; }
-                    if user-shell != "": SummaryRow { label: "Login shell"; value: user-shell; }
-                    SummaryRow { label: "SSH server"; value: ssh-server ? "Install and enable" : "Not requested"; set: true; }
+                    if user-groups != "": SummaryRow { label: "GROUPS"; value: user-groups; }
+                    if user-shell != "": SummaryRow { label: "LOGIN SHELL"; value: user-shell; }
+                    FDivider {}
+                    SummaryRow { label: "SSH SERVER"; value: ssh-server ? "Install and enable" : "Not requested"; set: true; }
                     SummaryRow {
-                        label: "SSH password auth";
+                        label: "SSH PASSWORD AUTH";
                         value: ssh-password-auth ? "Allowed" : "Disabled";
                         set: ssh-server;
                     }
                     SummaryRow {
-                        label: "SSH keys";
+                        label: "SSH KEYS";
                         value: ssh-keys != "" ? "Configured" : "None provided";
                         set: true;
                     }
                 }
             }
 
-            if artifact-path == "": SummaryCard {
-                title: "System, Network & Security";
+            // ── System, Network & Security ──────────────────────────────
+            if artifact-path == "": FCard {
+                title: "SYSTEM, NETWORK & SECURITY";
                 VerticalLayout {
-                    padding: 20px;
-                    spacing: 10px;
-                    if timezone != "": SummaryRow { label: "Timezone"; value: timezone; }
-                    if locale != "": SummaryRow { label: "Locale"; value: locale; }
-                    if keyboard-layout != "": SummaryRow { label: "Keyboard layout"; value: keyboard-layout; }
-                    if storage-layout != "": SummaryRow { label: "Storage layout"; value: storage-layout; }
-                    SummaryRow { label: "IP configuration"; value: static-ip != "" ? static-ip : "DHCP"; set: true; }
-                    if gateway != "": SummaryRow { label: "Gateway"; value: gateway; }
-                    if dns-servers != "": SummaryRow { label: "DNS servers"; value: dns-servers; }
-                    if ntp-servers != "": SummaryRow { label: "NTP servers"; value: ntp-servers; }
+                    padding: Sizes.space-5;
+                    spacing: Sizes.space-3;
+                    if timezone != "": SummaryRow { label: "TIMEZONE"; value: timezone; }
+                    if locale != "": SummaryRow { label: "LOCALE"; value: locale; }
+                    if keyboard-layout != "": SummaryRow { label: "KEYBOARD LAYOUT"; value: keyboard-layout; }
+                    if storage-layout != "": SummaryRow { label: "STORAGE LAYOUT"; value: storage-layout; }
+                    FDivider {}
+                    SummaryRow { label: "IP CONFIGURATION"; value: static-ip != "" ? static-ip : "DHCP"; set: true; }
+                    if gateway != "": SummaryRow { label: "GATEWAY"; value: gateway; }
+                    if dns-servers != "": SummaryRow { label: "DNS SERVERS"; value: dns-servers; }
+                    if ntp-servers != "": SummaryRow { label: "NTP SERVERS"; value: ntp-servers; }
+                    FDivider {}
                     SummaryRow {
-                        label: "Firewall";
+                        label: "FIREWALL";
                         value: firewall-on
                             ? (firewall-policy != ""
                                 ? "Enabled (" + firewall-policy + ")"
@@ -275,60 +225,64 @@ export component StepBuild inherits Rectangle {
                             : "Disabled";
                         set: true;
                     }
-                    if allow-ports != "": SummaryRow { label: "Allowed ports"; value: allow-ports; }
-                    if deny-ports != "": SummaryRow { label: "Denied ports"; value: deny-ports; }
-                    if encrypt-on: SummaryRow { label: "Disk encryption"; value: "LUKS enabled"; }
+                    if allow-ports != "": SummaryRow { label: "ALLOWED PORTS"; value: allow-ports; }
+                    if deny-ports != "": SummaryRow { label: "DENIED PORTS"; value: deny-ports; }
+                    if encrypt-on: SummaryRow { label: "DISK ENCRYPTION"; value: "LUKS enabled"; }
                 }
             }
 
-            if artifact-path == "" && (packages != "" || extra-repos != "" || enable-services != "" || disable-services != "" || docker-on || podman-on || mounts != ""): SummaryCard {
-                title: "Packages, Services & Runtime";
+            // ── Packages, Services & Runtime ────────────────────────────
+            if artifact-path == "" && (packages != "" || extra-repos != "" || enable-services != "" || disable-services != "" || docker-on || podman-on || mounts != ""): FCard {
+                title: "PACKAGES, SERVICES & RUNTIME";
                 VerticalLayout {
-                    padding: 20px;
-                    spacing: 10px;
-                    if packages != "": SummaryRow { label: "Extra packages"; value: packages; }
-                    if extra-repos != "": SummaryRow { label: "Extra repositories"; value: extra-repos; }
-                    if enable-services != "": SummaryRow { label: "Enable services"; value: enable-services; }
-                    if disable-services != "": SummaryRow { label: "Disable services"; value: disable-services; }
+                    padding: Sizes.space-5;
+                    spacing: Sizes.space-3;
+                    if packages != "": SummaryRow { label: "EXTRA PACKAGES"; value: packages; }
+                    if extra-repos != "": SummaryRow { label: "EXTRA REPOSITORIES"; value: extra-repos; }
+                    if enable-services != "": SummaryRow { label: "ENABLE SERVICES"; value: enable-services; }
+                    if disable-services != "": SummaryRow { label: "DISABLE SERVICES"; value: disable-services; }
                     if docker-on || podman-on: SummaryRow {
-                        label: "Containers";
+                        label: "CONTAINERS";
                         value: docker-on && podman-on ? "Docker + Podman"
                              : docker-on ? "Docker"
                              : "Podman";
                     }
-                    if docker-users != "": SummaryRow { label: "Docker users"; value: docker-users; }
-                    if mounts != "": SummaryRow { label: "Custom mounts"; value: mounts; }
+                    if docker-users != "": SummaryRow { label: "DOCKER USERS"; value: docker-users; }
+                    if mounts != "": SummaryRow { label: "CUSTOM MOUNTS"; value: mounts; }
                 }
             }
 
-            if artifact-path == "" && (run-commands != "" || late-commands != "" || unattended): SummaryCard {
-                title: "Custom Behavior";
+            // ── Custom Behavior ─────────────────────────────────────────
+            if artifact-path == "" && (run-commands != "" || late-commands != "" || unattended): FCard {
+                title: "CUSTOM BEHAVIOR";
                 VerticalLayout {
-                    padding: 20px;
-                    spacing: 10px;
-                    if run-commands != "": SummaryRow { label: "Run commands"; value: run-commands; }
-                    if late-commands != "": SummaryRow { label: "Late commands"; value: late-commands; }
+                    padding: Sizes.space-5;
+                    spacing: Sizes.space-3;
+                    if run-commands != "": SummaryRow { label: "RUN COMMANDS"; value: run-commands; }
+                    if late-commands != "": SummaryRow { label: "LATE COMMANDS"; value: late-commands; }
                     if unattended: SummaryRow {
-                        label: "Installer mode";
+                        label: "INSTALLER MODE";
                         value: "Fully unattended — target disks will be wiped without prompts";
                     }
                 }
             }
 
-            if unattended && artifact-path == "": Rectangle {
-                border-radius: Sizes.radius-sm;
-                background: rgba(210, 153, 34, 0.10);
-                border-width: 1px;
-                border-color: rgba(210, 153, 34, 0.40);
+            // ── Unattended warning banner ───────────────────────────────
+            if unattended && artifact-path == "": FCard {
+                border-color: rgba(227, 166, 44, 0.35);
+                background: rgba(227, 166, 44, 0.06);
+                drop-shadow-blur: 0px;
+
                 VerticalLayout {
-                    padding: 14px;
-                    spacing: 6px;
-                    Text {
-                        text: "UNATTENDED MODE";
-                        font-size: Sizes.font-2xs;
-                        font-weight: 700;
-                        color: Palette.amber;
-                        letter-spacing: 1.4px;
+                    padding: Sizes.space-4;
+                    spacing: Sizes.space-2;
+                    HorizontalLayout {
+                        spacing: Sizes.space-2;
+                        alignment: start;
+                        FBadge {
+                            text: "UNATTENDED";
+                            variant: "warning";
+                        }
                     }
                     Text {
                         text: "This build will create media that installs without interactive prompts. Review the plan above carefully before you continue.";
@@ -339,89 +293,48 @@ export component StepBuild inherits Rectangle {
                 }
             }
 
+            // ── Start Build button ──────────────────────────────────────
             if artifact-path == "": HorizontalLayout {
-                spacing: 16px;
+                spacing: Sizes.space-4;
                 alignment: start;
 
-                Rectangle {
-                    width: 220px;
+                FButton {
                     height: 50px;
-                    border-radius: Sizes.radius-md;
-                    background: running ? Palette.elevated
-                              : build-ta.has-hover ? @linear-gradient(135deg, #3d90ff 0%, #2060e8 100%)
-                              : @linear-gradient(135deg, Palette.accent 0%, #1a5cdb 100%);
-                    border-width: running ? 1px : 0px;
-                    border-color: Palette.border;
-                    animate background { duration: 120ms; }
-
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: 10px;
-                        if !running: Text {
-                            text: "🔨";
-                            font-size: 18px;
-                            vertical-alignment: center;
-                        }
-                        Text {
-                            text: running ? "Building…" : "Start Build";
-                            font-size: Sizes.font-md;
-                            font-weight: 700;
-                            color: running ? Palette.muted : Palette.on-accent;
-                            vertical-alignment: center;
-                        }
-                    }
-                    build-ta := TouchArea {
-                        enabled: !running;
-                        mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                        clicked => { run-clicked(); }
-                    }
+                    min-width: 220px;
+                    label: running ? "Building…" : "Start Build";
+                    icon: running ? "" : "🔨";
+                    variant: running ? "secondary" : "primary";
+                    enabled: !running;
+                    clicked => { run-clicked(); }
                 }
             }
 
+            // ── Rebuild section (post-build) ────────────────────────────
             if artifact-path != "": VerticalLayout {
-                spacing: 6px;
+                spacing: Sizes.space-2;
                 Text {
                     text: "Need another artifact after changing settings?";
                     font-size: Sizes.font-sm;
                     color: Palette.muted;
                 }
-                Rectangle {
-                    width: 180px;
-                    height: 38px;
-                    border-radius: Sizes.radius-sm;
-                    background: rebuild-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                    border-width: 1px;
-                    border-color: Palette.border;
-                    opacity: running ? 0.5 : 1.0;
-                    animate background { duration: 100ms; }
-                    animate opacity { duration: 150ms; }
-                    Text {
-                        text: "Rebuild ISO";
-                        font-size: Sizes.font-sm;
-                        font-weight: 600;
-                        color: Palette.text;
-                        vertical-alignment: center;
-                        horizontal-alignment: center;
-                    }
-                    rebuild-ta := TouchArea {
-                        enabled: !running;
-                        mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                        clicked => { run-clicked(); }
-                    }
+                FButton {
+                    label: "Rebuild ISO";
+                    variant: "secondary";
+                    enabled: !running;
+                    clicked => { run-clicked(); }
                 }
             }
 
-            if artifact-path != "": Rectangle {
-                border-radius: Sizes.radius-lg;
-                background: rgba(63, 185, 80, 0.06);
-                border-width: 1px;
-                border-color: rgba(63, 185, 80, 0.3);
+            // ── Success banner (post-build) ─────────────────────────────
+            if artifact-path != "": FCard {
+                border-color: rgba(69, 194, 107, 0.35);
+                background: rgba(69, 194, 107, 0.05);
 
                 VerticalLayout {
-                    padding: 20px;
-                    spacing: 8px;
+                    padding: Sizes.space-5;
+                    spacing: Sizes.space-3;
                     HorizontalLayout {
-                        spacing: 8px;
+                        spacing: Sizes.space-2;
                         Text {
                             text: "✓";
                             font-size: 18px;
@@ -453,70 +366,27 @@ export component StepBuild inherits Rectangle {
                         font-size: Sizes.font-sm;
                         color: Palette.muted;
                     }
+                    FDivider {}
                     HorizontalLayout {
-                        spacing: 10px;
+                        spacing: Sizes.space-3;
                         alignment: start;
 
-                        Rectangle {
-                            width: 170px;
-                            height: 38px;
-                            border-radius: Sizes.radius-sm;
-                            background: chk-ta.has-hover ? #3d90ff : Palette.accent;
-                            animate background { duration: 100ms; }
-                            Text {
-                                text: "Optional Checks →";
-                                font-size: Sizes.font-sm;
-                                font-weight: 700;
-                                color: Palette.on-accent;
-                                vertical-alignment: center;
-                                horizontal-alignment: center;
-                            }
-                            chk-ta := TouchArea {
-                                mouse-cursor: MouseCursor.pointer;
-                                clicked => { view-results(); }
-                            }
+                        FButton {
+                            label: "Optional Checks →";
+                            variant: "primary";
+                            clicked => { view-results(); }
                         }
 
-                        Rectangle {
-                            width: 132px;
-                            height: 38px;
-                            border-radius: Sizes.radius-sm;
-                            background: ofld-ta.has-hover ? Palette.active : Palette.elevated;
-                            border-width: 1px;
-                            border-color: Palette.border;
-                            animate background { duration: 100ms; }
-                            Text {
-                                text: "Open Folder";
-                                font-size: Sizes.font-sm;
-                                color: Palette.text;
-                                vertical-alignment: center;
-                                horizontal-alignment: center;
-                            }
-                            ofld-ta := TouchArea {
-                                mouse-cursor: MouseCursor.pointer;
-                                clicked => { open-folder(); }
-                            }
+                        FButton {
+                            label: "Open Folder";
+                            variant: "secondary";
+                            clicked => { open-folder(); }
                         }
 
-                        Rectangle {
-                            width: 132px;
-                            height: 38px;
-                            border-radius: Sizes.radius-sm;
-                            background: newbld-ta.has-hover ? Palette.active : Palette.elevated;
-                            border-width: 1px;
-                            border-color: Palette.border;
-                            animate background { duration: 100ms; }
-                            Text {
-                                text: "Start New Build";
-                                font-size: Sizes.font-sm;
-                                color: Palette.text;
-                                vertical-alignment: center;
-                                horizontal-alignment: center;
-                            }
-                            newbld-ta := TouchArea {
-                                mouse-cursor: MouseCursor.pointer;
-                                clicked => { start-over(); }
-                            }
+                        FButton {
+                            label: "Start New Build";
+                            variant: "secondary";
+                            clicked => { start-over(); }
                         }
                     }
                 }

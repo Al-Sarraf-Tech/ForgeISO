@@ -41,10 +41,6 @@ allow = [
     "OpenSSL",
     # Community Data License Agreement Permissive 2.0 (used by webpki-roots)
     "CDLA-Permissive-2.0",
-    # SIL Open Font License 1.1 — OSI + FSF approved; used by egui bundled fonts
-    "OFL-1.1",
-    # Ubuntu Font Licence — used by epaint_default_fonts (egui)
-    "Ubuntu-font-1.0",
     # Slint Royalty-free license — forge-slint GUI crate
     "LicenseRef-Slint-Royalty-free-2.0",
     # MPL-2.0: file-level weak copyleft (not GPL); used by option-ext 0.2.0

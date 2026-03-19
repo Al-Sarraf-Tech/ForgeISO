@@ -7,8 +7,10 @@ import { StepSource, PresetCard } from "steps/source.slint";
 import { StepConfigure }  from "steps/configure.slint";
 import { StepBuild }      from "steps/build.slint";
 import { StepCheck }      from "steps/check.slint";
+import { FormState } from "globals/form_state.slint";
+import { AppState }  from "globals/app_state.slint";
 
-export { LogEntry, PresetCard }
+export { LogEntry, PresetCard, FormState, AppState }
 
 export component AppWindow inherits Window {
     title: "ForgeISO";
@@ -18,111 +20,10 @@ export component AppWindow inherits Window {
     min-height: 700px;
     background: Palette.bg;
 
-    // ── Navigation ──────────────────────────────────────────────────────
-    in-out property <int>  current-step: 1;
-
-    // ── Job state ───────────────────────────────────────────────────────
-    in property <string>  job-phase;
-    in property <float>   job-percent: -1.0;
-    in property <bool>    job-running: false;
-    in property <string>  status-text;
-    in property <bool>    status-is-error: false;
-
-    // ── Log ─────────────────────────────────────────────────────────────
-    in-out property <bool>       log-open: false;
+    // ── Model properties (stay on window — ModelRc works best here) ────────
     in property <[LogEntry]>     log-entries;
-    in property <int>            log-error-count: 0;
-    in-out property <bool>       log-errors-only: false;
-
-    // ── Doctor ──────────────────────────────────────────────────────────
-    in-out property <bool>   doctor-open: false;
-    in property <bool>       doctor-loading: false;
-    in property <string>     doctor-text;       // pre-formatted report text
-
-    // ── Step done flags ─────────────────────────────────────────────────
-    in property <bool>  step1-done: false;
-    in property <bool>  step2-done: false;   // configure complete
-    in property <bool>  step3-done: false;   // build complete
-
-    // ── Presets ─────────────────────────────────────────────────────────
-    in property <[PresetCard]> presets-row1;
-    in property <[PresetCard]> presets-row2;
-
-    // ── Source step ─────────────────────────────────────────────────────
-    in-out property <string>  source-path;
-    in-out property <string>  selected-preset;
-    in-out property <string>  selected-preset-name;
-    in-out property <string>  detected-distro;
-
-    // ── Configure step ──────────────────────────────────────────────────
-    in-out property <string>  distro;
-    in-out property <string>  hostname;
-    in-out property <string>  username;
-    in-out property <string>  password;
-    in-out property <string>  password-confirm;
-    in-out property <string>  realname;
-    in property <bool>        passwords-match: true;
-    in-out property <string>  ssh-keys;
-    in-out property <bool>    ssh-password-auth: false;
-    in-out property <bool>    ssh-install-server: true;
-    in-out property <string>  dns-servers;
-    in-out property <string>  ntp-servers;
-    in-out property <string>  static-ip;
-    in-out property <string>  gateway;
-    in-out property <string>  http-proxy;
-    in-out property <string>  https-proxy;
-    in-out property <string>  no-proxy;
-    in-out property <string>  timezone;
-    in-out property <string>  locale;
-    in-out property <string>  keyboard-layout;
-    in-out property <string>  storage-layout;
-    in-out property <string>  apt-mirror;
-    in-out property <string>  packages;
-    in-out property <string>  apt-repos;
-    in-out property <string>  dnf-repos;
-    in-out property <string>  run-commands;
-    in-out property <string>  late-commands;
-    in-out property <bool>    firewall-enabled: false;
-    in-out property <string>  firewall-policy;
-    in-out property <string>  allow-ports;
-    in-out property <string>  deny-ports;
-    in-out property <string>  user-groups;
-    in-out property <string>  user-shell;
-    in-out property <bool>    sudo-nopasswd: false;
-    in-out property <string>  enable-services;
-    in-out property <string>  disable-services;
-    in-out property <bool>    docker: false;
-    in-out property <bool>    podman: false;
-    in-out property <string>  docker-users;
-    in-out property <string>  swap-size-mb;
-    in-out property <bool>    encrypt: false;
-    in-out property <string>  encrypt-passphrase;
-    in-out property <string>  mounts;
-    in-out property <string>  grub-timeout;
-    in-out property <string>  grub-cmdline;
-    in-out property <string>  sysctl-pairs;
-    in-out property <string>  output-dir;
-    in-out property <string>  out-name;
-    in-out property <string>  output-label;
-    in-out property <string>  expected-sha256;
-    in-out property <bool>    no-user-interaction: false;
-
-    // ── Build/check step ────────────────────────────────────────────────
-    in property <string>  artifact-path;
-    in property <string>  artifact-sha256;
-    in-out property <string>  verify-source;
-    in-out property <string>  sums-url;
-    in property <bool>    verify-done: false;
-    in property <bool>    verify-matched: false;
-    in property <string>  verify-hash-display;
-    in property <bool>    iso9660-done: false;
-    in property <bool>    iso9660-compliant: false;
-    in property <bool>    iso9660-boot-bios: false;
-    in property <bool>    iso9660-boot-uefi: false;
-    in property <string>  iso9660-volume-id;
-
-    // ── Defaults ─────────────────────────────────────────────────────────
-    in property <string>  defaults-summary;
+    in property <[PresetCard]>   presets-row1;
+    in property <[PresetCard]>   presets-row2;
 
     // ── Callbacks ───────────────────────────────────────────────────────
     // Header
@@ -163,169 +64,181 @@ export component AppWindow inherits Window {
     callback log-filter-toggle();
 
     // ── Derived helper: distro display label ─────────────────────────────
-    property <string> distro-display: distro == "fedora" ? "Fedora / RHEL — Kickstart"
-                                    : distro == "arch"   ? "Arch Linux — archinstall"
-                                    : distro == "mint"   ? "Linux Mint — preseed"
-                                    : "Ubuntu / Debian — cloud-init";
+    property <string> distro-display: FormState.distro == "fedora" ? "Fedora / RHEL \u{2014} Kickstart"
+                                    : FormState.distro == "arch"   ? "Arch Linux \u{2014} archinstall"
+                                    : FormState.distro == "mint"   ? "Linux Mint \u{2014} preseed"
+                                    : "Ubuntu / Debian \u{2014} cloud-init";
 
     // ── Layout ──────────────────────────────────────────────────────────
     VerticalLayout {
         Header {
-            job-phase: root.job-phase;
-            job-percent: root.job-percent;
-            job-running: root.job-running;
-            status-text: root.status-text;
-            status-is-error: root.status-is-error;
-            doctor-open: root.doctor-open;
+            job-phase: AppState.job-phase;
+            job-percent: AppState.job-percent;
+            job-running: AppState.job-running;
+            status-text: AppState.status-text;
+            status-is-error: AppState.status-is-error;
+            doctor-open: AppState.doctor-open;
             cancel => { root.cancel-job(); }
             doctor-toggled => { root.doctor-toggle(); }
         }
 
         StepBar {
-            current-step: root.current-step;
-            step1-done: root.step1-done;
-            step2-done: root.step2-done;
-            step3-done: root.step3-done;
-            step4-done: root.verify-done || root.iso9660-done;
-            job-running: root.job-running;
+            current-step: AppState.current-step;
+            step1-done: AppState.step1-done;
+            step2-done: AppState.step2-done;
+            step3-done: AppState.step3-done;
+            step4-done: AppState.verify-done || AppState.iso9660-done;
+            job-running: AppState.job-running;
             step-clicked(s) => { root.step-bar-clicked(s); }
         }
 
         // ── Main body ────────────────────────────────────────────────────
         HorizontalLayout {
-            // Content area — show one step at a time
-            if current-step == 1: StepSource {
+            // Content area — show one step at a time with fade-in
+            if AppState.current-step == 1: Rectangle {
+                opacity: 0.0;
+                init => { self.opacity = 1.0; }
+                animate opacity { duration: 200ms; easing: ease-out; }
+                StepSource {
                 presets-row1: root.presets-row1;
                 presets-row2: root.presets-row2;
-                source-path: root.source-path;
-                selected-preset: root.selected-preset;
-                detected-distro: root.detected-distro;
-                running: root.job-running;
-                can-continue: root.source-path != "";
+                source-path: FormState.source-path;
+                selected-preset: FormState.selected-preset;
+                detected-distro: FormState.detected-distro;
+                running: AppState.job-running;
+                can-continue: FormState.source-path != "";
                 preset-clicked(id) => { root.preset-clicked(id); }
                 browse-clicked => { root.browse-source(); }
                 source-changed(t) => { root.source-changed(t); }
                 continue-clicked => { root.source-continue(); }
                 clear-clicked => { root.clear-source(); }
-            }
+            }}
 
-            if current-step == 2: StepConfigure {
-                source-display: root.source-path;
-                distro: root.distro;
-                selected-preset-name: root.selected-preset-name;
+            if AppState.current-step == 2: Rectangle {
+                opacity: 0.0;
+                init => { self.opacity = 1.0; }
+                animate opacity { duration: 200ms; easing: ease-out; }
+                StepConfigure {
+                source-display: FormState.source-path;
+                distro: FormState.distro;
+                selected-preset-name: FormState.selected-preset-name;
                 distro-display: root.distro-display;
-                defaults-summary: root.defaults-summary;
-                hostname <=> root.hostname;
-                username <=> root.username;
-                password <=> root.password;
-                password-confirm <=> root.password-confirm;
-                realname <=> root.realname;
-                passwords-match: root.password == "" || root.password == root.password-confirm;
-                ssh-keys <=> root.ssh-keys;
-                ssh-password-auth <=> root.ssh-password-auth;
-                ssh-install-server <=> root.ssh-install-server;
-                dns-servers <=> root.dns-servers;
-                ntp-servers <=> root.ntp-servers;
-                static-ip <=> root.static-ip;
-                gateway <=> root.gateway;
-                http-proxy <=> root.http-proxy;
-                https-proxy <=> root.https-proxy;
-                no-proxy <=> root.no-proxy;
-                timezone <=> root.timezone;
-                locale <=> root.locale;
-                keyboard-layout <=> root.keyboard-layout;
-                storage-layout <=> root.storage-layout;
-                apt-mirror <=> root.apt-mirror;
-                packages <=> root.packages;
-                apt-repos <=> root.apt-repos;
-                dnf-repos <=> root.dnf-repos;
-                run-commands <=> root.run-commands;
-                late-commands <=> root.late-commands;
-                firewall-enabled <=> root.firewall-enabled;
-                firewall-policy <=> root.firewall-policy;
-                allow-ports <=> root.allow-ports;
-                deny-ports <=> root.deny-ports;
-                user-groups <=> root.user-groups;
-                user-shell <=> root.user-shell;
-                sudo-nopasswd <=> root.sudo-nopasswd;
-                enable-services <=> root.enable-services;
-                disable-services <=> root.disable-services;
-                docker <=> root.docker;
-                podman <=> root.podman;
-                docker-users <=> root.docker-users;
-                swap-size-mb <=> root.swap-size-mb;
-                encrypt <=> root.encrypt;
-                encrypt-passphrase <=> root.encrypt-passphrase;
-                mounts <=> root.mounts;
-                grub-timeout <=> root.grub-timeout;
-                grub-cmdline <=> root.grub-cmdline;
-                sysctl-pairs <=> root.sysctl-pairs;
-                output-dir <=> root.output-dir;
-                out-name <=> root.out-name;
-                output-label <=> root.output-label;
-                expected-sha256 <=> root.expected-sha256;
-                no-user-interaction <=> root.no-user-interaction;
-                running: root.job-running;
-                can-continue: root.source-path != "" && root.hostname != "" && root.username != "" && root.output-dir != "" && root.out-name != "";
+                defaults-summary: AppState.defaults-summary;
+                hostname <=> FormState.hostname;
+                username <=> FormState.username;
+                password <=> FormState.password;
+                password-confirm <=> FormState.password-confirm;
+                realname <=> FormState.realname;
+                passwords-match: FormState.password == "" || FormState.password == FormState.password-confirm;
+                ssh-keys <=> FormState.ssh-keys;
+                ssh-password-auth <=> FormState.ssh-password-auth;
+                ssh-install-server <=> FormState.ssh-install-server;
+                dns-servers <=> FormState.dns-servers;
+                ntp-servers <=> FormState.ntp-servers;
+                static-ip <=> FormState.static-ip;
+                gateway <=> FormState.gateway;
+                http-proxy <=> FormState.http-proxy;
+                https-proxy <=> FormState.https-proxy;
+                no-proxy <=> FormState.no-proxy;
+                timezone <=> FormState.timezone;
+                locale <=> FormState.locale;
+                keyboard-layout <=> FormState.keyboard-layout;
+                storage-layout <=> FormState.storage-layout;
+                apt-mirror <=> FormState.apt-mirror;
+                packages <=> FormState.packages;
+                apt-repos <=> FormState.apt-repos;
+                dnf-repos <=> FormState.dnf-repos;
+                run-commands <=> FormState.run-commands;
+                late-commands <=> FormState.late-commands;
+                firewall-enabled <=> FormState.firewall-enabled;
+                firewall-policy <=> FormState.firewall-policy;
+                allow-ports <=> FormState.allow-ports;
+                deny-ports <=> FormState.deny-ports;
+                user-groups <=> FormState.user-groups;
+                user-shell <=> FormState.user-shell;
+                sudo-nopasswd <=> FormState.sudo-nopasswd;
+                enable-services <=> FormState.enable-services;
+                disable-services <=> FormState.disable-services;
+                docker <=> FormState.docker;
+                podman <=> FormState.podman;
+                docker-users <=> FormState.docker-users;
+                swap-size-mb <=> FormState.swap-size-mb;
+                encrypt <=> FormState.encrypt;
+                encrypt-passphrase <=> FormState.encrypt-passphrase;
+                mounts <=> FormState.mounts;
+                grub-timeout <=> FormState.grub-timeout;
+                grub-cmdline <=> FormState.grub-cmdline;
+                sysctl-pairs <=> FormState.sysctl-pairs;
+                output-dir <=> FormState.output-dir;
+                out-name <=> FormState.out-name;
+                output-label <=> FormState.output-label;
+                expected-sha256 <=> FormState.expected-sha256;
+                no-user-interaction <=> FormState.no-user-interaction;
+                running: AppState.job-running;
+                can-continue: FormState.source-path != "" && FormState.hostname != "" && FormState.username != "" && FormState.output-dir != "" && FormState.out-name != "";
                 browse-output-dir => { root.browse-output-dir(); }
                 configure-continue => { root.configure-continue(); }
                 back-clicked => { root.configure-back(); }
-                distro-changed(d) => { root.distro = d; }
+                distro-changed(d) => { FormState.distro = d; }
                 clear-source => { root.clear-source(); }
                 apply-defaults => { root.apply-defaults(); }
                 reset-defaults => { root.reset-defaults(); }
                 field-edited(name) => { root.field-edited(name); }
                 username-changed(u) => { root.username-changed(u); }
                 docker-changed => { root.docker-changed(); }
-            }
+            }}
 
-            if current-step == 3: StepBuild {
+            if AppState.current-step == 3: Rectangle {
+                opacity: 0.0;
+                init => { self.opacity = 1.0; }
+                animate opacity { duration: 200ms; easing: ease-out; }
+                StepBuild {
                 distro-display: root.distro-display;
-                admin-group: root.distro == "fedora" || root.distro == "arch" ? "wheel" : "sudo";
-                source: root.source-path;
-                expected-sha256: root.expected-sha256;
-                hostname: root.hostname;
-                username: root.username;
-                realname: root.realname;
-                password-set: root.password != "";
-                user-groups: root.user-groups;
-                user-shell: root.user-shell;
-                sudo-nopasswd: root.sudo-nopasswd;
-                ssh-password-auth: root.ssh-password-auth;
-                ssh-keys: root.ssh-keys;
-                timezone: root.timezone;
-                locale: root.locale;
-                keyboard-layout: root.keyboard-layout;
-                static-ip: root.static-ip;
-                gateway: root.gateway;
-                dns-servers: root.dns-servers;
-                ntp-servers: root.ntp-servers;
-                firewall-policy: root.firewall-policy;
-                allow-ports: root.allow-ports;
-                deny-ports: root.deny-ports;
-                output-dir: root.output-dir;
-                out-name: root.out-name;
-                output-label: root.output-label;
-                unattended: root.no-user-interaction;
-                ssh-server: root.ssh-install-server;
-                packages: root.packages;
-                extra-repos: root.apt-repos != "" ? root.apt-repos : root.dnf-repos;
-                enable-services: root.enable-services;
-                disable-services: root.disable-services;
-                firewall-on: root.firewall-enabled;
-                docker-on: root.docker;
-                podman-on: root.podman;
-                docker-users: root.docker-users;
-                encrypt-on: root.encrypt;
-                storage-layout: root.storage-layout;
-                mounts: root.mounts;
-                run-commands: root.run-commands;
-                late-commands: root.late-commands;
-                running: root.job-running;
-                artifact-path: root.artifact-path;
-                artifact-sha256: root.artifact-sha256;
-                verify-summary: root.step3-done
-                    ? (root.verify-done || root.iso9660-done
+                admin-group: FormState.distro == "fedora" || FormState.distro == "arch" ? "wheel" : "sudo";
+                source: FormState.source-path;
+                expected-sha256: FormState.expected-sha256;
+                hostname: FormState.hostname;
+                username: FormState.username;
+                realname: FormState.realname;
+                password-set: FormState.password != "";
+                user-groups: FormState.user-groups;
+                user-shell: FormState.user-shell;
+                sudo-nopasswd: FormState.sudo-nopasswd;
+                ssh-password-auth: FormState.ssh-password-auth;
+                ssh-keys: FormState.ssh-keys;
+                timezone: FormState.timezone;
+                locale: FormState.locale;
+                keyboard-layout: FormState.keyboard-layout;
+                static-ip: FormState.static-ip;
+                gateway: FormState.gateway;
+                dns-servers: FormState.dns-servers;
+                ntp-servers: FormState.ntp-servers;
+                firewall-policy: FormState.firewall-policy;
+                allow-ports: FormState.allow-ports;
+                deny-ports: FormState.deny-ports;
+                output-dir: FormState.output-dir;
+                out-name: FormState.out-name;
+                output-label: FormState.output-label;
+                unattended: FormState.no-user-interaction;
+                ssh-server: FormState.ssh-install-server;
+                packages: FormState.packages;
+                extra-repos: FormState.apt-repos != "" ? FormState.apt-repos : FormState.dnf-repos;
+                enable-services: FormState.enable-services;
+                disable-services: FormState.disable-services;
+                firewall-on: FormState.firewall-enabled;
+                docker-on: FormState.docker;
+                podman-on: FormState.podman;
+                docker-users: FormState.docker-users;
+                encrypt-on: FormState.encrypt;
+                storage-layout: FormState.storage-layout;
+                mounts: FormState.mounts;
+                run-commands: FormState.run-commands;
+                late-commands: FormState.late-commands;
+                running: AppState.job-running;
+                artifact-path: AppState.artifact-path;
+                artifact-sha256: AppState.artifact-sha256;
+                verify-summary: AppState.step3-done
+                    ? (AppState.verify-done || AppState.iso9660-done
                         ? "Optional checks complete"
                         : "Optional checks skipped for now")
                     : "";
@@ -335,22 +248,26 @@ export component AppWindow inherits Window {
                 view-results => { root.build-view-results(); }
                 open-folder => { root.open-folder(); }
                 start-over => { root.clear-forms(); }
-            }
+            }}
 
-            if current-step == 4: StepCheck {
-                verify-source <=> root.verify-source;
-                sums-url <=> root.sums-url;
-                artifact-path: root.artifact-path;
-                artifact-sha256: root.artifact-sha256;
-                verify-done: root.verify-done;
-                verify-matched: root.verify-matched;
-                verify-hash-display: root.verify-hash-display;
-                iso9660-done: root.iso9660-done;
-                iso9660-compliant: root.iso9660-compliant;
-                iso9660-boot-bios: root.iso9660-boot-bios;
-                iso9660-boot-uefi: root.iso9660-boot-uefi;
-                iso9660-volume-id: root.iso9660-volume-id;
-                running: root.job-running;
+            if AppState.current-step == 4: Rectangle {
+                opacity: 0.0;
+                init => { self.opacity = 1.0; }
+                animate opacity { duration: 200ms; easing: ease-out; }
+                StepCheck {
+                verify-source <=> AppState.verify-source;
+                sums-url <=> AppState.sums-url;
+                artifact-path: AppState.artifact-path;
+                artifact-sha256: AppState.artifact-sha256;
+                verify-done: AppState.verify-done;
+                verify-matched: AppState.verify-matched;
+                verify-hash-display: AppState.verify-hash-display;
+                iso9660-done: AppState.iso9660-done;
+                iso9660-compliant: AppState.iso9660-compliant;
+                iso9660-boot-bios: AppState.iso9660-boot-bios;
+                iso9660-boot-uefi: AppState.iso9660-boot-uefi;
+                iso9660-volume-id: AppState.iso9660-volume-id;
+                running: AppState.job-running;
                 back-clicked => { root.check-back(); }
                 browse-verify-source => { root.browse-verify-source(); }
                 run-verify => { root.run-verify(); }
@@ -358,58 +275,54 @@ export component AppWindow inherits Window {
                 copy-sha256 => { root.copy-sha256(); }
                 open-folder => { root.open-folder(); }
                 clear-forms => { root.clear-forms(); }
-            }
+            }}
 
             // Log panel (collapsible)
-            if log-open: LogPanel {
+            if AppState.log-open: LogPanel {
                 entries: root.log-entries;
-                errors-only: root.log-errors-only;
-                error-count: root.log-error-count;
+                errors-only: AppState.log-errors-only;
+                error-count: AppState.log-error-count;
                 filter-toggled => { root.log-filter-toggle(); }
                 close-clicked => { root.log-toggle(); }
             }
         }
     }
 
-    // ── Log toggle button (bottom-right corner) ──────────────────────────
+    // ── Log toggle button (bottom-right, floating) ────────────────────────
     Rectangle {
-        x: parent.width - 114px;
-        y: parent.height - 46px;
-        width: 104px;
-        height: 36px;
-        border-radius: Sizes.radius-md;
-        background: log-btn-ta.has-hover ? Palette.active : Palette.surface;
+        x: parent.width - 110px;
+        y: parent.height - 44px;
+        width: 100px;
+        height: 32px;
+        border-radius: 16px;
+        background: log-btn-ta.has-hover ? Palette.active : Palette.elevated;
         border-width: 1px;
         border-color: log-btn-ta.has-hover ? Palette.border-focus : Palette.border;
-        drop-shadow-blur: 8px;
-        drop-shadow-color: rgba(0, 0, 0, 0.4);
+        drop-shadow-blur: 12px;
+        drop-shadow-color: Palette.shadow-md;
         drop-shadow-offset-y: -2px;
-        animate background { duration: 100ms; }
-        animate border-color { duration: 100ms; }
+        animate background { duration: 120ms; }
+        animate border-color { duration: 120ms; }
         HorizontalLayout {
-            spacing: 6px;
+            spacing: Sizes.space-2;
             alignment: center;
             Text {
-                text: "📋";
-                font-size: 13px;
-                vertical-alignment: center;
-            }
-            Text {
-                text: log-open ? "Hide Log" : "Show Log";
+                text: AppState.log-open ? "Hide Log" : "Activity";
                 font-size: Sizes.font-xs;
+                font-weight: 500;
                 color: log-btn-ta.has-hover ? Palette.text : Palette.muted;
                 vertical-alignment: center;
             }
-            if log-error-count > 0 && !log-open: Rectangle {
-                width: 18px;
-                height: 14px;
-                border-radius: 7px;
+            if AppState.log-error-count > 0 && !AppState.log-open: Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
                 background: Palette.red;
                 Text {
-                    text: log-error-count > 99 ? "99+" : log-error-count;
+                    text: AppState.log-error-count > 99 ? "+" : AppState.log-error-count;
                     font-size: 9px;
                     font-weight: 700;
-                    color: #ffffff;
+                    color: Palette.on-accent;
                     vertical-alignment: center;
                     horizontal-alignment: center;
                 }
@@ -422,91 +335,84 @@ export component AppWindow inherits Window {
     }
 
     // ── Doctor popup ─────────────────────────────────────────────────────
-    if doctor-open: Rectangle {
+    if AppState.doctor-open: Rectangle {
         x: parent.width - 384px;
         y: 72px;
-        width: 368px;
+        width: 360px;
         height: 380px;
         border-radius: Sizes.radius-lg;
-        background: Palette.elevated;
+        background: Palette.surface;
         border-width: 1px;
         border-color: Palette.border;
-        drop-shadow-blur: 32px;
-        drop-shadow-color: rgba(0, 0, 0, 0.6);
-        drop-shadow-offset-x: 0px;
-        drop-shadow-offset-y: 8px;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: Palette.shadow-lg;
+        drop-shadow-offset-y: 6px;
         clip: true;
 
         VerticalLayout {
-            // Header (fixed)
+            // Header
             Rectangle {
-                height: 52px;
-                background: Palette.elevated;
+                height: 48px;
+                background: Palette.surface;
                 HorizontalLayout {
-                    padding-left: 20px;
-                    padding-right: 14px;
+                    padding-left: Sizes.space-5;
+                    padding-right: Sizes.space-3;
                     alignment: space-between;
                     Text {
-                        text: "🩺 Dependency Check";
-                        font-size: Sizes.font-md;
-                        font-weight: 700;
+                        text: "Dependency Check";
+                        font-size: Sizes.font-sm;
+                        font-weight: 600;
                         color: Palette.text;
                         vertical-alignment: center;
                     }
                     Rectangle {
-                        width: 28px;
-                        height: 28px;
-                        border-radius: 14px;
-                        background: doc-close-ta.has-hover ? Palette.active : Palette.surface;
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 12px;
+                        background: doc-close-ta.has-hover ? Palette.active : transparent;
                         animate background { duration: 100ms; }
                         y: (parent.height - self.height) / 2;
                         Text {
-                            text: "×";
-                            font-size: 16px;
+                            text: "\u{2715}";
+                            font-size: 11px;
                             color: Palette.muted;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
                         doc-close-ta := TouchArea {
                             mouse-cursor: MouseCursor.pointer;
-                            clicked => { root.doctor-open = false; }
+                            clicked => { AppState.doctor-open = false; }
                         }
                     }
                 }
-                // Divider
                 Rectangle {
                     y: parent.height - 1px;
                     height: 1px;
-                    background: Palette.border;
+                    background: Palette.border-subtle;
                 }
             }
 
-            // Scrollable content
+            // Content
             ScrollView {
                 VerticalLayout {
-                    padding: 20px;
-                    spacing: 10px;
+                    padding: Sizes.space-5;
+                    spacing: Sizes.space-3;
 
-                    if doctor-loading: Rectangle {
-                        height: 40px;
-                        Text {
-                            text: "Checking dependencies…";
-                            font-size: Sizes.font-sm;
-                            color: Palette.muted;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
+                    if AppState.doctor-loading: Text {
+                        text: "Scanning host tools\u{2026}";
+                        font-size: Sizes.font-sm;
+                        color: Palette.muted;
                     }
 
-                    if !doctor-loading && doctor-text == "": Text {
-                        text: "No check results yet. ForgeISO runs a dependency scan when this panel opens.";
+                    if !AppState.doctor-loading && AppState.doctor-text == "": Text {
+                        text: "Open this panel to scan for required host tools (xorriso, mtools, qemu, etc.)";
                         font-size: Sizes.font-sm;
                         color: Palette.subtle;
                         wrap: word-wrap;
                     }
 
-                    if !doctor-loading && doctor-text != "": Text {
-                        text: doctor-text;
+                    if !AppState.doctor-loading && AppState.doctor-text != "": Text {
+                        text: AppState.doctor-text;
                         font-size: Sizes.font-sm;
                         color: Palette.text-secondary;
                         wrap: word-wrap;

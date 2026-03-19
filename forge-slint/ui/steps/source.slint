@@ -1,4 +1,5 @@
 import { Palette, Sizes } from "../theme.slint";
+import { FButton, FIconButton, FBadge, FDivider, FSectionLabel } from "../components/design_system.slint";
 import { ScrollView } from "std-widgets.slint";
 
 export struct PresetCard {
@@ -23,16 +24,17 @@ component DistroCard inherits Rectangle {
     border-width: selected ? 2px : 1px;
     border-color: selected ? Palette.green
                : hovered && !running ? Palette.border-focus
-               : Palette.border;
+               : Palette.border-subtle;
     opacity: running ? 0.75 : 1.0;
     clip: true;
-    drop-shadow-blur: selected ? 22px : 0px;
-    drop-shadow-color: selected ? rgba(63, 185, 80, 0.20) : transparent;
+    drop-shadow-blur: selected ? 22px : 4px;
+    drop-shadow-color: selected ? Palette.shadow-md : Palette.shadow-sm;
     animate background { duration: 180ms; }
     animate border-color { duration: 180ms; }
     animate border-width { duration: 180ms; }
     animate opacity { duration: 180ms; }
     animate drop-shadow-blur { duration: 250ms; }
+    animate drop-shadow-color { duration: 250ms; }
 
     property <bool> hovered: touch.has-hover;
 
@@ -52,12 +54,12 @@ component DistroCard inherits Rectangle {
 
     VerticalLayout {
         alignment: center;
-        spacing: 8px;
-        padding: 16px;
+        spacing: Sizes.space-2;
+        padding: Sizes.space-4;
 
         Text {
             text: card.emoji;
-            font-size: 32px;
+            font-size: Sizes.font-3xl;
             horizontal-alignment: center;
         }
         Text {
@@ -75,7 +77,7 @@ component DistroCard inherits Rectangle {
             wrap: word-wrap;
         }
         if selected: Text {
-            text: "✓ Selected";
+            text: "\u{2713} Selected";
             font-size: Sizes.font-2xs;
             color: Palette.green;
             font-weight: 700;
@@ -108,40 +110,38 @@ export component StepSource inherits Rectangle {
 
     ScrollView {
         VerticalLayout {
-            padding: 40px;
-            spacing: 32px;
+            padding: Sizes.space-10;
+            spacing: Sizes.space-8;
             alignment: start;
 
-            // ── Title ────────────────────────────────────────────────────
+            // -- Title -------------------------------------------------------
             VerticalLayout {
-                spacing: 6px;
+                spacing: Sizes.space-2;
                 Text {
                     text: "Build Your ISO";
-                    font-size: Sizes.font-2xl;
+                    font-size: Sizes.font-3xl;
                     font-weight: 700;
                     color: Palette.text;
+                    letter-spacing: -0.5px;
                 }
                 Text {
-                    text: "Inject unattended install config into any Linux ISO — Ubuntu, Fedora, Arch, Mint and more.";
+                    text: "Inject unattended install config into any Linux ISO \u{2014} Ubuntu, Fedora, Arch, Mint and more.";
                     font-size: Sizes.font-md;
                     color: Palette.muted;
                 }
             }
 
-            // ── Distro grid ─────────────────────────────────────────────
+            // -- Distro grid -------------------------------------------------
             VerticalLayout {
-                spacing: 12px;
-                Text {
+                spacing: Sizes.space-3;
+                FSectionLabel {
                     text: "POPULAR DISTRIBUTIONS";
-                    font-size: Sizes.font-2xs;
-                    font-weight: 700;
-                    color: Palette.subtle;
                     letter-spacing: 1.5px;
                 }
 
                 // Row 1
                 HorizontalLayout {
-                    spacing: 12px;
+                    spacing: Sizes.space-3;
                     alignment: center;
                     for card in presets-row1: DistroCard {
                         card: card;
@@ -153,7 +153,7 @@ export component StepSource inherits Rectangle {
 
                 // Row 2 (only rendered if non-empty)
                 if presets-row2.length > 0: HorizontalLayout {
-                    spacing: 12px;
+                    spacing: Sizes.space-3;
                     alignment: center;
                     for card in presets-row2: DistroCard {
                         card: card;
@@ -164,32 +164,15 @@ export component StepSource inherits Rectangle {
                 }
             }
 
-            // ── Manual path entry ───────────────────────────────────────
+            // -- Manual path entry -------------------------------------------
             VerticalLayout {
-                spacing: 10px;
-                HorizontalLayout {
-                    spacing: 12px;
-                    padding-top: 4px;
-                    padding-bottom: 4px;
-                    VerticalLayout {
-                        alignment: center;
-                        Rectangle { height: 1px; background: Palette.border; }
-                    }
-                    Text {
-                        text: "or enter a path / URL directly";
-                        font-size: Sizes.font-xs;
-                        color: Palette.subtle;
-                        vertical-alignment: center;
-                        horizontal-stretch: 0;
-                    }
-                    VerticalLayout {
-                        alignment: center;
-                        Rectangle { height: 1px; background: Palette.border; }
-                    }
+                spacing: Sizes.space-3;
+                FDivider {
+                    label: "or enter a path / URL directly";
                 }
 
                 HorizontalLayout {
-                    spacing: 8px;
+                    spacing: Sizes.space-2;
                     alignment: start;
 
                     // Path input
@@ -201,19 +184,20 @@ export component StepSource inherits Rectangle {
                         border-color: path-input.has-focus ? Palette.accent : Palette.border;
                         animate border-color { duration: 150ms; }
                         if source-path == "" && !path-input.has-focus: Text {
-                            x: 12px; y: 0;
-                            width: parent.width - 24px;
+                            x: Sizes.space-3;
+                            y: 0;
+                            width: parent.width - Sizes.space-6;
                             height: parent.height;
-                            text: "/path/to/ubuntu.iso  or  https://releases.ubuntu.com/…";
+                            text: "/path/to/ubuntu.iso  or  https://releases.ubuntu.com/\u{2026}";
                             font-size: Sizes.font-sm;
                             color: Palette.subtle;
                             vertical-alignment: center;
                             overflow: elide;
                         }
                         path-input := TextInput {
-                            x: 12px;
+                            x: Sizes.space-3;
                             y: (parent.height - self.preferred-height) / 2;
-                            width: parent.width - 24px;
+                            width: parent.width - Sizes.space-6;
                             text: source-path;
                             font-size: Sizes.font-sm;
                             color: Palette.text;
@@ -226,109 +210,48 @@ export component StepSource inherits Rectangle {
                     }
 
                     // Browse button
-                    Rectangle {
+                    FButton {
+                        label: "Browse\u{2026}";
+                        variant: "secondary";
+                        enabled: !running;
                         width: 90px;
                         height: 42px;
-                        border-radius: Sizes.radius-sm;
-                        background: browse-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                        border-width: 1px;
-                        border-color: Palette.border;
-                        opacity: running ? 0.5 : 1.0;
-                        animate background { duration: 100ms; }
-                        animate opacity { duration: 150ms; }
-                        Text {
-                            text: "Browse…";
-                            font-size: Sizes.font-sm;
-                            color: Palette.text;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        browse-ta := TouchArea {
-                            enabled: !running;
-                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                            clicked => { browse-clicked(); }
-                        }
+                        clicked => { browse-clicked(); }
                     }
 
                     // Clear button
-                    if source-path != "": Rectangle {
+                    if source-path != "": FIconButton {
+                        icon: "\u{2715}";
+                        variant: "destructive";
+                        enabled: !running;
                         width: 42px;
                         height: 42px;
-                        border-radius: Sizes.radius-sm;
-                        background: clear-ta.has-hover && !running ? rgba(248, 81, 73, 0.12) : Palette.elevated;
-                        border-width: 1px;
-                        border-color: clear-ta.has-hover && !running ? rgba(248, 81, 73, 0.4) : Palette.border;
-                        animate background { duration: 100ms; }
-                        animate border-color { duration: 100ms; }
-                        Text {
-                            text: "✕";
-                            font-size: 16px;
-                            color: clear-ta.has-hover && !running ? Palette.red : Palette.muted;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                        }
-                        clear-ta := TouchArea {
-                            enabled: !running;
-                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                            clicked => { clear-clicked(); }
-                        }
+                        clicked => { clear-clicked(); }
                     }
                 }
 
                 // Detected distro badge
                 if detected-distro != "": HorizontalLayout {
                     alignment: start;
-                    Rectangle {
+                    FBadge {
+                        text: "\u{2713} Detected: " + detected-distro;
+                        variant: "success";
                         height: 26px;
                         border-radius: 13px;
-                        background: rgba(63, 185, 80, 0.12);
-                        border-width: 1px;
-                        border-color: rgba(63, 185, 80, 0.3);
-                        HorizontalLayout {
-                            padding-left: 10px;
-                            padding-right: 10px;
-                            spacing: 4px;
-                            alignment: center;
-                            Text {
-                                text: "✓ Detected: " + detected-distro;
-                                font-size: Sizes.font-xs;
-                                color: Palette.green;
-                                font-weight: 600;
-                            }
-                        }
                     }
                 }
             }
 
-            // ── Continue button ─────────────────────────────────────────
+            // -- Continue button ---------------------------------------------
             HorizontalLayout {
                 alignment: start;
-                Rectangle {
+                FButton {
+                    label: "Continue to Configure Installer \u{2192}";
+                    variant: "primary";
+                    enabled: can-continue && !running;
                     width: 300px;
                     height: 46px;
-                    border-radius: Sizes.radius-sm;
-                    background: can-continue
-                        ? (cont-ta.has-hover ? #3d90ff : Palette.accent)
-                        : Palette.elevated;
-                    opacity: can-continue ? 1.0 : 0.6;
-                    animate background { duration: 120ms; }
-                    animate opacity  { duration: 180ms; }
-
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: 8px;
-                        Text {
-                            text: "Continue to Configure Installer →";
-                            font-size: Sizes.font-sm;
-                            font-weight: 600;
-                            color: can-continue ? Palette.on-accent : Palette.subtle;
-                        }
-                    }
-                    cont-ta := TouchArea {
-                        enabled: can-continue && !running;
-                        mouse-cursor: can-continue && !running ? MouseCursor.pointer : MouseCursor.default;
-                        clicked => { continue-clicked(); }
-                    }
+                    clicked => { continue-clicked(); }
                 }
             }
         }

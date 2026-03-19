@@ -221,7 +221,7 @@ for stage in "${STAGES[@]}"; do
     case "${stage}" in
         c1) label="C1 Rust (fmt / clippy / test)" ;;
         c2) label="C2 SBOM + Audit (cargo-deny / cargo-audit / syft)" ;;
-        c3) label="C3 GUI (forge-gui + legacy Tauri build)" ;;
+        c3) label="C3 GUI (forge-slint build)" ;;
         c4) label="C4 Security (trivy / syft / grype)" ;;
         c5) label="C5 Integration (build + inject smoke)" ;;
         c6) label="C6 E2E Smoke (QEMU boot)" ;;

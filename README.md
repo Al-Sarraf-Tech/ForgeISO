@@ -81,7 +81,7 @@ sudo install -m755 forgeiso-0.2.1-linux-x86_64/bin/forge-slint /usr/local/bin/
 
 If you switch from a tarball install in `/usr/local/bin` to an RPM, DEB, or
 pacman-style package, remove the old `/usr/local/bin/forgeiso*`,
-`/usr/local/bin/forge-slint`, and `/usr/local/bin/forge-gui` binaries first.
+`/usr/local/bin/forge-slint` binaries first.
 `/usr/local/bin` shadows `/usr/bin`, so stale tarball binaries can hide your
 packaged upgrade.
 
@@ -239,7 +239,6 @@ sudo install -m755 target/release/forgeiso /usr/local/bin/
 sudo install -m755 target/release/forgeiso-tui /usr/local/bin/
 sudo install -m755 scripts/release/forgeiso-desktop /usr/local/bin/
 sudo install -m755 target/release/forge-slint /usr/local/bin/
-sudo install -m755 target/release/forge-gui /usr/local/bin/
 ```
 
 ## Contributors

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 // ── Inject form state ─────────────────────────────────────────────────────────
-// Mirrors forge-gui/src/state.rs — passwords carry #[serde(skip)] for security.
+// Passwords carry #[serde(skip)] for security — never written to disk.
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]

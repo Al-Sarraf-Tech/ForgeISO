@@ -1,20 +1,19 @@
-# GUI Runbook — forge-slint and forge-gui
+# GUI Runbook — forge-slint
 
-This document covers building, running, packaging, and troubleshooting both
-desktop GUI frontends for ForgeISO.
+This document covers building, running, packaging, and troubleshooting the
+desktop GUI frontend for ForgeISO.
 
 ---
 
 ## Overview
 
-ForgeISO ships two desktop GUIs that wrap the same `forgeiso-engine` crate:
+ForgeISO ships a desktop GUI (`forge-slint`) that wraps the `forgeiso-engine` crate:
 
 | Binary | Crate | Toolkit | Status |
 |---|---|---|---|
 | `forge-slint` | `forge-slint/` | Slint 1.15 (declarative DSL) | **Primary** |
-| `forge-gui` | `forge-gui/` | egui/eframe 0.33 | Alternate |
 
-Both GUIs implement the same 4-step wizard:
+The GUI implements a 4-step wizard:
 
 1. **Choose ISO** — select a distro preset or paste a path/URL
 2. **Configure** — set hostname, user, network, firewall, packages, etc.
@@ -54,7 +53,7 @@ sudo dnf install qemu-system-x86 edk2-ovmf
 sudo apt-get install qemu-system-x86 ovmf
 ```
 
-### For the file picker (forge-slint)
+### For the file picker
 
 `forge-slint` uses `zenity` first and falls back to `kdialog` on KDE-based systems:
 
@@ -89,23 +88,19 @@ count:
 ```bash
 export CARGO_BUILD_JOBS=$(( $(nproc) - 2 ))
 
-# Both GUIs + CLI + engine in one pass
+# Full workspace in one pass
 cargo build --workspace --release
 
 # forge-slint only
 cargo build --release -p forge-slint -j "$CARGO_BUILD_JOBS"
-
-# forge-gui only
-cargo build --release -p forge-gui -j "$CARGO_BUILD_JOBS"
 ```
 
-Binaries land in `target/release/forge-slint` and `target/release/forge-gui`.
+Binary lands in `target/release/forge-slint`.
 
 ### Dev builds (faster, no optimisation)
 
 ```bash
 cargo build -p forge-slint -j "$CARGO_BUILD_JOBS"
-cargo build -p forge-gui -j "$CARGO_BUILD_JOBS"
 ```
 
 ---
@@ -119,7 +114,7 @@ back cleanly when you are on a minimal desktop or a non-graphical shell:
 forgeiso-desktop
 ```
 
-### forge-slint (primary)
+### Direct launch
 
 ```bash
 # Direct launch for troubleshooting
@@ -180,24 +175,9 @@ forgeiso
 The packaged launcher `forgeiso-desktop` auto-detects this and falls back to
 TUI/CLI when no display server is available.
 
-### forge-gui (egui/eframe)
-
-```bash
-# Standard launch
-./target/release/forge-gui
-
-# Intel Arc / integrated GPU — avoid Vulkan stability issues
-WGPU_BACKEND=gl forge-gui
-
-# Force OpenGL ES explicitly
-WGPU_BACKEND=gles forge-gui
-```
-
 ---
 
 ## Persistent State
-
-### forge-slint
 
 State is saved to:
 ```
@@ -207,16 +187,6 @@ State is saved to:
 - All form fields are persisted **except passwords** (`#[serde(skip)]`).
 - State is loaded at startup and saved when the window closes.
 - To reset: `rm ~/.local/share/forgeiso/slint-state.json`
-
-### forge-gui
-
-State is saved via the eframe storage API to:
-```
-~/.local/share/forgeiso/  (Linux XDG)
-```
-
-Persist key: `"forgeiso_v1"`. If the schema breaks, bump to `"forgeiso_v2"`
-in `forge-gui/src/app.rs`.
 
 ---
 
@@ -228,7 +198,6 @@ After building:
 sudo install -m755 target/release/forgeiso /usr/local/bin/
 sudo install -m755 target/release/forgeiso-tui /usr/local/bin/
 sudo install -m755 target/release/forge-slint /usr/local/bin/
-sudo install -m755 target/release/forge-gui   /usr/local/bin/
 sudo install -m755 scripts/release/forgeiso-desktop /usr/local/bin/
 ```
 
@@ -252,15 +221,10 @@ cargo fmt --all --check
 
 # Lint (zero warnings allowed)
 cargo clippy --workspace --all-targets -j 18 -- -D warnings
-
-# forge-gui specific (C3 CI gate)
-cargo fmt --manifest-path forge-gui/Cargo.toml --all --check
-cargo clippy -p forge-gui --all-targets -j 18 -- -D warnings
-cargo build -p forge-gui -j 18
 ```
 
-The C3 CI container validates `forge-gui`. `forge-slint` is covered by C1
-(workspace clippy + tests) and C7 (lint-only fast gate).
+The C3 CI container validates `forge-slint`. Workspace-wide checks are covered
+by C1 (clippy + tests) and C7 (lint-only fast gate).
 
 ---
 
@@ -273,42 +237,7 @@ bash scripts/release/make-packages.sh 0.2.1
 ```
 
 This produces RPM, DEB, pacman `.pkg.tar.zst`, tarball, and checksums
-under `dist/release/`. Both GUI binaries are included when they are built.
-
----
-
-## Legacy Tauri GUI (`gui/`)
-
-The `gui/` directory contains an older Tauri 2 + React frontend. It is
-kept for CI validation (C3 builds it) but **not recommended for end users**.
-
-### Dependencies
-
-```bash
-cd gui
-npm ci                 # install Node deps
-npm run lint           # TypeScript lint
-npm run build          # Vite + Tauri bundle (Linux)
-```
-
-Requires Node.js 20+ and Rust (for the Tauri backend).
-
-### Key versions (as of v0.2.1)
-
-| Package | Version |
-|---|---|
-| `@tauri-apps/api` | 2.10.1 |
-| `react` | ^18.3.1 |
-| `@tauri-apps/cli` | 2.10.1 |
-| TypeScript | ^5.8.3 |
-| Vite | ^6.3.5 |
-| `tauri` (Rust) | 2.10.3 |
-
-To check the Rust backend only (no npm required):
-
-```bash
-cargo check --manifest-path gui/src-tauri/Cargo.toml
-```
+under `dist/release/`. The GUI binary is included when it is built.
 
 ---
 
@@ -317,7 +246,6 @@ cargo check --manifest-path gui/src-tauri/Cargo.toml
 | Symptom | Cause | Fix |
 |---|---|---|
 | Black window / no rendering | Mesa/GPU driver issue | `MESA_GL_VERSION_OVERRIDE=3.3 forge-slint` |
-| `wgpu` crash on launch | Vulkan not available for forge-gui | `WGPU_BACKEND=gl forge-gui` |
 | File picker shows a status-bar error | Neither `zenity` nor `kdialog` is installed | `sudo dnf install zenity` |
 | Clipboard copy fails | No `wl-copy`, `xclip`, or `xsel` helper is installed | `sudo dnf install wl-clipboard xclip` |
 | Open Folder shows a status-bar error | `xdg-open`/`gio` helper missing or failed | `sudo dnf install xdg-utils` |
