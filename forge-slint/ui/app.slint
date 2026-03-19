@@ -56,6 +56,7 @@ export component AppWindow inherits Window {
     callback check-back();
     callback run-verify();
     callback run-iso9660();
+    callback run-verify-output();
     callback copy-sha256();
     callback open-folder();
     callback clear-forms();
@@ -268,10 +269,13 @@ export component AppWindow inherits Window {
                 iso9660-boot-uefi: AppState.iso9660-boot-uefi;
                 iso9660-volume-id: AppState.iso9660-volume-id;
                 running: AppState.job-running;
+                output-verified: AppState.output-verified;
+                output-verify-matched: AppState.output-verify-matched;
                 back-clicked => { root.check-back(); }
                 browse-verify-source => { root.browse-verify-source(); }
                 run-verify => { root.run-verify(); }
                 run-iso9660 => { root.run-iso9660(); }
+                run-verify-output => { root.run-verify-output(); }
                 copy-sha256 => { root.copy-sha256(); }
                 open-folder => { root.open-folder(); }
                 clear-forms => { root.clear-forms(); }

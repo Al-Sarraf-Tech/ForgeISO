@@ -432,6 +432,21 @@ fn main() -> anyhow::Result<()> {
         with_app(|a| a.spawn_iso9660());
     });
 
+    // run-verify-output — re-hash output ISO to confirm write integrity
+    {
+        let weak = win.as_weak();
+        win.on_run_verify_output(move || {
+            if let Some(w) = weak.upgrade() {
+                let gs = w.global::<AppState>();
+                let path = gs.get_artifact_path().to_string();
+                let hash = gs.get_artifact_sha256().to_string();
+                if !path.is_empty() && !hash.is_empty() {
+                    app::spawn_verify_output(w.as_weak(), path, hash);
+                }
+            }
+        });
+    }
+
     // copy-sha256  — write artifact hash to clipboard via wl-copy/xclip/xsel
     {
         let weak = win.as_weak();

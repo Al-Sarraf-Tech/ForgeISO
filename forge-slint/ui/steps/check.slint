@@ -73,10 +73,15 @@ export component StepCheck inherits Rectangle {
 
     in property <bool>    running;
 
+    // Output self-check
+    in property <bool>    output-verified;
+    in property <bool>    output-verify-matched;
+
     callback back-clicked();
     callback browse-verify-source();
     callback run-verify();
     callback run-iso9660();
+    callback run-verify-output();
     callback copy-sha256();
     callback open-folder();
     callback clear-forms();
@@ -196,27 +201,83 @@ export component StepCheck inherits Rectangle {
             }
         }
 
-        // ── Checksum Verification ────────────────────────────────────
-        FCard {
+        // ── Output ISO Integrity ────────────────────────────────────
+        if artifact-path != "" && artifact-sha256 != "": FCard {
+            title: "OUTPUT ISO INTEGRITY";
             VerticalLayout {
                 padding: Sizes.space-5;
-                spacing: Sizes.space-4;
+                spacing: Sizes.space-3;
+
+                Text {
+                    text: "Share this hash so others can verify your ISO is authentic and unmodified.";
+                    font-size: Sizes.font-sm;
+                    color: Palette.muted;
+                    wrap: word-wrap;
+                }
+
+                // Hash display
+                Rectangle {
+                    height: 36px;
+                    border-radius: Sizes.radius-sm;
+                    background: Palette.bg;
+                    border-width: 1px;
+                    border-color: Palette.border-subtle;
+                    HorizontalLayout {
+                        padding-left: Sizes.space-3;
+                        padding-right: Sizes.space-3;
+                        alignment: start;
+                        Text {
+                            text: artifact-sha256;
+                            font-size: Sizes.font-xs;
+                            font-family: "monospace";
+                            color: Palette.text;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                }
 
                 HorizontalLayout {
                     spacing: Sizes.space-2;
                     alignment: start;
-                    Text {
-                        text: "CHECKSUM VERIFICATION";
-                        font-size: Sizes.font-2xs;
-                        font-weight: 700;
-                        color: Palette.subtle;
-                        letter-spacing: 1.5px;
-                        vertical-alignment: center;
+
+                    FButton {
+                        label: "Copy Hash";
+                        variant: "secondary";
+                        clicked => { copy-sha256(); }
                     }
-                    FBadge {
-                        text: "Optional";
-                        variant: "default";
+
+                    FButton {
+                        label: "Verify Write Integrity";
+                        variant: output-verified && output-verify-matched ? "secondary" : "primary";
+                        enabled: !running;
+                        clicked => { run-verify-output(); }
                     }
+                }
+
+                if output-verified: ResultCard {
+                    has-result: true;
+                    passed: output-verify-matched;
+                    result-title: output-verify-matched ? "Output ISO integrity confirmed" : "Output hash mismatch — possible write error";
+                    detail: output-verify-matched
+                        ? "Re-read the ISO file and recomputed SHA-256. Matches the build hash."
+                        : "The file on disk differs from what was written. Check disk space or filesystem errors.";
+                }
+            }
+        }
+
+        // ── Source Checksum Verification ─────────────────────────────
+        FCard {
+            title: "SOURCE ISO VERIFICATION";
+            VerticalLayout {
+                padding: Sizes.space-5;
+                spacing: Sizes.space-4;
+
+                Text {
+                    text: "Verify a source ISO against the distro's published upstream checksums (SHA256SUMS).";
+                    font-size: Sizes.font-sm;
+                    color: Palette.muted;
+                    wrap: word-wrap;
                 }
 
                 HorizontalLayout {

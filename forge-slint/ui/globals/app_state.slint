@@ -45,6 +45,10 @@ export global AppState {
     in-out property <bool>   iso9660-boot-uefi: false;
     in-out property <string> iso9660-volume-id;
 
+    // ── Output integrity (re-hash self-check) ────────────────────────────
+    in-out property <bool>   output-verified: false;
+    in-out property <bool>   output-verify-matched: false;
+
     // ── Defaults ───────────────────────────────────────────────────────────
     in-out property <string> defaults-summary;
 

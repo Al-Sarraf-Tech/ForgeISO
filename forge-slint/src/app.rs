@@ -905,6 +905,22 @@ fn compute_sha256(path: &str) -> String {
     format!("{:x}", hasher.finalize())
 }
 
+/// Re-hash the output ISO and compare to the stored build hash.
+/// Confirms the file on disk matches what was written (write integrity check).
+pub fn spawn_verify_output(win: Weak<AppWindow>, path: String, expected_hash: String) {
+    std::thread::spawn(move || {
+        let actual = compute_sha256(&path);
+        let matched = !actual.is_empty() && actual == expected_hash;
+        let _ = slint::invoke_from_event_loop(move || {
+            if let Some(w) = win.upgrade() {
+                let gs = w.global::<AppState>();
+                gs.set_output_verified(true);
+                gs.set_output_verify_matched(matched);
+            }
+        });
+    });
+}
+
 // ── Preset selection handler ──────────────────────────────────────────────────
 
 pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut ForgeApp) {

@@ -27,19 +27,10 @@ export component Header inherits Rectangle {
         spacing: Sizes.space-4;
         alignment: space-between;
 
-        // Left: logo + wordmark
+        // Left: wordmark
         HorizontalLayout {
             spacing: Sizes.space-3;
             alignment: start;
-            VerticalLayout {
-                alignment: center;
-                Rectangle {
-                    width: 4px;
-                    height: 32px;
-                    border-radius: 2px;
-                    background: @linear-gradient(180deg, Palette.accent 0%, #3366cc 100%);
-                }
-            }
             VerticalLayout {
                 alignment: center;
                 spacing: 1px;

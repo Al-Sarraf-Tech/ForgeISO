@@ -1,5 +1,5 @@
 import { Palette, Sizes } from "../theme.slint";
-import { ScrollView, CheckBox } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import { TabRail } from "../components/tab_rail.slint";
 import { FTextInput, FTextarea, FSectionLabel, FFieldHelp, FSwitch } from "../components/design_system.slint";
 
@@ -397,8 +397,8 @@ export component StepConfigure inherits Rectangle {
                             }
                             HorizontalLayout {
                                 spacing: 24px;
-                                CheckBox { text: "Install SSH server"; checked <=> ssh-install-server; enabled: !running; }
-                                CheckBox { text: "Allow password authentication"; checked <=> ssh-password-auth; enabled: !running; }
+                                FSwitch { label: "Install SSH server"; checked <=> ssh-install-server; enabled: !running; }
+                                FSwitch { label: "Allow password authentication"; checked <=> ssh-password-auth; enabled: !running; }
                             }
 
                             // User access
@@ -420,7 +420,7 @@ export component StepConfigure inherits Rectangle {
                                     + (distro == "fedora" || distro == "arch" ? "wheel" : "sudo")
                                     + " for admin access once you choose a username. Edit the list only if you need something custom.";
                             }
-                            CheckBox { text: "Grant passwordless sudo (NOPASSWD:ALL)"; checked <=> sudo-nopasswd; enabled: !running; }
+                            FSwitch { label: "Passwordless sudo (NOPASSWD:ALL)"; checked <=> sudo-nopasswd; enabled: !running; }
                         }
 
                         // ── TAB 2: Network ───────────────────────────────
@@ -553,7 +553,7 @@ export component StepConfigure inherits Rectangle {
                                 color: Palette.text;
                             }
 
-                            CheckBox { text: "Enable firewall"; checked <=> firewall-enabled; enabled: !running; }
+                            FSwitch { label: "Enable firewall"; checked <=> firewall-enabled; enabled: !running; }
                             if firewall-enabled: VerticalLayout {
                                 spacing: 14px;
                                 VerticalLayout {
@@ -605,13 +605,13 @@ export component StepConfigure inherits Rectangle {
                             // Containers
                             HorizontalLayout {
                                 spacing: 24px;
-                                CheckBox {
-                                    text: "Install Docker";
+                                FSwitch {
+                                    label: "Install Docker";
                                     checked <=> docker;
                                     enabled: !running;
                                     toggled => { docker-changed(); }
                                 }
-                                CheckBox { text: "Install Podman"; checked <=> podman; enabled: !running; }
+                                FSwitch { label: "Install Podman"; checked <=> podman; enabled: !running; }
                             }
                             if docker: VerticalLayout {
                                 spacing: 4px;
@@ -637,7 +637,7 @@ export component StepConfigure inherits Rectangle {
                             // Storage & encryption
                             FSectionLabel { text: "SWAP SIZE  (MB, blank = no swap)"; }
                             FTextInput { value <=> swap-size-mb; hint: "2048"; enabled: !running; }
-                            CheckBox { text: "Enable LUKS disk encryption"; checked <=> encrypt; enabled: !running; }
+                            FSwitch { label: "Enable LUKS disk encryption"; checked <=> encrypt; enabled: !running; }
                             if encrypt: VerticalLayout {
                                 spacing: 4px;
                                 FSectionLabel { text: "LUKS PASSPHRASE"; }
@@ -684,7 +684,7 @@ export component StepConfigure inherits Rectangle {
                             // Sysctl
                             FSectionLabel { text: "SYSCTL PAIRS  (key=value, one per line)"; }
                             FTextarea { value <=> sysctl-pairs; hint: "vm.swappiness=10\nnet.ipv4.ip_forward=1"; enabled: !running; }
-                            CheckBox { text: "Unattended installation (no user interaction at all)"; checked <=> no-user-interaction; enabled: !running; }
+                            FSwitch { label: "Unattended installation (no user interaction)"; checked <=> no-user-interaction; enabled: !running; }
                         }
 
                         // ── TAB 9: Output ────────────────────────────────
