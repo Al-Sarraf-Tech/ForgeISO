@@ -29,8 +29,8 @@ you want to customize.
 | Terminal wizard | `forgeiso-tui` | Guided use on a terminal or remote shell |
 | Advanced CLI | `forgeiso` | Scripting, CI, repeatable automation, power users |
 
-`forgeiso-desktop` prefers the primary Slint GUI (`forge-slint`), then falls
-back to the alternate GUI, TUI, or CLI depending on what your system supports.
+`forgeiso-desktop` prefers the Slint GUI (`forge-slint`), then falls
+back to the TUI or CLI depending on what your system supports.
 
 ## Start Here
 
