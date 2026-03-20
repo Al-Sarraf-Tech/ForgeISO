@@ -156,11 +156,17 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
         autoinstall.insert("network".into(), serde_yaml::Value::Mapping(network));
     }
 
-    // storage (with optional encryption)
-    if let Some(layout) = &cfg.storage_layout {
+    // storage — ALWAYS included for fully unattended install.
+    // Without a storage.layout, Subiquity pauses and prompts the user.
+    {
+        let layout_name = cfg
+            .storage_layout
+            .as_deref()
+            .unwrap_or("lvm")
+            .to_string();
         let mut storage = serde_yaml::Mapping::new();
         let mut layout_map = serde_yaml::Mapping::new();
-        layout_map.insert("name".into(), serde_yaml::Value::String(layout.clone()));
+        layout_map.insert("name".into(), serde_yaml::Value::String(layout_name));
         if cfg.encrypt {
             if let Some(passphrase) = &cfg.encrypt_passphrase {
                 // NOTE: Ubuntu cloud-init autoinstall requires the LUKS passphrase in
@@ -447,14 +453,19 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
         autoinstall_map.insert("network".into(), serde_yaml::Value::Mapping(network));
     }
 
-    // storage (with optional encryption)
-    if let Some(layout) = &cfg.storage_layout {
+    // storage — ALWAYS included for fully unattended install.
+    {
+        let layout_name = cfg
+            .storage_layout
+            .as_deref()
+            .unwrap_or("lvm")
+            .to_string();
         let mut storage = autoinstall_map
             .remove("storage")
             .and_then(|v| v.as_mapping().cloned())
             .unwrap_or_default();
         let mut layout_map = serde_yaml::Mapping::new();
-        layout_map.insert("name".into(), serde_yaml::Value::String(layout.clone()));
+        layout_map.insert("name".into(), serde_yaml::Value::String(layout_name));
         if cfg.encrypt {
             if let Some(passphrase) = &cfg.encrypt_passphrase {
                 // NOTE: Ubuntu cloud-init autoinstall requires the LUKS passphrase in

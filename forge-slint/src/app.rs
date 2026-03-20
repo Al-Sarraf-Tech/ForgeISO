@@ -57,10 +57,10 @@ pub fn make_preset_cards() -> (ModelRc<PresetCard>, ModelRc<PresetCard>) {
             desc: "LTS Server".into(),
         },
         PresetCard {
-            id: "ubuntu-desktop-lts".into(),
-            emoji: "🖥️".into(),
-            name: "Ubuntu Desktop".into(),
-            desc: "LTS Desktop".into(),
+            id: "centos-stream".into(),
+            emoji: "".into(),
+            name: "CentOS Stream".into(),
+            desc: "RHEL upstream".into(),
         },
         PresetCard {
             id: "linux-mint-cinnamon".into(),
@@ -95,10 +95,10 @@ pub fn make_preset_cards() -> (ModelRc<PresetCard>, ModelRc<PresetCard>) {
             desc: "Rolling release".into(),
         },
         PresetCard {
-            id: "fedora-workstation".into(),
-            emoji: "💻".into(),
-            name: "Fedora WS".into(),
-            desc: "Workstation".into(),
+            id: "ubuntu-server-jammy".into(),
+            emoji: "".into(),
+            name: "Ubuntu 22.04".into(),
+            desc: "Server Jammy LTS".into(),
         },
     ];
     (

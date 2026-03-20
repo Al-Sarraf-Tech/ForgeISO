@@ -49,6 +49,27 @@ impl ForgeIsoEngine {
             resolved.source_value,
         )?;
 
+        // Warn if the ISO is a desktop edition — desktop installers (Ubuntu Desktop,
+        // Fedora Workstation) do NOT support cloud-init/kickstart autoinstall the same
+        // way server editions do. The resulting ISO will likely boot to a manual installer.
+        let is_desktop = metadata
+            .volume_id
+            .as_deref()
+            .map(|v| {
+                let lc = v.to_lowercase();
+                lc.contains("desktop") || lc.contains("workstation")
+            })
+            .unwrap_or(false);
+        if is_desktop {
+            self.emit(EngineEvent::warn(
+                EventPhase::Inject,
+                "This appears to be a DESKTOP ISO. Desktop editions (Ubuntu Desktop, \
+                 Fedora Workstation) do NOT support fully unattended installation. \
+                 Use the Server edition for automated installs."
+                    .to_string(),
+            ));
+        }
+
         // Warn if the requested distro doesn't match what the ISO reports.
         // This is non-fatal: custom/hybrid ISOs legitimately differ; we warn
         // so users notice unintentional mismatches before a long build.
