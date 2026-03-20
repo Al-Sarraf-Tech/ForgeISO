@@ -230,7 +230,11 @@ impl ForgeApp {
 
     pub fn push_log(&mut self, phase: &str, message: &str, level: i32, percent: Option<f32>) {
         let m = &self.log_vec;
-        let pct_val = percent.unwrap_or(-1.0);
+        // Engine reports percent as 0–100; UI progress bars expect 0.0–1.0.
+        let pct_val = match percent {
+            Some(p) if p >= 0.0 => (p / 100.0).clamp(0.0, 1.0),
+            _ => -1.0,
+        };
 
         // For download progress: update in-place rather than append.
         if pct_val >= 0.0 {

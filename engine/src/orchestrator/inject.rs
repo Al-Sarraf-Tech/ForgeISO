@@ -271,6 +271,16 @@ impl ForgeIsoEngine {
                 // Boot patch — Ubuntu autoinstall kernel params
                 let kernel_append = " autoinstall ds=nocloud;s=/cdrom/nocloud/";
                 patch_boot_configs(&extract_dir, kernel_append)?;
+
+                // Also patch EFI/BOOT/grub.cfg for UEFI boot — without this,
+                // modern UEFI systems see the unmodified EFI grub config and
+                // boot straight into the manual interactive installer.
+                let efi_grub = extract_dir.join("EFI").join("BOOT").join("grub.cfg");
+                if efi_grub.exists() {
+                    let content = std::fs::read_to_string(&efi_grub)?;
+                    let patched = patch_efi_grub_cfg(&content, kernel_append);
+                    std::fs::write(&efi_grub, patched)?;
+                }
             }
             Some(Distro::Mint) => {
                 // Copy preseed.cfg to ISO root (accessible as /cdrom/preseed.cfg at boot).
@@ -396,6 +406,17 @@ impl ForgeIsoEngine {
                             std::fs::write(entry.path(), patched)?;
                         }
                     }
+                }
+
+                // Also patch EFI/BOOT/grub.cfg if present (some Arch media include it).
+                let efi_grub = extract_dir.join("EFI").join("BOOT").join("grub.cfg");
+                if efi_grub.exists() {
+                    let content = std::fs::read_to_string(&efi_grub)?;
+                    let patched = patch_efi_grub_cfg(
+                        &content,
+                        " archiso_script=/arch/boot/run-archinstall.sh",
+                    );
+                    std::fs::write(&efi_grub, patched)?;
                 }
             }
         }
