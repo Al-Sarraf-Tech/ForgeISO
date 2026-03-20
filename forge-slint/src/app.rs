@@ -948,8 +948,6 @@ pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut ForgeApp) {
 
         // Apply distro-aware defaults for this preset.
         app.apply_distro_defaults(w);
-
-        gs.set_current_step(2);
     }
 }
 
