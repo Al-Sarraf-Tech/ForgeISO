@@ -240,11 +240,12 @@ impl ForgeApp {
         if pct_val >= 0.0 {
             if let Some(&idx) = self.download_idx.get(phase) {
                 if idx < m.row_count() {
-                    let mut entry = m.row_data(idx).unwrap();
-                    entry.message = message.into();
-                    entry.percent = pct_val;
-                    m.set_row_data(idx, entry);
-                    return;
+                    if let Some(mut entry) = m.row_data(idx) {
+                        entry.message = message.into();
+                        entry.percent = pct_val;
+                        m.set_row_data(idx, entry);
+                        return;
+                    }
                 }
             }
         }

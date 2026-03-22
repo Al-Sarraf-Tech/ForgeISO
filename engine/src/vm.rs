@@ -147,12 +147,16 @@ pub struct VmLaunchSpec {
 
 impl VmLaunchSpec {
     /// Create a launch spec with sensible defaults derived from the ISO path.
+    ///
+    /// The VM name is sanitized to contain only `[a-zA-Z0-9._-]` so it is safe
+    /// to embed in shell commands, QEMU `-drive file=` paths, and hypervisor APIs
+    /// without quoting or escaping issues.
     pub fn new(iso_path: &Path, hypervisor: Hypervisor, firmware: FirmwareMode) -> Self {
-        let vm_name = iso_path
+        let raw_name = iso_path
             .file_stem()
             .and_then(|s| s.to_str())
-            .unwrap_or("forgeiso-vm")
-            .to_string();
+            .unwrap_or("forgeiso-vm");
+        let vm_name = sanitize_vm_name(raw_name);
         let ovmf_path = if matches!(firmware, FirmwareMode::Uefi) {
             find_ovmf()
         } else {
@@ -168,6 +172,28 @@ impl VmLaunchSpec {
             vm_name,
             ovmf_path,
         }
+    }
+}
+
+/// Sanitize a VM name to contain only shell/path-safe characters.
+/// Replaces anything outside `[a-zA-Z0-9._-]` with `-` and trims leading/trailing dashes.
+/// Falls back to `"forgeiso-vm"` if the result is empty.
+fn sanitize_vm_name(input: &str) -> String {
+    let cleaned: String = input
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let trimmed = cleaned.trim_matches('-');
+    if trimmed.is_empty() {
+        "forgeiso-vm".to_string()
+    } else {
+        trimmed.to_string()
     }
 }
 
@@ -924,5 +950,42 @@ mod tests {
         );
         // BIOS mode must never attempt OVMF discovery.
         assert!(spec.ovmf_path.is_none());
+    }
+
+    #[test]
+    fn vm_launch_spec_new_sanitizes_special_chars_in_name() {
+        // File names with spaces, parens, or quotes must be sanitized so
+        // the vm_name is safe for shell commands and QEMU -drive paths.
+        let spec = VmLaunchSpec::new(
+            Path::new("/tmp/ubuntu 24.04 (copy).iso"),
+            Hypervisor::Qemu,
+            FirmwareMode::Bios,
+        );
+        assert!(
+            !spec.vm_name.contains(' '),
+            "spaces must be sanitized: {}",
+            spec.vm_name
+        );
+        assert!(
+            !spec.vm_name.contains('('),
+            "parens must be sanitized: {}",
+            spec.vm_name
+        );
+        assert!(
+            spec.vm_name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_'),
+            "vm_name must contain only safe chars: {}",
+            spec.vm_name
+        );
+    }
+
+    #[test]
+    fn sanitize_vm_name_handles_edge_cases() {
+        assert_eq!(sanitize_vm_name("normal-name"), "normal-name");
+        assert_eq!(sanitize_vm_name("has spaces"), "has-spaces");
+        assert_eq!(sanitize_vm_name("---"), "forgeiso-vm");
+        assert_eq!(sanitize_vm_name(""), "forgeiso-vm");
+        assert_eq!(sanitize_vm_name("a'b\"c"), "a-b-c");
     }
 }

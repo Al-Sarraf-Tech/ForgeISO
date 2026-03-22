@@ -159,11 +159,7 @@ pub fn generate_autoinstall_yaml(cfg: &InjectConfig) -> EngineResult<String> {
     // storage — ALWAYS included for fully unattended install.
     // Without a storage.layout, Subiquity pauses and prompts the user.
     {
-        let layout_name = cfg
-            .storage_layout
-            .as_deref()
-            .unwrap_or("lvm")
-            .to_string();
+        let layout_name = cfg.storage_layout.as_deref().unwrap_or("lvm").to_string();
         let mut storage = serde_yaml::Mapping::new();
         let mut layout_map = serde_yaml::Mapping::new();
         layout_map.insert("name".into(), serde_yaml::Value::String(layout_name));
@@ -455,11 +451,7 @@ pub fn merge_autoinstall_yaml(existing: &str, cfg: &InjectConfig) -> EngineResul
 
     // storage — ALWAYS included for fully unattended install.
     {
-        let layout_name = cfg
-            .storage_layout
-            .as_deref()
-            .unwrap_or("lvm")
-            .to_string();
+        let layout_name = cfg.storage_layout.as_deref().unwrap_or("lvm").to_string();
         let mut storage = autoinstall_map
             .remove("storage")
             .and_then(|v| v.as_mapping().cloned())

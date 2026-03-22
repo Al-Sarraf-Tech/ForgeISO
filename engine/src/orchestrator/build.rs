@@ -263,7 +263,8 @@ fn strip_volume_args(args: &[String]) -> Vec<String> {
     while index < args.len() {
         let arg = &args[index];
         if arg == "-V" || arg == "-volid" {
-            index += 2;
+            // Skip the flag and its value (if present).
+            index += if index + 1 < args.len() { 2 } else { 1 };
             continue;
         }
         filtered.push(arg.clone());
