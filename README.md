@@ -204,6 +204,12 @@ If the primary GUI has rendering trouble on Intel integrated graphics:
 MESA_GL_VERSION_OVERRIDE=3.3 forgeiso-desktop
 ```
 
+### VM name sanitization
+
+VM names derived from hostnames or build configs are sanitized before being
+passed to any hypervisor command. Characters that are invalid for QEMU,
+VirtualBox, VMware, or Proxmox VM names are stripped or replaced automatically.
+
 ### Download verification
 
 ```bash
@@ -224,7 +230,7 @@ checks source ISO hashes, never the output ISO hash as a trust source.
 
 ## Build From Source
 
-Requires Rust 1.75+ plus `xorriso`, `squashfs-tools`, and `mtools`.
+Requires Rust 1.87+ plus `xorriso`, `squashfs-tools`, and `mtools`.
 
 ```bash
 git clone https://github.com/jalsarraf0/ForgeISO
