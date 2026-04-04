@@ -187,7 +187,8 @@ export component AppWindow inherits Window {
                 field-edited(name) => { root.field-edited(name); }
                 username-changed(u) => { root.username-changed(u); }
                 docker-changed => { root.docker-changed(); }
-            }}
+            }
+}
 
             if AppState.current-step == 3: Rectangle {
                 opacity: 0.0;
@@ -240,8 +241,8 @@ export component AppWindow inherits Window {
                 artifact-sha256: AppState.artifact-sha256;
                 verify-summary: AppState.step3-done
                     ? (AppState.verify-done || AppState.iso9660-done
-                        ? "Optional checks complete"
-                        : "Optional checks skipped for now")
+                        ? "Verification checks complete"
+                        : "")
                     : "";
                 back-clicked => { root.build-back(); }
                 back-to-source => { root.build-back-to-source(); }

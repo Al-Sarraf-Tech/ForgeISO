@@ -1,7 +1,9 @@
 slint::include_modules!();
 
 mod app;
+mod config;
 mod defaults;
+mod jobs;
 mod persist;
 mod state;
 mod worker;
@@ -12,10 +14,8 @@ use std::sync::Arc;
 
 use slint::ComponentHandle;
 
-use app::{
-    handle_preset_clicked, make_preset_cards, preset_display_name, with_app, with_app_result,
-    ForgeApp, APP,
-};
+use app::{with_app, with_app_result, ForgeApp, APP};
+use config::{handle_preset_clicked, make_preset_cards, preset_display_name};
 use forgeiso_engine::ForgeIsoEngine;
 use persist::{load_state, save_state};
 use state::{InjectState, PersistedState, VerifyState};
@@ -441,7 +441,7 @@ fn main() -> anyhow::Result<()> {
                 let path = gs.get_artifact_path().to_string();
                 let hash = gs.get_artifact_sha256().to_string();
                 if !path.is_empty() && !hash.is_empty() {
-                    app::spawn_verify_output(w.as_weak(), path, hash);
+                    jobs::spawn_verify_output(w.as_weak(), path, hash);
                 }
             }
         });

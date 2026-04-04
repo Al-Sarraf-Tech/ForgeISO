@@ -100,13 +100,13 @@ export component StepCheck inherits Rectangle {
             VerticalLayout {
                 spacing: Sizes.space-1;
                 Text {
-                    text: "Optional Checks";
+                    text: "Verify ISO";
                     font-size: Sizes.font-2xl;
                     font-weight: 700;
                     color: Palette.text;
                 }
                 Text {
-                    text: "Your ISO is already ready to use. Run checksum or ISO-9660 checks only if you want extra validation.";
+                    text: "Confirm integrity and layout of your output ISO.";
                     font-size: Sizes.font-sm;
                     color: Palette.muted;
                 }
@@ -116,15 +116,10 @@ export component StepCheck inherits Rectangle {
                 alignment: end;
 
                 FButton {
-                    label: "← Back to Build";
+                    label: "\u{2190} Back to Build";
                     variant: "secondary";
                     enabled: !running;
                     clicked => { back-clicked(); }
-                }
-
-                FBadge {
-                    text: "Optional";
-                    variant: "default";
                 }
             }
         }
@@ -150,7 +145,7 @@ export component StepCheck inherits Rectangle {
                     VerticalLayout {
                         spacing: 2px;
                         Text {
-                            text: "Build complete — verification optional";
+                            text: "Build complete";
                             font-size: Sizes.font-lg;
                             font-weight: 700;
                             color: Palette.green;
@@ -335,13 +330,13 @@ export component StepCheck inherits Rectangle {
                         padding: Sizes.space-4;
                         spacing: Sizes.space-2;
                         Text {
-                            text: "Build complete — checks skipped for now";
+                            text: "No checks run yet";
                             font-size: Sizes.font-md;
                             font-weight: 700;
                             color: Palette.text;
                         }
                         Text {
-                            text: "You can stop here, ship the ISO, or come back later to run checksum and ISO layout checks.";
+                            text: "Run a checksum or ISO-9660 layout check above, or ship the ISO as-is.";
                             font-size: Sizes.font-sm;
                             color: Palette.muted;
                             wrap: word-wrap;

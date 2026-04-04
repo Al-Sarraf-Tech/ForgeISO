@@ -16,7 +16,7 @@ component DistroCard inherits Rectangle {
     callback clicked();
 
     width: 180px;
-    height: 100px;
+    height: 110px;
     border-radius: Sizes.radius-md;
     background: selected ? rgba(69, 194, 107, 0.08)
               : hovered && !running ? Palette.active
@@ -40,6 +40,11 @@ component DistroCard inherits Rectangle {
         padding-top: Sizes.space-3;
         padding-bottom: Sizes.space-3;
 
+        if card.emoji != "": Text {
+            text: card.emoji;
+            font-size: 22px;
+            horizontal-alignment: center;
+        }
         Text {
             text: card.name;
             font-size: Sizes.font-md;
@@ -178,6 +183,9 @@ export component StepSource inherits Rectangle {
                             single-line: true;
                             enabled: !running;
                             edited => { source-changed(path-input.text); }
+                            accepted => {
+                                if (can-continue && !running) { continue-clicked(); }
+                            }
                         }
                     }
 

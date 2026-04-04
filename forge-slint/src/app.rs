@@ -1,23 +1,18 @@
 use std::cell::RefCell;
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use forgeiso_engine::{
-    find_preset_by_str, resolve_url, AcquisitionStrategy, ContainerConfig, Distro, EventLevel,
-    FirewallConfig, ForgeIsoEngine, GrubConfig, InjectConfig, IsoSource, NetworkConfig,
-    ProxyConfig, SshConfig, SwapConfig, UserConfig,
-};
-use sha2::{Digest, Sha256};
+use forgeiso_engine::{ForgeIsoEngine, InjectConfig};
 use slint::{ComponentHandle, Model, ModelRc, VecModel, Weak};
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 
 use std::collections::HashSet;
 
+use crate::config::build_inject_config;
 use crate::defaults;
-use crate::state::{lines, opt, tokens, InjectState, VerifyState};
-use crate::{clear_build_results, AppState, AppWindow, FormState, LogEntry, PresetCard};
+use crate::state::{InjectState, VerifyState};
+use crate::{AppState, AppWindow, FormState, LogEntry};
 
 // ── Thread-local app handle ───────────────────────────────────────────────────
 //
@@ -45,73 +40,7 @@ where
     APP.with(|cell| cell.borrow().as_ref().map(|rc| f(&mut rc.borrow_mut())))
 }
 
-// ── Preset cards shown on Step 1 ─────────────────────────────────────────────
-
-/// Returns (row1, row2) preset card models for the two-row distro grid.
-pub fn make_preset_cards() -> (ModelRc<PresetCard>, ModelRc<PresetCard>) {
-    let row1: Vec<PresetCard> = vec![
-        PresetCard {
-            id: "ubuntu-server-lts".into(),
-            emoji: "🐧".into(),
-            name: "Ubuntu Server".into(),
-            desc: "LTS Server".into(),
-        },
-        PresetCard {
-            id: "centos-stream".into(),
-            emoji: "".into(),
-            name: "CentOS Stream".into(),
-            desc: "RHEL upstream".into(),
-        },
-        PresetCard {
-            id: "linux-mint-cinnamon".into(),
-            emoji: "🌿".into(),
-            name: "Linux Mint".into(),
-            desc: "Cinnamon".into(),
-        },
-        PresetCard {
-            id: "fedora-server".into(),
-            emoji: "🎩".into(),
-            name: "Fedora Server".into(),
-            desc: "Latest stable".into(),
-        },
-        PresetCard {
-            id: "rocky-linux".into(),
-            emoji: "🪨".into(),
-            name: "Rocky Linux".into(),
-            desc: "RHEL compatible".into(),
-        },
-    ];
-    let row2: Vec<PresetCard> = vec![
-        PresetCard {
-            id: "almalinux".into(),
-            emoji: "🦬".into(),
-            name: "AlmaLinux".into(),
-            desc: "RHEL compatible".into(),
-        },
-        PresetCard {
-            id: "arch-linux".into(),
-            emoji: "⚙️".into(),
-            name: "Arch Linux".into(),
-            desc: "Rolling release".into(),
-        },
-        PresetCard {
-            id: "ubuntu-server-jammy".into(),
-            emoji: "".into(),
-            name: "Ubuntu 22.04".into(),
-            desc: "Server Jammy LTS".into(),
-        },
-    ];
-    (
-        ModelRc::new(VecModel::from(row1)),
-        ModelRc::new(VecModel::from(row2)),
-    )
-}
-
-pub fn preset_display_name(id: &str) -> Option<&'static str> {
-    find_preset_by_str(id).map(|preset| preset.name)
-}
-
-// ── Log helpers ───────────────────────────────────────────────────────────────
+// ── Log helpers ──────────────────────────────────────────────────────────────
 
 const MAX_LOG: usize = 5_000;
 
@@ -119,7 +48,7 @@ fn now_ts() -> slint::SharedString {
     chrono::Local::now().format("%H:%M:%S").to_string().into()
 }
 
-// ── Main app state ────────────────────────────────────────────────────────────
+// ── Main app state ───────────────────────────────────────────────────────────
 
 pub struct ForgeApp {
     pub win: Weak<AppWindow>,
@@ -156,9 +85,9 @@ impl ForgeApp {
         }
     }
 
-    // ── Job lifecycle ─────────────────────────────────────────────────────────
+    // ── Job lifecycle ────────────────────────────────────────────────────────
 
-    fn start_job(&mut self, phase: &str) {
+    pub(crate) fn start_job(&mut self, phase: &str) {
         self.download_idx.clear();
         if let Some(w) = self.win.upgrade() {
             let gs = w.global::<AppState>();
@@ -200,32 +129,6 @@ impl ForgeApp {
             gs.set_status_text(first.into());
             gs.set_status_is_error(true);
         }
-    }
-
-    /// Spawn a task that receives engine broadcast events and delivers them to
-    /// the log panel via `invoke_from_event_loop`. Returns a handle that callers
-    /// should abort once the main operation task finishes.
-    pub fn subscribe_events(&self) -> JoinHandle<()> {
-        let mut rx = self.engine.subscribe();
-        self.rt.spawn(async move {
-            while let Ok(ev) = rx.recv().await {
-                let phase = format!("{:?}", ev.phase);
-                let msg = ev.message.clone();
-                let level = match ev.level {
-                    EventLevel::Error => 2i32,
-                    EventLevel::Warn => 1i32,
-                    _ => 0i32,
-                };
-                let pct = ev.percent;
-                let _ = slint::invoke_from_event_loop(move || {
-                    APP.with(|cell| {
-                        if let Some(rc) = cell.borrow().as_ref() {
-                            rc.borrow_mut().push_log(&phase, &msg, level, pct);
-                        }
-                    });
-                });
-            }
-        })
     }
 
     pub fn push_log(&mut self, phase: &str, message: &str, level: i32, percent: Option<f32>) {
@@ -296,7 +199,7 @@ impl ForgeApp {
         self.set_status_ok("Cancelled");
     }
 
-    // ── Snapshot current form state from Slint ────────────────────────────────
+    // ── Snapshot current form state from Slint ───────────────────────────────
 
     pub fn snap_inject(&self) -> Option<InjectState> {
         let w = self.win.upgrade()?;
@@ -374,7 +277,7 @@ impl ForgeApp {
         })
     }
 
-    fn collect_inject_config(&self) -> Result<(InjectState, InjectConfig), String> {
+    pub(crate) fn collect_inject_config(&self) -> Result<(InjectState, InjectConfig), String> {
         let w = self
             .win
             .upgrade()
@@ -420,7 +323,7 @@ impl ForgeApp {
         self.collect_inject_config().map(|_| ())
     }
 
-    // ── Distro defaults ─────────────────────────────────────────────────
+    // ── Distro defaults ─────────────────────────────────────────────────────
 
     /// Apply distro defaults to unedited fields and update the summary.
     pub fn apply_distro_defaults(&mut self, w: &AppWindow) {
@@ -525,7 +428,6 @@ impl ForgeApp {
     }
 
     /// Auto-manage user groups and Docker users when the username changes.
-    /// Only modifies fields that the user hasn't manually edited.
     pub fn on_username_changed(&mut self, w: &AppWindow) {
         self.sync_auto_managed_access(w);
     }
@@ -533,624 +435,5 @@ impl ForgeApp {
     /// Recompute Docker user defaults when Docker is toggled on or off.
     pub fn on_docker_changed(&mut self, w: &AppWindow) {
         self.sync_auto_managed_access(w);
-    }
-
-    // ── spawn_inject ──────────────────────────────────────────────────────────
-
-    pub fn spawn_inject(&mut self) {
-        let w = match self.win.upgrade() {
-            Some(w) => w,
-            None => return,
-        };
-
-        if w.global::<AppState>().get_job_running() {
-            return;
-        }
-
-        let (inject, cfg) = match self.collect_inject_config() {
-            Ok(values) => values,
-            Err(msg) => {
-                self.set_status_err(msg);
-                return;
-            }
-        };
-
-        // Abort stale tasks
-        if let Some(h) = self.detect_task.take() {
-            h.abort();
-        }
-        if let Some(h) = self.sha256_task.take() {
-            h.abort();
-        }
-
-        // Reset build/check state while preserving completed configuration.
-        clear_build_results(&w);
-
-        self.start_job("Injecting\u{2026}");
-
-        let engine = Arc::clone(&self.engine);
-        let win2 = self.win.clone();
-        let out_dir = PathBuf::from(&inject.output_dir);
-
-        self.current_task = Some(self.rt.spawn(async move {
-            match engine.inject_autoinstall(&cfg, &out_dir).await {
-                Ok(result) => {
-                    let artifact = result
-                        .artifacts
-                        .first()
-                        .map(|p| p.to_string_lossy().into_owned())
-                        .unwrap_or_default();
-
-                    let art2 = artifact.clone();
-                    let win3 = win2.clone();
-                    let _ = slint::invoke_from_event_loop(move || {
-                        if let Some(w) = win2.upgrade() {
-                            let gs = w.global::<AppState>();
-                            gs.set_job_running(false);
-                            gs.set_job_phase("".into());
-                            gs.set_step3_done(true);
-                            gs.set_artifact_path(artifact.clone().into());
-                            gs.set_verify_source(artifact.into());
-                            gs.set_current_step(3);
-                            gs.set_status_text(
-                                "ISO ready \u{2014} optional checks are available if you want them"
-                                    .into(),
-                            );
-                            gs.set_status_is_error(false);
-                        }
-                    });
-
-                    // Background SHA-256
-                    if !art2.is_empty() {
-                        let _ = slint::invoke_from_event_loop(move || {
-                            if let Some(w) = win3.upgrade() {
-                                spawn_sha256(w.as_weak(), art2);
-                            }
-                        });
-                    }
-                }
-                Err(e) => {
-                    let msg = e.to_string();
-                    let _ = slint::invoke_from_event_loop(move || {
-                        if let Some(w) = win2.upgrade() {
-                            let gs = w.global::<AppState>();
-                            gs.set_job_running(false);
-                            gs.set_job_phase("".into());
-                            gs.set_status_text(
-                                msg.as_str().chars().take(200).collect::<String>().into(),
-                            );
-                            gs.set_status_is_error(true);
-                        }
-                    });
-                }
-            }
-        }));
-    }
-
-    // ── spawn_verify ──────────────────────────────────────────────────────────
-
-    pub fn spawn_verify(&mut self) {
-        let w = match self.win.upgrade() {
-            Some(w) => w,
-            None => return,
-        };
-        let gs = w.global::<AppState>();
-        if gs.get_job_running() {
-            return;
-        }
-        // Abort any previous verify
-        if let Some(h) = self.current_task.take() {
-            h.abort();
-        }
-
-        let source: String = gs.get_verify_source().into();
-        if source.trim().is_empty() {
-            self.set_status_err("Source ISO is required for verification");
-            return;
-        }
-        let sums: String = gs.get_sums_url().into();
-        let sums_opt = opt(&sums);
-
-        gs.set_verify_done(false);
-        gs.set_verify_matched(false);
-        gs.set_verify_hash_display("".into());
-        self.start_job("Verifying checksum\u{2026}");
-
-        let engine = Arc::clone(&self.engine);
-        let win2 = self.win.clone();
-
-        self.current_task = Some(self.rt.spawn(async move {
-            match engine.verify(&source, sums_opt.as_deref()).await {
-                Ok(r) => {
-                    let matched = r.matched;
-                    let hash = r.actual.clone();
-                    let display = format!(
-                        "{}{}",
-                        if matched {
-                            "Match: "
-                        } else {
-                            "Mismatch \u{2014} actual: "
-                        },
-                        hash
-                    );
-                    let _ = slint::invoke_from_event_loop(move || {
-                        if let Some(w) = win2.upgrade() {
-                            let gs = w.global::<AppState>();
-                            gs.set_job_running(false);
-                            gs.set_job_phase("".into());
-                            gs.set_verify_done(true);
-                            gs.set_verify_matched(matched);
-                            gs.set_verify_hash_display(display.into());
-                            gs.set_step3_done(true);
-                            gs.set_status_text(
-                                if matched {
-                                    "Integrity verified \u{2713}"
-                                } else {
-                                    "Checksum mismatch"
-                                }
-                                .into(),
-                            );
-                            gs.set_status_is_error(!matched);
-                        }
-                    });
-                }
-                Err(e) => {
-                    let msg = e.to_string();
-                    let _ = slint::invoke_from_event_loop(move || {
-                        if let Some(w) = win2.upgrade() {
-                            let gs = w.global::<AppState>();
-                            gs.set_job_running(false);
-                            gs.set_job_phase("".into());
-                            gs.set_status_text(
-                                msg.as_str().chars().take(200).collect::<String>().into(),
-                            );
-                            gs.set_status_is_error(true);
-                        }
-                    });
-                }
-            }
-        }));
-    }
-
-    // ── spawn_iso9660 ─────────────────────────────────────────────────────────
-
-    pub fn spawn_iso9660(&mut self) {
-        let w = match self.win.upgrade() {
-            Some(w) => w,
-            None => return,
-        };
-        let gs = w.global::<AppState>();
-        if gs.get_job_running() {
-            return;
-        }
-        if let Some(h) = self.current_task.take() {
-            h.abort();
-        }
-
-        let source: String = gs.get_verify_source().into();
-        if source.trim().is_empty() {
-            self.set_status_err("Source ISO is required");
-            return;
-        }
-        gs.set_iso9660_done(false);
-        gs.set_iso9660_compliant(false);
-        gs.set_iso9660_boot_bios(false);
-        gs.set_iso9660_boot_uefi(false);
-        gs.set_iso9660_volume_id("".into());
-        self.start_job("Validating ISO-9660\u{2026}");
-
-        let engine = Arc::clone(&self.engine);
-        let win2 = self.win.clone();
-
-        self.current_task = Some(self.rt.spawn(async move {
-            match engine.validate_iso9660(&source).await {
-                Ok(r) => {
-                    let compliant = r.compliant;
-                    let bios = r.boot_bios;
-                    let uefi = r.boot_uefi;
-                    let vol = r.volume_id.clone().unwrap_or_default();
-                    let _ = slint::invoke_from_event_loop(move || {
-                        if let Some(w) = win2.upgrade() {
-                            let gs = w.global::<AppState>();
-                            gs.set_job_running(false);
-                            gs.set_job_phase("".into());
-                            gs.set_iso9660_done(true);
-                            gs.set_iso9660_compliant(compliant);
-                            gs.set_iso9660_boot_bios(bios);
-                            gs.set_iso9660_boot_uefi(uefi);
-                            gs.set_iso9660_volume_id(vol.into());
-                            gs.set_status_text(
-                                if compliant {
-                                    "ISO-9660 compliant \u{2713}"
-                                } else {
-                                    "ISO-9660 issues found"
-                                }
-                                .into(),
-                            );
-                            gs.set_status_is_error(!compliant);
-                        }
-                    });
-                }
-                Err(e) => {
-                    let msg = e.to_string();
-                    let _ = slint::invoke_from_event_loop(move || {
-                        if let Some(w) = win2.upgrade() {
-                            let gs = w.global::<AppState>();
-                            gs.set_job_running(false);
-                            gs.set_job_phase("".into());
-                            gs.set_status_text(
-                                msg.as_str().chars().take(200).collect::<String>().into(),
-                            );
-                            gs.set_status_is_error(true);
-                        }
-                    });
-                }
-            }
-        }));
-    }
-
-    // ── spawn_doctor ──────────────────────────────────────────────────────────
-
-    pub fn spawn_doctor(&mut self) {
-        let w = match self.win.upgrade() {
-            Some(w) => w,
-            None => return,
-        };
-        let gs = w.global::<AppState>();
-        if gs.get_job_running() {
-            return;
-        }
-        if let Some(h) = self.current_task.take() {
-            h.abort();
-        }
-
-        gs.set_doctor_loading(true);
-        gs.set_doctor_text("".into());
-        self.start_job("Checking dependencies\u{2026}");
-
-        let engine = Arc::clone(&self.engine);
-        let win2 = self.win.clone();
-
-        self.current_task = Some(self.rt.spawn(async move {
-            let report = engine.doctor().await;
-            // Build a human-readable text from BTreeMap<tool, ok>.
-            let mut lines_out = Vec::new();
-            for (tool, ok) in &report.tooling {
-                let mark = if *ok { "\u{2713}" } else { "\u{2717}" };
-                lines_out.push(format!("  {mark}  {tool}"));
-            }
-            if !report.warnings.is_empty() {
-                lines_out.push(String::new());
-                for w in &report.warnings {
-                    lines_out.push(format!("  \u{26A0}  {w}"));
-                }
-            }
-            let text = lines_out.join("\n");
-            let _ = slint::invoke_from_event_loop(move || {
-                if let Some(w) = win2.upgrade() {
-                    let gs = w.global::<AppState>();
-                    gs.set_job_running(false);
-                    gs.set_job_phase("".into());
-                    gs.set_doctor_loading(false);
-                    gs.set_doctor_text(text.into());
-                }
-            });
-        }));
-    }
-
-    // ── spawn_detect_iso ──────────────────────────────────────────────────────
-
-    pub fn spawn_detect_iso(&mut self, path: String) {
-        // Abort any existing detection
-        if let Some(h) = self.detect_task.take() {
-            h.abort();
-        }
-
-        let engine = Arc::clone(&self.engine);
-        let win2 = self.win.clone();
-
-        self.detect_task = Some(self.rt.spawn(async move {
-            if let Ok(meta) = engine.inspect_source(&path, None).await {
-                let distro_str = match meta.distro {
-                    Some(Distro::Ubuntu) => "ubuntu",
-                    Some(Distro::Fedora) => "fedora",
-                    Some(Distro::Arch) => "arch",
-                    Some(Distro::Mint) => "mint",
-                    _ => "",
-                };
-                let label = meta.volume_id.clone().unwrap_or_default();
-                let distro = distro_str.to_string();
-                let _ = slint::invoke_from_event_loop(move || {
-                    if let Some(w) = win2.upgrade() {
-                        let fs = w.global::<FormState>();
-                        if !distro.is_empty() {
-                            fs.set_distro(distro.clone().into());
-                            fs.set_detected_distro(
-                                match distro.as_str() {
-                                    "fedora" => "Fedora / RHEL",
-                                    "arch" => "Arch Linux",
-                                    "mint" => "Linux Mint",
-                                    _ => "Ubuntu",
-                                }
-                                .into(),
-                            );
-                        }
-                        if !label.is_empty() && fs.get_output_label().is_empty() {
-                            fs.set_output_label(label.into());
-                        }
-                    }
-                });
-            }
-        }));
-    }
-}
-
-// ── SHA-256 background task ───────────────────────────────────────────────────
-
-pub fn spawn_sha256(win: Weak<AppWindow>, path: String) {
-    std::thread::spawn(move || {
-        let hash = compute_sha256(&path);
-        let _ = slint::invoke_from_event_loop(move || {
-            if let Some(w) = win.upgrade() {
-                w.global::<AppState>().set_artifact_sha256(hash.into());
-            }
-        });
-    });
-}
-
-fn compute_sha256(path: &str) -> String {
-    let mut file = match std::fs::File::open(path) {
-        Ok(f) => f,
-        Err(_) => return String::new(),
-    };
-    let mut hasher = Sha256::new();
-    if std::io::copy(&mut file, &mut hasher).is_err() {
-        return String::new();
-    }
-    format!("{:x}", hasher.finalize())
-}
-
-/// Re-hash the output ISO and compare to the stored build hash.
-/// Confirms the file on disk matches what was written (write integrity check).
-pub fn spawn_verify_output(win: Weak<AppWindow>, path: String, expected_hash: String) {
-    std::thread::spawn(move || {
-        let actual = compute_sha256(&path);
-        let matched = !actual.is_empty() && actual == expected_hash;
-        let _ = slint::invoke_from_event_loop(move || {
-            if let Some(w) = win.upgrade() {
-                let gs = w.global::<AppState>();
-                gs.set_output_verified(true);
-                gs.set_output_verify_matched(matched);
-            }
-        });
-    });
-}
-
-// ── Preset selection handler ──────────────────────────────────────────────────
-
-pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut ForgeApp) {
-    if let Some(p) = find_preset_by_str(id) {
-        let fs = w.global::<FormState>();
-        fs.set_selected_preset(p.id.as_str().into());
-        fs.set_selected_preset_name(p.name.into());
-        fs.set_distro(p.distro.into());
-        // Clear stale build state
-        let gs = w.global::<AppState>();
-        gs.set_step2_done(false);
-        clear_build_results(w);
-
-        if p.strategy == AcquisitionStrategy::DirectUrl {
-            if let Ok(Some(url)) = resolve_url(p) {
-                fs.set_source_path(url.into());
-                // Trigger ISO detection on URL-resolved presets
-                app.spawn_detect_iso(fs.get_source_path().into());
-            }
-        }
-
-        // Apply distro-aware defaults for this preset.
-        app.apply_distro_defaults(w);
-    }
-}
-
-// ── InjectConfig builder ──────────────────────────────────────────────────────
-
-pub fn build_inject_config(s: &InjectState) -> InjectConfig {
-    let source = IsoSource::from_raw(s.source.trim());
-    let shared_repo_lines = lines(&s.apt_repos);
-
-    let distro = match s.distro.as_str() {
-        "fedora" => Some(Distro::Fedora),
-        "arch" => Some(Distro::Arch),
-        "mint" => Some(Distro::Mint),
-        _ => None,
-    };
-
-    let ssh = SshConfig {
-        authorized_keys: lines(&s.ssh_keys),
-        install_server: Some(s.ssh_install_server),
-        allow_password_auth: Some(s.ssh_password_auth),
-    };
-
-    let network = NetworkConfig {
-        dns_servers: tokens(&s.dns_servers),
-        ntp_servers: tokens(&s.ntp_servers),
-    };
-
-    let proxy = ProxyConfig {
-        http_proxy: opt(&s.http_proxy),
-        https_proxy: opt(&s.https_proxy),
-        no_proxy: tokens(&s.no_proxy),
-    };
-
-    let user = UserConfig {
-        groups: lines(&s.user_groups),
-        shell: opt(&s.user_shell),
-        sudo_nopasswd: s.sudo_nopasswd,
-        sudo_commands: lines(&s.sudo_commands),
-    };
-
-    let firewall = FirewallConfig {
-        enabled: s.firewall_enabled,
-        default_policy: opt(&s.firewall_policy),
-        allow_ports: tokens(&s.allow_ports),
-        deny_ports: tokens(&s.deny_ports),
-    };
-
-    let swap = s
-        .swap_size_mb
-        .parse::<u32>()
-        .ok()
-        .map(|size_mb| SwapConfig {
-            size_mb,
-            filename: opt(&s.swap_filename),
-            swappiness: s.swap_swappiness.parse::<u8>().ok(),
-        });
-
-    let containers = ContainerConfig {
-        docker: s.docker,
-        podman: s.podman,
-        docker_users: lines(&s.docker_users),
-    };
-
-    let grub = GrubConfig {
-        timeout: s.grub_timeout.parse::<u32>().ok(),
-        cmdline_extra: tokens(&s.grub_cmdline),
-        default_entry: opt(&s.grub_default),
-    };
-
-    let sysctl: Vec<(String, String)> = s
-        .sysctl_pairs
-        .lines()
-        .filter_map(|l| {
-            let l = l.trim();
-            let mut parts = l.splitn(2, '=');
-            match (parts.next(), parts.next()) {
-                (Some(k), Some(v)) => {
-                    let k = k.trim().to_string();
-                    let v = v.trim().to_string();
-                    if k.is_empty() || v.is_empty() {
-                        None
-                    } else {
-                        Some((k, v))
-                    }
-                }
-                _ => None,
-            }
-        })
-        .collect();
-
-    InjectConfig {
-        source,
-        autoinstall_yaml: None,
-        out_name: s.out_name.clone(),
-        output_label: opt(&s.output_label),
-        expected_sha256: opt(&s.expected_sha256),
-        hostname: opt(&s.hostname),
-        username: opt(&s.username),
-        password: opt(&s.password),
-        realname: opt(&s.realname),
-        ssh,
-        network,
-        proxy,
-        user,
-        timezone: opt(&s.timezone),
-        locale: opt(&s.locale),
-        keyboard_layout: opt(&s.keyboard_layout),
-        storage_layout: opt(&s.storage_layout),
-        apt_mirror: opt(&s.apt_mirror),
-        extra_packages: tokens(&s.packages),
-        wallpaper: opt(&s.wallpaper_path).map(PathBuf::from),
-        extra_late_commands: lines(&s.late_commands),
-        no_user_interaction: s.no_user_interaction,
-        firewall,
-        static_ip: opt(&s.static_ip),
-        gateway: opt(&s.gateway),
-        enable_services: lines(&s.enable_services),
-        disable_services: lines(&s.disable_services),
-        sysctl,
-        swap,
-        apt_repos: if matches!(distro, None | Some(Distro::Mint)) {
-            shared_repo_lines.clone()
-        } else {
-            Vec::new()
-        },
-        dnf_repos: if matches!(distro, Some(Distro::Fedora)) {
-            let repos = lines(&s.dnf_repos);
-            if repos.is_empty() {
-                shared_repo_lines.clone()
-            } else {
-                repos
-            }
-        } else {
-            Vec::new()
-        },
-        dnf_mirror: opt(&s.dnf_mirror),
-        pacman_repos: if matches!(distro, Some(Distro::Arch)) {
-            let repos = lines(&s.pacman_repos);
-            if repos.is_empty() {
-                shared_repo_lines.clone()
-            } else {
-                repos
-            }
-        } else {
-            Vec::new()
-        },
-        pacman_mirror: opt(&s.pacman_mirror),
-        containers,
-        grub,
-        encrypt: s.encrypt,
-        encrypt_passphrase: opt(&s.encrypt_passphrase),
-        mounts: lines(&s.mounts),
-        run_commands: lines(&s.run_commands),
-        distro,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{build_inject_config, preset_display_name};
-    use crate::state::InjectState;
-
-    #[test]
-    fn preset_display_name_uses_engine_metadata() {
-        assert_eq!(
-            preset_display_name("ubuntu-server-lts"),
-            Some("Ubuntu 24.04.4 LTS Server")
-        );
-        assert_eq!(preset_display_name("arch-linux"), Some("Arch Linux"));
-    }
-
-    #[test]
-    fn preset_display_name_rejects_unknown_ids() {
-        assert_eq!(preset_display_name("unknown-preset"), None);
-    }
-
-    #[test]
-    fn build_inject_config_splits_flexible_token_fields() {
-        let state = InjectState {
-            dns_servers: "1.1.1.1, 8.8.8.8".into(),
-            ntp_servers: "time1.example.com\ntime2.example.com".into(),
-            no_proxy: "localhost,127.0.0.1 internal.example.com".into(),
-            packages: "curl git\nhtop".into(),
-            allow_ports: "22 80/tcp".into(),
-            deny_ports: "23,25".into(),
-            grub_cmdline: "quiet splash".into(),
-            ..InjectState::default()
-        };
-
-        let cfg = build_inject_config(&state);
-        assert_eq!(cfg.network.dns_servers, vec!["1.1.1.1", "8.8.8.8"]);
-        assert_eq!(
-            cfg.network.ntp_servers,
-            vec!["time1.example.com", "time2.example.com"]
-        );
-        assert_eq!(
-            cfg.proxy.no_proxy,
-            vec!["localhost", "127.0.0.1", "internal.example.com"]
-        );
-        assert_eq!(cfg.extra_packages, vec!["curl", "git", "htop"]);
-        assert_eq!(cfg.firewall.allow_ports, vec!["22", "80/tcp"]);
-        assert_eq!(cfg.firewall.deny_ports, vec!["23", "25"]);
-        assert_eq!(cfg.grub.cmdline_extra, vec!["quiet", "splash"]);
     }
 }

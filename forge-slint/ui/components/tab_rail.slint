@@ -1,6 +1,6 @@
 // ── Tab Rail ────────────────────────────────────────────────────────────────
 // Vertical navigation rail for the Configure step.
-// Each tab item shows an icon, label, and optional completion indicator.
+// Each tab item shows a label and optional completion indicator.
 
 import { Palette, Sizes } from "../theme.slint";
 
@@ -62,8 +62,7 @@ export component TabRail inherits Rectangle {
     in property <int>  active-index: 0;
 
     // Completion flags per tab
-    in property <bool> identity-complete: false;
-    in property <bool> output-complete: false;
+    in property <bool> essentials-complete: false;
 
     callback tab-clicked(int);
 
@@ -82,25 +81,15 @@ export component TabRail inherits Rectangle {
         padding-top: Sizes.space-3;
         spacing: 2px;
 
-        TabRailItem { label: "Identity";          active: active-index == 0; complete: identity-complete;
+        TabRailItem { label: "Identity & Output"; active: active-index == 0; complete: essentials-complete;
             clicked => { tab-clicked(0); } }
-        TabRailItem { label: "Access & SSH";      active: active-index == 1;
+        TabRailItem { label: "Access & Network";  active: active-index == 1;
             clicked => { tab-clicked(1); } }
-        TabRailItem { label: "Network";           active: active-index == 2;
+        TabRailItem { label: "System & Packages"; active: active-index == 2;
             clicked => { tab-clicked(2); } }
-        TabRailItem { label: "System";            active: active-index == 3;
+        TabRailItem { label: "Services & Security"; active: active-index == 3;
             clicked => { tab-clicked(3); } }
-        TabRailItem { label: "Packages";          active: active-index == 4;
+        TabRailItem { label: "Storage & Advanced"; active: active-index == 4;
             clicked => { tab-clicked(4); } }
-        TabRailItem { label: "Firewall";          active: active-index == 5;
-            clicked => { tab-clicked(5); } }
-        TabRailItem { label: "Services";          active: active-index == 6;
-            clicked => { tab-clicked(6); } }
-        TabRailItem { label: "Storage & Boot";    active: active-index == 7;
-            clicked => { tab-clicked(7); } }
-        TabRailItem { label: "Advanced";          active: active-index == 8;
-            clicked => { tab-clicked(8); } }
-        TabRailItem { label: "Output";            active: active-index == 9; complete: output-complete;
-            clicked => { tab-clicked(9); } }
     }
 }
