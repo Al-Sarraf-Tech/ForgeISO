@@ -321,6 +321,11 @@ impl ForgeApp {
             h.abort();
         }
 
+        // Signal that detection is running
+        if let Some(w) = self.win.upgrade() {
+            w.global::<AppState>().set_detect_running(true);
+        }
+
         let engine = Arc::clone(&self.engine);
         let win2 = self.win.clone();
 
@@ -353,6 +358,13 @@ impl ForgeApp {
                         if !label.is_empty() && fs.get_output_label().is_empty() {
                             fs.set_output_label(label.into());
                         }
+                        w.global::<AppState>().set_detect_running(false);
+                    }
+                });
+            } else {
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(w) = win2.upgrade() {
+                        w.global::<AppState>().set_detect_running(false);
                     }
                 });
             }

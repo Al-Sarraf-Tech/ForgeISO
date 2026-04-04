@@ -54,7 +54,23 @@ export global FormState {
     in-out property <string>  mounts;
     in-out property <string>  grub-timeout;
     in-out property <string>  grub-cmdline;
+    in-out property <string>  grub-default;
     in-out property <string>  sysctl-pairs;
+
+    // ── Distro-specific repos ─────────────────────────────────────────────
+    in-out property <string>  dnf-mirror;
+    in-out property <string>  pacman-repos;
+    in-out property <string>  pacman-mirror;
+
+    // ── Extra access ──────────────────────────────────────────────────────
+    in-out property <string>  sudo-commands;
+
+    // ── Swap tuning ───────────────────────────────────────────────────────
+    in-out property <string>  swap-filename;
+    in-out property <string>  swap-swappiness;
+
+    // ── Desktop ───────────────────────────────────────────────────────────
+    in-out property <string>  wallpaper-path;
 
     // ── Output ─────────────────────────────────────────────────────────────
     in-out property <string>  output-dir;

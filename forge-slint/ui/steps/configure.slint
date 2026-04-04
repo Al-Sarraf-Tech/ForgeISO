@@ -83,9 +83,25 @@ export component StepConfigure inherits Rectangle {
     // GRUB
     in-out property <string> grub-timeout;
     in-out property <string> grub-cmdline;
+    in-out property <string> grub-default;
 
     // Sysctl
     in-out property <string> sysctl-pairs;
+
+    // Distro-specific repos
+    in-out property <string> dnf-mirror;
+    in-out property <string> pacman-repos;
+    in-out property <string> pacman-mirror;
+
+    // Extra access
+    in-out property <string> sudo-commands;
+
+    // Swap tuning
+    in-out property <string> swap-filename;
+    in-out property <string> swap-swappiness;
+
+    // Desktop
+    in-out property <string> wallpaper-path;
 
     // Output
     in-out property <string> output-dir;
@@ -333,13 +349,13 @@ export component StepConfigure inherits Rectangle {
                                 spacing: 16px;
                                 VerticalLayout {
                                     spacing: 4px;
-                                    FSectionLabel { text: "HOSTNAME"; }
-                                    FTextInput { value <=> hostname; hint: "myserver"; enabled: !running; }
+                                    FSectionLabel { text: "HOSTNAME *"; }
+                                    FTextInput { value <=> hostname; hint: "myserver"; enabled: !running; error: hostname == "" && username != ""; }
                                 }
                                 VerticalLayout {
                                     spacing: 4px;
-                                    FSectionLabel { text: "USERNAME"; }
-                                    FTextInput { value <=> username; hint: "admin"; enabled: !running; changed(t) => { username-changed(t); } }
+                                    FSectionLabel { text: "USERNAME *"; }
+                                    FTextInput { value <=> username; hint: "admin"; enabled: !running; error: username == "" && hostname != ""; changed(t) => { username-changed(t); } }
                                 }
                                 VerticalLayout {
                                     spacing: 4px;
@@ -431,8 +447,8 @@ export component StepConfigure inherits Rectangle {
                                 spacing: 16px;
                                 VerticalLayout {
                                     spacing: 4px;
-                                    FSectionLabel { text: "OUTPUT FILENAME"; }
-                                    FTextInput { value <=> out-name; hint: "forgeiso-local.iso"; enabled: !running; }
+                                    FSectionLabel { text: "OUTPUT FILENAME *"; }
+                                    FTextInput { value <=> out-name; hint: "forgeiso-local.iso"; enabled: !running; error: out-name == "" && output-dir != ""; }
                                 }
                                 VerticalLayout {
                                     spacing: 4px;
@@ -492,6 +508,11 @@ export component StepConfigure inherits Rectangle {
                                     + " for admin access once you choose a username. Edit only if you need something custom.";
                             }
                             FSwitch { label: "Passwordless sudo (NOPASSWD:ALL)"; checked <=> sudo-nopasswd; enabled: !running; }
+                            VerticalLayout {
+                                spacing: 4px;
+                                FSectionLabel { text: "SUDO COMMANDS  (one per line, blank = ALL)"; }
+                                FTextarea { value <=> sudo-commands; hint: "/usr/bin/systemctl restart nginx\n/usr/bin/docker *"; enabled: !running; }
+                            }
 
                             FDivider { label: "Network"; }
 
@@ -597,9 +618,30 @@ export component StepConfigure inherits Rectangle {
                                 FTextarea { value <=> apt-repos; hint: "ppa:ondrej/php\ndeb https://\u{2026}"; enabled: !running; }
                             }
                             if distro == "fedora": VerticalLayout {
-                                spacing: 4px;
-                                FSectionLabel { text: "EXTRA DNF REPOS  (one per line)"; }
-                                FTextarea { value <=> dnf-repos; hint: "https://rpm.example.com/repo"; enabled: !running; }
+                                spacing: 14px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "DNF MIRROR"; }
+                                    FTextInput { value <=> dnf-mirror; hint: "https://mirror.example.com/fedora"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "EXTRA DNF REPOS  (one per line)"; }
+                                    FTextarea { value <=> dnf-repos; hint: "https://rpm.example.com/repo"; enabled: !running; }
+                                }
+                            }
+                            if distro == "arch": VerticalLayout {
+                                spacing: 14px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "PACMAN MIRROR"; }
+                                    FTextInput { value <=> pacman-mirror; hint: "https://mirror.example.com/archlinux/$repo/os/$arch"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "EXTRA PACMAN REPOS  (one per line)"; }
+                                    FTextarea { value <=> pacman-repos; hint: "[myrepo]\nServer = https://\u{2026}"; enabled: !running; }
+                                }
                             }
                         }
 
@@ -687,8 +729,24 @@ export component StepConfigure inherits Rectangle {
                             }
 
                             // Storage & encryption
-                            FSectionLabel { text: "SWAP SIZE  (MB, blank = no swap)"; }
-                            FTextInput { value <=> swap-size-mb; hint: "2048"; enabled: !running; }
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "SWAP SIZE  (MB, blank = no swap)"; }
+                                    FTextInput { value <=> swap-size-mb; hint: "2048"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "SWAP FILE PATH"; }
+                                    FTextInput { value <=> swap-filename; hint: "/swap.img  (default)"; enabled: !running; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    FSectionLabel { text: "SWAPPINESS  (0\u{2013}200)"; }
+                                    FTextInput { value <=> swap-swappiness; hint: "60"; enabled: !running; }
+                                }
+                            }
                             FSwitch { label: "Enable LUKS disk encryption"; checked <=> encrypt; enabled: !running; }
                             if encrypt: VerticalLayout {
                                 spacing: 4px;
@@ -716,6 +774,11 @@ export component StepConfigure inherits Rectangle {
                                     FTextInput { value <=> grub-cmdline; hint: "quiet splash"; enabled: !running; }
                                 }
                             }
+                            VerticalLayout {
+                                spacing: 4px;
+                                FSectionLabel { text: "GRUB DEFAULT ENTRY"; }
+                                FTextInput { value <=> grub-default; hint: "0  (first entry)"; enabled: !running; }
+                            }
 
                             FDivider { label: "Custom Commands"; }
 
@@ -724,6 +787,15 @@ export component StepConfigure inherits Rectangle {
                             FFieldHelp { text: "Use for simple pre-install tasks. Leave blank unless you need custom behavior."; }
                             FSectionLabel { text: "LATE COMMANDS  (after install, in chroot)"; }
                             FTextarea { value <=> late-commands; hint: "curtin in-target -- apt-get install -y vim"; enabled: !running; }
+
+                            FDivider { label: "Desktop"; }
+
+                            VerticalLayout {
+                                spacing: 4px;
+                                FSectionLabel { text: "WALLPAPER PATH  (on target system)"; }
+                                FTextInput { value <=> wallpaper-path; hint: "/usr/share/backgrounds/custom.png"; enabled: !running; }
+                                FFieldHelp { text: "Path to the wallpaper image inside the installed system. Leave blank for distro default."; }
+                            }
 
                             FDivider { label: "Sysctl & Mode"; }
 

@@ -641,7 +641,15 @@ fn restore_inject(w: &AppWindow, s: &InjectState) {
     fs.set_mounts(s.mounts.clone().into());
     fs.set_grub_timeout(s.grub_timeout.clone().into());
     fs.set_grub_cmdline(s.grub_cmdline.clone().into());
+    fs.set_grub_default(s.grub_default.clone().into());
     fs.set_sysctl_pairs(s.sysctl_pairs.clone().into());
+    fs.set_dnf_mirror(s.dnf_mirror.clone().into());
+    fs.set_pacman_repos(s.pacman_repos.clone().into());
+    fs.set_pacman_mirror(s.pacman_mirror.clone().into());
+    fs.set_sudo_commands(s.sudo_commands.clone().into());
+    fs.set_swap_filename(s.swap_filename.clone().into());
+    fs.set_swap_swappiness(s.swap_swappiness.clone().into());
+    fs.set_wallpaper_path(s.wallpaper_path.clone().into());
     fs.set_no_user_interaction(s.no_user_interaction);
     fs.set_expected_sha256(s.expected_sha256.clone().into());
     let defaults_summary = if s.source_preset.is_empty() {

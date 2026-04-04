@@ -1,6 +1,7 @@
 import { Palette, Sizes } from "../theme.slint";
 import { FButton, FIconButton, FBadge, FDivider, FSectionLabel } from "../components/design_system.slint";
 import { ScrollView } from "std-widgets.slint";
+import { AppState } from "../globals/app_state.slint";
 
 export struct PresetCard {
     id: string,
@@ -207,6 +208,37 @@ export component StepSource inherits Rectangle {
                         width: 42px;
                         height: 42px;
                         clicked => { clear-clicked(); }
+                    }
+                }
+
+                // Detection loading indicator
+                if AppState.detect-running && detected-distro == "": HorizontalLayout {
+                    alignment: start;
+                    spacing: Sizes.space-2;
+                    Text {
+                        text: "Detecting distro\u{2026}";
+                        font-size: Sizes.font-xs;
+                        color: Palette.muted;
+                        vertical-alignment: center;
+                    }
+                    // Indeterminate dot animation
+                    Rectangle {
+                        width: 40px;
+                        height: 4px;
+                        border-radius: 2px;
+                        background: Palette.border-subtle;
+                        clip: true;
+                        y: (parent.height - self.height) / 2;
+                        property <float> sweep: 0.0;
+                        init => { sweep = 1.0; }
+                        animate sweep { duration: 1200ms; easing: ease-in-out; iteration-count: -1; }
+                        Rectangle {
+                            x: (parent.width + 16px) * sweep - 16px;
+                            width: 16px;
+                            height: parent.height;
+                            border-radius: 2px;
+                            background: Palette.accent;
+                        }
                     }
                 }
 

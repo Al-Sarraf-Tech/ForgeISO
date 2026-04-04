@@ -2,6 +2,63 @@ import { Palette, Sizes } from "../theme.slint";
 import { ScrollView } from "std-widgets.slint";
 import { FButton, FCard, FBadge, FDivider } from "../components/design_system.slint";
 
+component CollapsibleCard inherits Rectangle {
+    in property <string> title;
+    in-out property <bool> expanded: false;
+
+    border-radius: Sizes.radius-lg;
+    background: Palette.surface;
+    border-width: 1px;
+    border-color: Palette.border;
+    drop-shadow-blur: 4px;
+    drop-shadow-color: Palette.shadow-sm;
+    clip: true;
+
+    VerticalLayout {
+        // Title bar — always visible, clickable
+        Rectangle {
+            height: 40px;
+            HorizontalLayout {
+                padding-left: Sizes.space-5;
+                padding-right: Sizes.space-5;
+                alignment: space-between;
+                Text {
+                    text: title;
+                    font-size: Sizes.font-2xs;
+                    font-weight: 700;
+                    color: Palette.subtle;
+                    letter-spacing: 1.4px;
+                    vertical-alignment: center;
+                }
+                Text {
+                    text: expanded ? "\u{25B2}" : "\u{25BC}";
+                    font-size: Sizes.font-2xs;
+                    color: cc-ta.has-hover ? Palette.text-secondary : Palette.subtle;
+                    vertical-alignment: center;
+                    animate color { duration: 120ms; }
+                }
+            }
+            cc-ta := TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => { expanded = !expanded; }
+            }
+        }
+        Rectangle {
+            height: expanded ? 1px : 0px;
+            background: Palette.border;
+            opacity: 0.5;
+        }
+        // Content area — height collapses when not expanded
+        Rectangle {
+            height: expanded ? content-layout.preferred-height : 0px;
+            animate height { duration: 200ms; easing: ease-out; }
+            content-layout := VerticalLayout {
+                @children
+            }
+        }
+    }
+}
+
 component SummaryRow inherits Rectangle {
     in property <string> label;
     in property <string> value;
@@ -154,8 +211,9 @@ export component StepBuild inherits Rectangle {
             }
 
             // ── Source & Output ──────────────────────────────────────────
-            if artifact-path == "": FCard {
+            if artifact-path == "": CollapsibleCard {
                 title: "SOURCE & OUTPUT";
+                expanded: true;
                 VerticalLayout {
                     padding: Sizes.space-5;
                     spacing: Sizes.space-3;
@@ -169,7 +227,7 @@ export component StepBuild inherits Rectangle {
             }
 
             // ── Identity & Access ───────────────────────────────────────
-            if artifact-path == "": FCard {
+            if artifact-path == "": CollapsibleCard {
                 title: "IDENTITY & ACCESS";
                 VerticalLayout {
                     padding: Sizes.space-5;
@@ -201,7 +259,7 @@ export component StepBuild inherits Rectangle {
             }
 
             // ── System, Network & Security ──────────────────────────────
-            if artifact-path == "": FCard {
+            if artifact-path == "": CollapsibleCard {
                 title: "SYSTEM, NETWORK & SECURITY";
                 VerticalLayout {
                     padding: Sizes.space-5;
@@ -232,7 +290,7 @@ export component StepBuild inherits Rectangle {
             }
 
             // ── Packages, Services & Runtime ────────────────────────────
-            if artifact-path == "" && (packages != "" || extra-repos != "" || enable-services != "" || disable-services != "" || docker-on || podman-on || mounts != ""): FCard {
+            if artifact-path == "" && (packages != "" || extra-repos != "" || enable-services != "" || disable-services != "" || docker-on || podman-on || mounts != ""): CollapsibleCard {
                 title: "PACKAGES, SERVICES & RUNTIME";
                 VerticalLayout {
                     padding: Sizes.space-5;
@@ -253,7 +311,7 @@ export component StepBuild inherits Rectangle {
             }
 
             // ── Custom Behavior ─────────────────────────────────────────
-            if artifact-path == "" && (run-commands != "" || late-commands != "" || unattended): FCard {
+            if artifact-path == "" && (run-commands != "" || late-commands != "" || unattended): CollapsibleCard {
                 title: "CUSTOM BEHAVIOR";
                 VerticalLayout {
                     padding: Sizes.space-5;
