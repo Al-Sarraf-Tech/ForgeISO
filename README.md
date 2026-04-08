@@ -2,8 +2,8 @@
 
 > Turn a stock Linux ISO into a hands-free installer from your own Linux machine.
 
-[![CI](https://github.com/jalsarraf0/ForgeISO/actions/workflows/ci.yml/badge.svg)](https://github.com/jalsarraf0/ForgeISO/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/jalsarraf0/ForgeISO)](https://github.com/jalsarraf0/ForgeISO/releases/latest)
+[![CI](https://github.com/Al-Sarraf-Tech/ForgeISO/actions/workflows/ci.yml/badge.svg)](https://github.com/Al-Sarraf-Tech/ForgeISO/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Al-Sarraf-Tech/ForgeISO)](https://github.com/Al-Sarraf-Tech/ForgeISO/releases/latest)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 **Current version: v0.2.1**
@@ -37,7 +37,7 @@ back to the TUI or CLI depending on what your system supports.
 ### 1. Install ForgeISO
 
 Download the latest release from the
-[Releases page](https://github.com/jalsarraf0/ForgeISO/releases/latest).
+[Releases page](https://github.com/Al-Sarraf-Tech/ForgeISO/releases/latest).
 
 #### Fedora, Rocky, AlmaLinux, CentOS Stream
 
@@ -181,6 +181,7 @@ forgeiso scan --artifact custom.iso
 forgeiso test --iso custom.iso --bios --uefi
 forgeiso report --build ./artifacts --format html
 forgeiso sources list
+forgeiso vm emit --iso custom.iso --hypervisor qemu --firmware uefi
 ```
 
 For the full CLI surface:
@@ -233,7 +234,7 @@ checks source ISO hashes, never the output ISO hash as a trust source.
 Requires Rust 1.87+ plus `xorriso`, `squashfs-tools`, and `mtools`.
 
 ```bash
-git clone https://github.com/jalsarraf0/ForgeISO
+git clone https://github.com/Al-Sarraf-Tech/ForgeISO
 cd ForgeISO
 cargo build --release
 ```
