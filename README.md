@@ -252,6 +252,10 @@ sudo install -m755 target/release/forge-slint /usr/local/bin/
 See [AGENTS.md](AGENTS.md) for project architecture, build rules, and agent
 conventions.
 
+## CI/CD & Orchestration
+
+This project is governed by the [Haskell Orchestrator](https://github.com/Al-Sarraf-Tech/Haskell-Orchestrator) — a Haskell-based multi-agent CI/CD governance framework for pre-push validation, code quality enforcement, and release management across the Al-Sarraf-Tech organization.
+
 ## License
 
 [Apache-2.0](LICENSE)
