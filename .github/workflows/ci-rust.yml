@@ -115,6 +115,13 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
         run: find . -name '*.sh' -type f | xargs shfmt -d
+      - name: Install Trivy
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          if ! command -v trivy &>/dev/null; then
+            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          fi
       - name: Trivy filesystem scan
         shell: bash
         timeout-minutes: 15
