@@ -1411,3 +1411,271 @@ fn merge_autoinstall_yaml_deduplicates_existing_late_commands() {
         "merge must keep existing late-commands stable instead of duplicating them: {yaml}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Mutation-killing tests for the identity-presence guard in
+// generate_autoinstall_yaml() and merge_autoinstall_yaml().
+//
+// Each `||` between hostname/username/password/realname must be evaluated
+// independently — if any one field is set, the identity block must appear.
+// Mutants that swap any single `||` -> `&&` survive the existing
+// "all four set" / "all four unset" tests because both operators agree at
+// those endpoints.  These per-field tests pin down the boundary.
+// ---------------------------------------------------------------------------
+
+fn minimal_cfg() -> InjectConfig {
+    InjectConfig {
+        source: IsoSource::from_raw("/tmp/test.iso"),
+        out_name: "out.iso".to_string(),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn generate_emits_identity_block_when_only_hostname_is_set() {
+    let cfg = InjectConfig {
+        hostname: Some("only-hostname".to_string()),
+        ..minimal_cfg()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        yaml.contains("identity:"),
+        "identity block must appear when hostname alone is set: {yaml}"
+    );
+    assert!(
+        yaml.contains("only-hostname"),
+        "the configured hostname must appear in the YAML: {yaml}"
+    );
+}
+
+#[test]
+fn generate_emits_identity_block_when_only_username_is_set() {
+    let cfg = InjectConfig {
+        username: Some("only-username".to_string()),
+        ..minimal_cfg()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        yaml.contains("identity:"),
+        "identity block must appear when username alone is set: {yaml}"
+    );
+    assert!(
+        yaml.contains("only-username"),
+        "the configured username must appear in the YAML: {yaml}"
+    );
+}
+
+#[test]
+fn generate_emits_identity_block_when_only_password_is_set() {
+    let cfg = InjectConfig {
+        password: Some("uniquepw".to_string()),
+        ..minimal_cfg()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        yaml.contains("identity:"),
+        "identity block must appear when password alone is set: {yaml}"
+    );
+    assert!(
+        yaml.contains("$6$"),
+        "password must be SHA-512 hashed when emitted: {yaml}"
+    );
+}
+
+#[test]
+fn generate_emits_identity_block_when_only_realname_is_set() {
+    let cfg = InjectConfig {
+        realname: Some("Only Realname".to_string()),
+        ..minimal_cfg()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        yaml.contains("identity:"),
+        "identity block must appear when realname alone is set: {yaml}"
+    );
+    assert!(
+        yaml.contains("Only Realname"),
+        "the configured realname must appear in the YAML: {yaml}"
+    );
+}
+
+#[test]
+fn generate_omits_identity_block_when_no_identity_field_is_set() {
+    let yaml = generate_autoinstall_yaml(&minimal_cfg()).expect("generate must succeed");
+    assert!(
+        !yaml.contains("identity:"),
+        "identity block must NOT appear when every identity field is None: {yaml}"
+    );
+}
+
+#[test]
+fn merge_emits_identity_block_when_only_hostname_is_set() {
+    let existing = "autoinstall:\n  version: 1\n";
+    let cfg = InjectConfig {
+        hostname: Some("merge-hostname".to_string()),
+        ..minimal_cfg()
+    };
+    let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+    assert!(
+        yaml.contains("identity:"),
+        "merge must produce identity block when only hostname is set: {yaml}"
+    );
+    assert!(
+        yaml.contains("merge-hostname"),
+        "the configured hostname must appear in the merged YAML: {yaml}"
+    );
+}
+
+#[test]
+fn merge_emits_identity_block_when_only_username_is_set() {
+    let existing = "autoinstall:\n  version: 1\n";
+    let cfg = InjectConfig {
+        username: Some("merge-username".to_string()),
+        ..minimal_cfg()
+    };
+    let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+    assert!(
+        yaml.contains("identity:"),
+        "merge must produce identity block when only username is set: {yaml}"
+    );
+    assert!(
+        yaml.contains("merge-username"),
+        "the configured username must appear in the merged YAML: {yaml}"
+    );
+}
+
+#[test]
+fn merge_emits_identity_block_when_only_password_is_set() {
+    let existing = "autoinstall:\n  version: 1\n";
+    let cfg = InjectConfig {
+        password: Some("merge-pw".to_string()),
+        ..minimal_cfg()
+    };
+    let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+    assert!(
+        yaml.contains("identity:"),
+        "merge must produce identity block when only password is set: {yaml}"
+    );
+    assert!(
+        yaml.contains("$6$"),
+        "merged password must be SHA-512 hashed: {yaml}"
+    );
+}
+
+#[test]
+fn merge_emits_identity_block_when_only_realname_is_set() {
+    let existing = "autoinstall:\n  version: 1\n";
+    let cfg = InjectConfig {
+        realname: Some("Merge Realname".to_string()),
+        ..minimal_cfg()
+    };
+    let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+    assert!(
+        yaml.contains("identity:"),
+        "merge must produce identity block when only realname is set: {yaml}"
+    );
+    assert!(
+        yaml.contains("Merge Realname"),
+        "the configured realname must appear in the merged YAML: {yaml}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Mutation-killing test for the PPA / software-properties-common branch in
+// generate_autoinstall_yaml() at line 216:
+//     is_ubuntu_like && cfg.apt_repos.iter().any(|r| r.starts_with("ppa:"))
+//
+// A `&&` -> `||` mutant survives any test that either has both conditions
+// true or both false.  We need the half-true case: an Ubuntu-like distro
+// with a PPA repo and no other auto-feature packages.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn generate_adds_software_properties_common_for_ubuntu_with_ppa() {
+    let cfg = InjectConfig {
+        distro: None, // None = Ubuntu (is_ubuntu_like = true)
+        apt_repos: vec!["ppa:deadsnakes/ppa".to_string()],
+        ..minimal_cfg()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        yaml.contains("software-properties-common"),
+        "Ubuntu + PPA must auto-add software-properties-common to packages: {yaml}"
+    );
+}
+
+#[test]
+fn generate_does_not_add_software_properties_common_for_arch_with_ppa() {
+    // Pinning the negative case: an Arch system with a (nonsensical) PPA
+    // entry must NOT pull software-properties-common — Arch has no apt.
+    // This anchors the `is_ubuntu_like && ...` left-hand operand and kills
+    // the symmetric `&& -> ||` mutant.
+    let cfg = InjectConfig {
+        distro: Some(Distro::Arch),
+        apt_repos: vec!["ppa:deadsnakes/ppa".to_string()],
+        ..minimal_cfg()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        !yaml.contains("software-properties-common"),
+        "Arch must never auto-add software-properties-common (no apt): {yaml}"
+    );
+}
+
+#[test]
+fn generate_omits_software_properties_common_when_no_ppa_present() {
+    // The negative case for the right-hand operand: Ubuntu, no PPA -> no
+    // software-properties-common.  Without this assertion an `&& -> ||`
+    // mutant with apt_repos empty would still match the positive case.
+    let cfg = InjectConfig {
+        distro: None,
+        apt_repos: vec!["http://archive.ubuntu.com/ubuntu jammy main".to_string()],
+        ..minimal_cfg()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        !yaml.contains("software-properties-common"),
+        "Ubuntu with non-PPA apt_repos must not auto-add software-properties-common: {yaml}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Mutation-killing tests for the function-body return mutants
+// (generate_autoinstall_yaml -> EngineResult<String>::Ok(String::new()) and
+// merge_autoinstall_yaml -> EngineResult<String>::Ok(String::new())).
+//
+// The existing minimal-yaml test only asserts `starts_with("#cloud-config")`
+// which doesn't catch a mutant that returns an empty string in some
+// implementations (cargo-mutants substitutes via type-resolution paths).
+// These tests assert the YAML contains structural content that no
+// short-circuit return value could satisfy.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn generate_returns_yaml_with_storage_layout_section() {
+    // storage block is always emitted (required for fully unattended install).
+    // An empty / short-circuited return cannot satisfy this.
+    let yaml = generate_autoinstall_yaml(&minimal_cfg()).expect("generate must succeed");
+    assert!(
+        yaml.contains("storage:"),
+        "generate must emit a storage section in every output: {yaml}"
+    );
+    assert!(
+        yaml.contains("layout:"),
+        "generate must emit a storage layout in every output: {yaml}"
+    );
+}
+
+#[test]
+fn merge_returns_yaml_with_storage_layout_section() {
+    let existing = "autoinstall:\n  version: 1\n";
+    let yaml = merge_autoinstall_yaml(existing, &minimal_cfg()).expect("merge must succeed");
+    assert!(
+        yaml.contains("storage:"),
+        "merge must emit a storage section in every output: {yaml}"
+    );
+    assert!(
+        yaml.contains("layout:"),
+        "merge must emit a storage layout in every output: {yaml}"
+    );
+}
