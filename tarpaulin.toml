@@ -1,0 +1,36 @@
+# Library coverage gate. Excludes:
+# - cli/src/main.rs, cli/src/obs.rs, tui/*, forge-slint/*: these are
+#   binaries that drive interactive flows or shell out to xorriso/qemu.
+#   Tarpaulin can't instrument the slint codegen, the ratatui event loop,
+#   or subprocess execution and would falsely report near-zero coverage
+#   for them. They are exercised via end-to-end CI jobs and manual smoke
+#   testing, not by tarpaulin.
+# - engine/tests/*: tarpaulin double-counts integration test files that
+#   it also instruments; exclude to focus on library code under test.
+#
+# Current measured: 47.04% (1461/3106 library lines). Gate set to 40 to
+# allow ~5 points of flicker headroom plus a small buffer for cross-host
+# variance (xorriso-dependent paths run differently on workers without
+# xorriso installed). Ratchet target: 65%. Raise fail-under as coverage
+# improves; never lower it without an ADR.
+#
+# Pain points blocking ratchet:
+#   - engine/src/scanner.rs: 0/126   (needs no-tool fallback paths tested)
+#   - engine/src/orchestrator/scan_test.rs, inject.rs, mod.rs, build.rs:
+#     all 0% — exercise via mocked external tools
+#   - engine/src/iso.rs: 37/148      (xorriso branches uncovered)
+#   - engine/src/orchestrator/helpers.rs: 74/185 (process spawn paths)
+
+[default]
+exclude-files = [
+  "cli/src/main.rs",
+  "cli/src/obs.rs",
+  "tui/*",
+  "forge-slint/*",
+  "engine/tests/*",
+  "engine/benches/*",
+]
+fail-under = 40
+skip-clean = true
+out = ["Stdout", "Html"]
+output-dir = "target/tarpaulin"

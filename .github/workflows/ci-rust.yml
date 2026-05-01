@@ -85,6 +85,45 @@ jobs:
         shell: bash
         timeout-minutes: 20
         run: cargo test --workspace
+  coverage:
+    name: Coverage Gate
+    runs-on: [self-hosted, rust-slim]
+    needs: test
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: ~/.cargo/registry
+          restore-keys: ${{ runner.os }}-cargo-registry-
+      - name: Cache target
+        uses: actions/cache@v4
+        with:
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
+          path: target
+          restore-keys: ${{ runner.os }}-cargo-target-
+      - name: Install cargo-tarpaulin (pinned 0.35.4)
+        shell: bash
+        timeout-minutes: 10
+        run: |
+          if ! command -v cargo-tarpaulin >/dev/null; then
+            cargo install cargo-tarpaulin --version 0.35.4 --locked
+          fi
+          cargo tarpaulin --version
+      - name: Run coverage gate (config in tarpaulin.toml)
+        shell: bash
+        timeout-minutes: 25
+        run: cargo tarpaulin --workspace
+      - name: Upload tarpaulin report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarpaulin-report
+          path: target/tarpaulin/
+          retention-days: 14
   security:
     name: Security
     runs-on: [self-hosted, rust-slim]
