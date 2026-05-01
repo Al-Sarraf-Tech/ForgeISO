@@ -89,3 +89,79 @@ fn inject_accepts_sha256_uppercase() {
         "uppercase 64-char hex SHA-256 must pass"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Mutation-killing boundary tests for the output_label length check at
+// validate/output.rs:20:
+//     if label.len() > 32 { return Err(...) }
+//
+// A `> -> >=` mutant survives any test that uses a length bucket clearly
+// inside or outside the 33-char rejection range.  The two tests below pin
+// the boundary exactly: a 32-char label MUST pass; a 33-char label MUST
+// fail.  Together they make `>` and `>=` produce divergent verdicts.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn inject_accepts_output_label_at_max_length_32() {
+    let cfg = InjectConfig {
+        output_label: Some("a".repeat(32)),
+        out_name: "x.iso".into(),
+        ..Default::default()
+    };
+    assert!(
+        cfg.validate().is_ok(),
+        "output_label of exactly 32 chars must be accepted (boundary == 32)"
+    );
+}
+
+#[test]
+fn inject_rejects_output_label_over_max_length_32() {
+    let cfg = InjectConfig {
+        output_label: Some("a".repeat(33)),
+        out_name: "x.iso".into(),
+        ..Default::default()
+    };
+    assert!(
+        cfg.validate().is_err(),
+        "output_label of 33 chars must be rejected (boundary > 32)"
+    );
+}
+
+#[test]
+fn inject_rejects_output_label_blank() {
+    let cfg = InjectConfig {
+        output_label: Some("   ".into()),
+        out_name: "x.iso".into(),
+        ..Default::default()
+    };
+    assert!(
+        cfg.validate().is_err(),
+        "output_label that trims to empty must be rejected"
+    );
+}
+
+#[test]
+fn inject_rejects_output_label_with_non_ascii() {
+    let cfg = InjectConfig {
+        output_label: Some("Ubuntu-Édition".into()),
+        out_name: "x.iso".into(),
+        ..Default::default()
+    };
+    assert!(
+        cfg.validate().is_err(),
+        "output_label with non-ASCII chars must be rejected"
+    );
+}
+
+#[test]
+fn inject_rejects_output_label_with_control_char() {
+    let cfg = InjectConfig {
+        output_label: Some("Ubuntu\x01Build".into()),
+        out_name: "x.iso".into(),
+        ..Default::default()
+    };
+    assert!(
+        cfg.validate().is_err(),
+        "output_label with ASCII control char must be rejected"
+    );
+}
