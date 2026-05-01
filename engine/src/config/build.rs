@@ -330,6 +330,100 @@ mod tests {
     }
 
     #[test]
+    fn build_config_from_path_round_trips_through_yaml() {
+        let dir = tempfile::tempdir().expect("dir");
+        let p = dir.path().join("build.yaml");
+        std::fs::write(&p, "name: from-path-build\nsource: /tmp/x.iso\n").expect("write");
+        let cfg = BuildConfig::from_path(&p).expect("from_path must parse");
+        assert_eq!(cfg.name, "from-path-build");
+    }
+
+    #[test]
+    fn build_config_from_path_returns_err_for_missing_file() {
+        let r = BuildConfig::from_path(std::path::Path::new(
+            "/nonexistent/forgeiso-build-config.yaml",
+        ));
+        assert!(r.is_err(), "missing file must produce an Err");
+    }
+
+    #[test]
+    fn build_config_rejects_empty_source_path() {
+        let cfg = BuildConfig {
+            name: "n".to_string(),
+            source: IsoSource::Path(PathBuf::new()), // empty path
+            overlay_dir: None,
+            output_label: None,
+            profile: ProfileKind::Minimal,
+            auto_scan: false,
+            auto_test: false,
+            scanning: ScanPolicy::default(),
+            testing: TestingPolicy::default(),
+            keep_workdir: false,
+            expected_sha256: None,
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn build_config_rejects_url_without_http_scheme() {
+        let cfg = BuildConfig {
+            name: "n".to_string(),
+            source: IsoSource::Url("ftp://example.com/x.iso".to_string()),
+            overlay_dir: None,
+            output_label: None,
+            profile: ProfileKind::Minimal,
+            auto_scan: false,
+            auto_test: false,
+            scanning: ScanPolicy::default(),
+            testing: TestingPolicy::default(),
+            keep_workdir: false,
+            expected_sha256: None,
+        };
+        let r = cfg.validate();
+        assert!(matches!(r, Err(EngineError::InvalidConfig(_))));
+    }
+
+    #[test]
+    fn build_config_rejects_overlay_dir_pointing_at_a_file() {
+        // Path exists but is a file, not a dir -> must be rejected.
+        let dir = tempfile::tempdir().expect("dir");
+        let f = dir.path().join("overlay-as-file");
+        std::fs::write(&f, b"not a dir").expect("write");
+        let cfg = BuildConfig {
+            name: "n".to_string(),
+            source: IsoSource::from_raw("/tmp/x.iso"),
+            overlay_dir: Some(f),
+            output_label: None,
+            profile: ProfileKind::Minimal,
+            auto_scan: false,
+            auto_test: false,
+            scanning: ScanPolicy::default(),
+            testing: TestingPolicy::default(),
+            keep_workdir: false,
+            expected_sha256: None,
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn build_config_rejects_non_ascii_output_label() {
+        let cfg = BuildConfig {
+            name: "n".to_string(),
+            source: IsoSource::from_raw("/tmp/x.iso"),
+            overlay_dir: None,
+            output_label: Some("LÅBEL".to_string()), // non-ASCII Å
+            profile: ProfileKind::Minimal,
+            auto_scan: false,
+            auto_test: false,
+            scanning: ScanPolicy::default(),
+            testing: TestingPolicy::default(),
+            keep_workdir: false,
+            expected_sha256: None,
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
     fn build_config_rejects_auto_test_without_smoke() {
         let testing = TestingPolicy {
             smoke: false,

@@ -186,4 +186,155 @@ mod tests {
         assert_eq!(step.one_based(), 4);
         assert!(GuidedWorkflowStep::from_index(4).is_none());
     }
+
+    #[test]
+    fn next_chains_through_all_steps_then_terminates() {
+        assert_eq!(
+            GuidedWorkflowStep::Source.next(),
+            Some(GuidedWorkflowStep::Configure)
+        );
+        assert_eq!(
+            GuidedWorkflowStep::Configure.next(),
+            Some(GuidedWorkflowStep::Build)
+        );
+        assert_eq!(
+            GuidedWorkflowStep::Build.next(),
+            Some(GuidedWorkflowStep::OptionalChecks)
+        );
+        assert_eq!(GuidedWorkflowStep::OptionalChecks.next(), None);
+    }
+
+    #[test]
+    fn prev_chains_back_to_source_then_terminates() {
+        assert_eq!(GuidedWorkflowStep::Source.prev(), None);
+        assert_eq!(
+            GuidedWorkflowStep::Configure.prev(),
+            Some(GuidedWorkflowStep::Source)
+        );
+        assert_eq!(
+            GuidedWorkflowStep::Build.prev(),
+            Some(GuidedWorkflowStep::Configure)
+        );
+        assert_eq!(
+            GuidedWorkflowStep::OptionalChecks.prev(),
+            Some(GuidedWorkflowStep::Build)
+        );
+    }
+
+    #[test]
+    fn step_index_round_trips() {
+        for s in GuidedWorkflowStep::ALL {
+            let idx = s.index();
+            assert_eq!(GuidedWorkflowStep::from_index(idx), Some(s));
+        }
+    }
+
+    #[test]
+    fn label_and_subtitle_distinct_for_each_step() {
+        assert_eq!(GuidedWorkflowStep::Configure.label(), "Configure");
+        assert_eq!(
+            GuidedWorkflowStep::Configure.subtitle(),
+            "Required settings first"
+        );
+        assert_eq!(GuidedWorkflowStep::Build.label(), "Build");
+        assert_eq!(GuidedWorkflowStep::Build.subtitle(), "Create the ISO");
+    }
+
+    #[test]
+    fn can_open_step_blocks_skipping_required_predecessors() {
+        // No source ready, on Source step -> can NOT open Configure
+        let blocked = GuidedWorkflowProgress::default();
+        assert!(blocked.can_open_step(GuidedWorkflowStep::Source, GuidedWorkflowStep::Source));
+        assert!(!blocked.can_open_step(GuidedWorkflowStep::Source, GuidedWorkflowStep::Configure));
+        assert!(!blocked.can_open_step(GuidedWorkflowStep::Source, GuidedWorkflowStep::Build));
+        assert!(!blocked.can_open_step(
+            GuidedWorkflowStep::Source,
+            GuidedWorkflowStep::OptionalChecks
+        ));
+    }
+
+    #[test]
+    fn can_open_step_allows_revisiting_current_or_earlier_step() {
+        let progress = GuidedWorkflowProgress {
+            source_ready: false,
+            configure_done: false,
+            build_done: false,
+            verify_done: false,
+            iso9660_done: false,
+        };
+        // Already on Configure -> may revisit Configure even without source_ready
+        assert!(
+            progress.can_open_step(GuidedWorkflowStep::Configure, GuidedWorkflowStep::Configure)
+        );
+        // Source is always openable
+        assert!(progress.can_open_step(
+            GuidedWorkflowStep::OptionalChecks,
+            GuidedWorkflowStep::Source
+        ));
+    }
+
+    #[test]
+    fn checks_run_returns_true_when_either_check_done() {
+        let mut p = GuidedWorkflowProgress::default();
+        assert!(!p.checks_run());
+        p.verify_done = true;
+        assert!(p.checks_run());
+        let q = GuidedWorkflowProgress {
+            iso9660_done: true,
+            ..Default::default()
+        };
+        assert!(q.checks_run());
+    }
+
+    #[test]
+    fn optional_checks_summary_branches_correctly() {
+        let none_done = GuidedWorkflowProgress::default();
+        assert_eq!(none_done.optional_checks_summary(), "Build not finished");
+
+        let built_only = GuidedWorkflowProgress {
+            build_done: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            built_only.optional_checks_summary(),
+            "Optional checks skipped"
+        );
+
+        let built_and_checked = GuidedWorkflowProgress {
+            build_done: true,
+            verify_done: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            built_and_checked.optional_checks_summary(),
+            "Optional checks complete"
+        );
+    }
+
+    #[test]
+    fn step_complete_for_optional_checks_requires_either_check() {
+        let neither = GuidedWorkflowProgress {
+            build_done: true,
+            ..Default::default()
+        };
+        assert!(!neither.step_complete(GuidedWorkflowStep::OptionalChecks));
+
+        let with_iso9660 = GuidedWorkflowProgress {
+            build_done: true,
+            iso9660_done: true,
+            ..Default::default()
+        };
+        assert!(with_iso9660.step_complete(GuidedWorkflowStep::OptionalChecks));
+    }
+
+    #[test]
+    fn flow_complete_only_requires_build_done() {
+        let p = GuidedWorkflowProgress {
+            build_done: true,
+            ..Default::default()
+        };
+        assert!(p.flow_complete());
+        let q = GuidedWorkflowProgress::default();
+        assert!(!q.flow_complete());
+    }
 }

@@ -150,3 +150,133 @@ pub(super) fn arch(
     ));
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::InjectConfig;
+
+    #[test]
+    fn ubuntu_writes_user_data_and_meta_data_to_nocloud_overlay() {
+        let work = tempfile::tempdir().expect("work");
+        let engine = ForgeIsoEngine::new();
+        let cfg = InjectConfig {
+            hostname: Some("h".to_string()),
+            username: Some("u".to_string()),
+            password: Some("Secret123!".to_string()),
+            ..Default::default()
+        };
+        ubuntu(&engine, &cfg, work.path()).expect("ubuntu configure");
+        let user_data = work
+            .path()
+            .join("overlay")
+            .join("nocloud")
+            .join("user-data");
+        let meta_data = work
+            .path()
+            .join("overlay")
+            .join("nocloud")
+            .join("meta-data");
+        assert!(user_data.exists(), "user-data must be written");
+        assert!(meta_data.exists(), "meta-data must be written");
+        let body = std::fs::read_to_string(&user_data).expect("read user-data");
+        assert!(
+            body.contains("autoinstall"),
+            "user-data must contain autoinstall block"
+        );
+    }
+
+    #[test]
+    fn mint_writes_preseed_file() {
+        let work = tempfile::tempdir().expect("work");
+        let engine = ForgeIsoEngine::new();
+        let cfg = InjectConfig {
+            hostname: Some("mint-host".to_string()),
+            username: Some("mintuser".to_string()),
+            password: Some("Secret123!".to_string()),
+            ..Default::default()
+        };
+        mint(&engine, &cfg, work.path()).expect("mint configure");
+        let preseed = work.path().join("preseed.cfg");
+        assert!(preseed.exists());
+        let body = std::fs::read_to_string(&preseed).expect("read preseed");
+        // preseed.cfg should have d-i directives
+        assert!(
+            body.contains("d-i ") || body.contains("preseed"),
+            "preseed body should contain debian-installer directives"
+        );
+    }
+
+    #[test]
+    fn fedora_writes_kickstart_file() {
+        let work = tempfile::tempdir().expect("work");
+        let engine = ForgeIsoEngine::new();
+        let cfg = InjectConfig {
+            hostname: Some("fed-host".to_string()),
+            username: Some("feduser".to_string()),
+            password: Some("Secret123!".to_string()),
+            ..Default::default()
+        };
+        fedora(&engine, &cfg, work.path()).expect("fedora configure");
+        let ks = work.path().join("ks.cfg");
+        assert!(ks.exists());
+    }
+
+    #[test]
+    fn arch_writes_archinstall_config_and_launcher() {
+        let work = tempfile::tempdir().expect("work");
+        let engine = ForgeIsoEngine::new();
+        let cfg = InjectConfig {
+            distro: Some(crate::config::Distro::Arch),
+            hostname: Some("arch-host".to_string()),
+            username: Some("archuser".to_string()),
+            password: Some("Secret123!".to_string()),
+            ..Default::default()
+        };
+        arch(&engine, &cfg, work.path()).expect("arch configure");
+        let cfg_path = work.path().join("archinstall-config.json");
+        let launcher = work.path().join("run-archinstall.sh");
+        assert!(cfg_path.exists(), "archinstall-config.json must be written");
+        assert!(launcher.exists(), "run-archinstall.sh must be written");
+        let json = std::fs::read_to_string(&cfg_path).expect("read");
+        // Must be valid JSON
+        let _: serde_json::Value = serde_json::from_str(&json).expect("must parse as JSON");
+    }
+
+    #[test]
+    fn arch_emits_warnings_for_unsupported_features() {
+        // When unsupported features are set, the engine emits warn events that
+        // arch() reports out via the provided ForgeIsoEngine. We subscribe to
+        // events first, then run arch(), then drain the channel.
+        let work = tempfile::tempdir().expect("work");
+        let engine = ForgeIsoEngine::new();
+        let mut rx = engine.subscribe();
+
+        let cfg = InjectConfig {
+            distro: Some(crate::config::Distro::Arch),
+            hostname: Some("arch".to_string()),
+            username: Some("a".to_string()),
+            password: Some("Secret123!".to_string()),
+            sysctl: vec![("net.ipv4.ip_forward".into(), "1".into())],
+            run_commands: vec!["touch /tmp/x".into()],
+            ..Default::default()
+        };
+        arch(&engine, &cfg, work.path()).expect("arch configure");
+
+        // Drain all queued events and look for the unsupported-feature warnings.
+        let mut warns = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            if matches!(ev.level, crate::events::EventLevel::Warn) {
+                warns.push(ev.message);
+            }
+        }
+        assert!(
+            warns.iter().any(|m| m.contains("sysctl")),
+            "expected sysctl warning, got: {warns:?}"
+        );
+        assert!(
+            warns.iter().any(|m| m.contains("run_commands")),
+            "expected run_commands warning, got: {warns:?}"
+        );
+    }
+}

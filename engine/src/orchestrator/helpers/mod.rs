@@ -391,21 +391,23 @@ menuentry 'Mint' {\n\
 
     // ── cache helpers ────────────────────────────────────────────────────────
 
-    #[test]
-    fn cache_default_root_uses_forgeiso_cache_dir_env() {
+    use std::sync::Mutex;
+    // Serialize all env-var-touching tests in this module so cargo's parallel
+    // test runner doesn't interleave them and observe a "wrong" value of
+    // FORGEISO_CACHE_DIR mid-test.
+    static CACHE_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_cache_env<F: FnOnce(&std::path::Path)>(f: F) {
+        let guard = CACHE_ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let tmp = tempfile::tempdir().expect("tmp dir");
-        let custom = tmp.path().join("my-cache");
         let prior = std::env::var("FORGEISO_CACHE_DIR").ok();
-        // SAFETY: this test mutates a process-wide env var. Other tests in this
-        // module that depend on FORGEISO_CACHE_DIR run sequentially within the
-        // same #[cfg(test)] mod via cargo's per-test isolation when run with
-        // --test-threads=1 in CI; here we simply restore on exit.
+        // SAFETY: env var access serialized by CACHE_ENV_LOCK; restore on exit.
         unsafe {
-            std::env::set_var("FORGEISO_CACHE_DIR", &custom);
+            std::env::set_var("FORGEISO_CACHE_DIR", tmp.path());
         }
-        let root = default_cache_root().expect("default_cache_root");
-        assert_eq!(root, custom, "FORGEISO_CACHE_DIR must take precedence");
-        assert!(custom.exists(), "directory must be created");
+        f(tmp.path());
         match prior {
             Some(v) => unsafe {
                 std::env::set_var("FORGEISO_CACHE_DIR", v);
@@ -414,26 +416,25 @@ menuentry 'Mint' {\n\
                 std::env::remove_var("FORGEISO_CACHE_DIR");
             },
         }
+        drop(guard);
+    }
+
+    #[test]
+    fn cache_default_root_uses_forgeiso_cache_dir_env() {
+        with_cache_env(|tmp_path| {
+            let root = default_cache_root().expect("default_cache_root");
+            assert_eq!(root, tmp_path, "FORGEISO_CACHE_DIR must take precedence");
+            assert!(tmp_path.exists(), "directory must be created");
+        });
     }
 
     #[test]
     fn cache_subdir_creates_nested_directory() {
-        let tmp = tempfile::tempdir().expect("tmp dir");
-        let prior = std::env::var("FORGEISO_CACHE_DIR").ok();
-        unsafe {
-            std::env::set_var("FORGEISO_CACHE_DIR", tmp.path());
-        }
-        let sub = cache_subdir("inject-test").expect("cache_subdir");
-        assert!(sub.ends_with("inject-test"));
-        assert!(sub.exists(), "subdirectory must be created");
-        match prior {
-            Some(v) => unsafe {
-                std::env::set_var("FORGEISO_CACHE_DIR", v);
-            },
-            None => unsafe {
-                std::env::remove_var("FORGEISO_CACHE_DIR");
-            },
-        }
+        with_cache_env(|_tmp_path| {
+            let sub = cache_subdir("inject-test").expect("cache_subdir");
+            assert!(sub.ends_with("inject-test"));
+            assert!(sub.exists(), "subdirectory must be created");
+        });
     }
 
     // ── host helpers ─────────────────────────────────────────────────────────

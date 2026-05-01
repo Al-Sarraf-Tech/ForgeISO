@@ -386,6 +386,138 @@ mod tests {
     }
 
     #[test]
+    fn infer_from_label_recognises_each_known_distro() {
+        for (label, distro) in [
+            ("Ubuntu 24.04", Distro::Ubuntu),
+            ("Linux Mint 22", Distro::Mint),
+            ("Fedora 40 Server", Distro::Fedora),
+            ("Arch Linux 2026.05.01", Distro::Arch),
+        ] {
+            let mut info = empty_metadata();
+            infer_from_label(label, &mut info);
+            assert_eq!(info.distro, Some(distro), "label {label} -> {distro:?}");
+        }
+    }
+
+    #[test]
+    fn infer_from_label_leaves_distro_unset_for_unknown_label() {
+        let mut info = empty_metadata();
+        infer_from_label("UnknownDistro 1.0", &mut info);
+        assert!(info.distro.is_none(), "unknown label must not set a distro");
+    }
+
+    #[test]
+    fn infer_architecture_returns_none_for_unrecognised_text() {
+        assert!(infer_architecture("no architecture mentioned").is_none());
+    }
+
+    #[test]
+    fn infer_architecture_recognises_i686_aliases() {
+        assert_eq!(infer_architecture("Linux i386"), Some("i686".to_string()));
+        assert_eq!(infer_architecture("Linux i686"), Some("i686".to_string()));
+        assert_eq!(
+            infer_architecture("Live 32bit edition"),
+            Some("i686".to_string())
+        );
+    }
+
+    #[test]
+    fn capture_version_returns_none_for_label_without_digits() {
+        assert!(capture_version("no digits here").is_none());
+    }
+
+    #[test]
+    fn infer_from_arch_version_sets_distro_and_release() {
+        let mut info = empty_metadata();
+        infer_from_arch_version("2026.05.01\n", &mut info);
+        assert_eq!(info.distro, Some(Distro::Arch));
+        assert_eq!(info.release.as_deref(), Some("2026.05.01"));
+    }
+
+    #[test]
+    fn infer_from_arch_version_leaves_release_unset_for_blank_body() {
+        let mut info = empty_metadata();
+        infer_from_arch_version("\n", &mut info);
+        assert_eq!(info.distro, Some(Distro::Arch));
+        assert!(info.release.is_none(), "blank body must not set release");
+    }
+
+    #[test]
+    fn infer_from_disk_info_does_not_overwrite_existing_edition() {
+        let mut info = empty_metadata();
+        info.edition = Some("Pre-set".to_string());
+        infer_from_disk_info("Ubuntu 24.04", &mut info);
+        assert_eq!(
+            info.edition.as_deref(),
+            Some("Pre-set"),
+            "edition must not be overwritten"
+        );
+    }
+
+    #[test]
+    fn read_primary_volume_id_rejects_too_small_file() {
+        let dir = tempfile::tempdir().expect("dir");
+        let p = dir.path().join("small.iso");
+        std::fs::write(&p, b"not enough bytes").expect("write");
+        let r = read_primary_volume_id(&p);
+        assert!(matches!(r, Err(EngineError::InvalidConfig(_))));
+    }
+
+    #[test]
+    fn read_primary_volume_id_rejects_file_without_cd001() {
+        let dir = tempfile::tempdir().expect("dir");
+        let p = dir.path().join("blob.iso");
+        std::fs::write(&p, vec![0_u8; 17 * 2048]).expect("write");
+        let r = read_primary_volume_id(&p);
+        assert!(matches!(r, Err(EngineError::InvalidConfig(_))));
+    }
+
+    #[test]
+    fn read_primary_volume_id_returns_volume_label_when_present() {
+        let dir = tempfile::tempdir().expect("dir");
+        let p = dir.path().join("ok.iso");
+        let mut blob = vec![0_u8; 17 * 2048];
+        let pvd = 16 * 2048;
+        blob[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
+        blob[pvd + 40..pvd + 48].copy_from_slice(b"FORGEISO");
+        std::fs::write(&p, &blob).expect("write");
+        let vid = read_primary_volume_id(&p).expect("read");
+        assert_eq!(vid.as_deref(), Some("FORGEISO"));
+    }
+
+    #[test]
+    fn read_primary_volume_id_returns_none_for_empty_label() {
+        let dir = tempfile::tempdir().expect("dir");
+        let p = dir.path().join("blank.iso");
+        let mut blob = vec![0_u8; 17 * 2048];
+        let pvd = 16 * 2048;
+        blob[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
+        // bytes 40..72 stay zero -> label is empty after trim
+        std::fs::write(&p, &blob).expect("write");
+        let vid = read_primary_volume_id(&p).expect("read");
+        assert!(vid.is_none(), "empty PVD label must yield None");
+    }
+
+    fn empty_metadata() -> IsoMetadata {
+        IsoMetadata {
+            source_path: PathBuf::from("/tmp/test.iso"),
+            source_kind: SourceKind::LocalPath,
+            source_value: "/tmp/test.iso".to_string(),
+            size_bytes: 0,
+            sha256: String::new(),
+            volume_id: None,
+            distro: None,
+            release: None,
+            edition: None,
+            architecture: None,
+            rootfs_path: None,
+            boot: BootSupport::default(),
+            inspected_at: String::new(),
+            warnings: Vec::new(),
+        }
+    }
+
+    #[test]
     fn infer_from_treeinfo_fedora_sets_distro_and_release() {
         let body = "[general]\nfamily = Fedora\nversion = 40\narch = x86_64\nvariant = Server\n";
         let mut info = IsoMetadata {

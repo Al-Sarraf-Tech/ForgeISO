@@ -209,3 +209,193 @@ fn patch_efi_grub_if_present(extract_dir: &Path, kernel_append: &str) -> EngineR
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::InjectConfig;
+
+    #[test]
+    fn patch_lines_starting_with_appends_only_to_matching_lines() {
+        let input = "  APPEND foo bar\nLABEL x\n  APPEND baz\n";
+        let out = patch_lines_starting_with(input, "APPEND ", " EXTRA");
+        assert!(
+            out.contains("APPEND foo bar EXTRA"),
+            "first APPEND must be patched: {out}"
+        );
+        assert!(
+            out.contains("APPEND baz EXTRA"),
+            "second APPEND must be patched: {out}"
+        );
+        assert!(
+            out.contains("LABEL x"),
+            "non-matching line must be unchanged: {out}"
+        );
+    }
+
+    #[test]
+    fn patch_lines_starting_with_terminates_with_single_newline() {
+        let out = patch_lines_starting_with("only a single line\n", "APPEND ", " X");
+        assert!(out.ends_with('\n'), "output must end with newline");
+        // No double-newline at end
+        assert!(
+            !out.ends_with("\n\n"),
+            "must not produce trailing blank line"
+        );
+    }
+
+    #[test]
+    fn patch_lines_starting_with_does_nothing_when_prefix_not_present() {
+        let input = "no matching lines here\n";
+        let out = patch_lines_starting_with(input, "APPEND ", " X");
+        // Lines retained, with single trailing newline.
+        assert_eq!(out, "no matching lines here\n");
+    }
+
+    #[test]
+    fn patch_efi_grub_if_present_skips_when_file_absent() {
+        let dir = tempfile::tempdir().expect("dir");
+        // No EFI/BOOT/grub.cfg at all
+        patch_efi_grub_if_present(dir.path(), " inst.ks=cdrom:/ks.cfg")
+            .expect("must succeed when file absent");
+    }
+
+    #[test]
+    fn patch_efi_grub_if_present_patches_when_file_exists() {
+        let dir = tempfile::tempdir().expect("dir");
+        let efi = dir.path().join("EFI").join("BOOT");
+        std::fs::create_dir_all(&efi).expect("mkdir");
+        std::fs::write(
+            efi.join("grub.cfg"),
+            "menuentry 'Fedora' {\n  linuxefi /vmlinuz quiet\n}\n",
+        )
+        .expect("write");
+        patch_efi_grub_if_present(dir.path(), " inst.ks=cdrom:/ks.cfg").expect("patch");
+        let body = std::fs::read_to_string(efi.join("grub.cfg")).expect("read");
+        assert!(
+            body.contains("linuxefi /vmlinuz quiet inst.ks=cdrom:/ks.cfg"),
+            "linuxefi line was not patched: {body}"
+        );
+    }
+
+    #[test]
+    fn ubuntu_place_creates_nocloud_directory_and_patches_grub() {
+        let work = tempfile::tempdir().expect("work");
+        let extract = tempfile::tempdir().expect("extract");
+        // Pre-populate nocloud overlay (configure phase would have done this)
+        let nocloud = work.path().join("overlay").join("nocloud");
+        std::fs::create_dir_all(&nocloud).expect("mkdir");
+        std::fs::write(nocloud.join("user-data"), b"#cloud-config\n").expect("write user-data");
+        std::fs::write(nocloud.join("meta-data"), b"").expect("write meta-data");
+        // Pre-populate boot/grub/grub.cfg so patching has something to do
+        let grub = extract.path().join("boot").join("grub");
+        std::fs::create_dir_all(&grub).expect("mkdir");
+        std::fs::write(grub.join("grub.cfg"), "linux\t/casper/vmlinuz quiet ---\n")
+            .expect("write grub.cfg");
+
+        let engine = ForgeIsoEngine::new();
+        let cfg = InjectConfig {
+            hostname: Some("h".to_string()),
+            ..Default::default()
+        };
+        ubuntu(&engine, &cfg, work.path(), extract.path()).expect("place ubuntu");
+
+        // nocloud/ must be created at extract root
+        assert!(
+            extract.path().join("nocloud").join("user-data").exists(),
+            "nocloud/user-data must be copied"
+        );
+        assert!(extract.path().join("nocloud").join("meta-data").exists());
+
+        // grub.cfg must be patched
+        let body = std::fs::read_to_string(grub.join("grub.cfg")).expect("read grub.cfg");
+        assert!(
+            body.contains("autoinstall ds=nocloud"),
+            "grub.cfg must be patched: {body}"
+        );
+    }
+
+    #[test]
+    fn fedora_place_copies_kickstart_and_patches_grub() {
+        let work = tempfile::tempdir().expect("work");
+        let extract = tempfile::tempdir().expect("extract");
+        std::fs::write(work.path().join("ks.cfg"), b"# kickstart\n").expect("write ks.cfg");
+        let grub = extract.path().join("boot").join("grub");
+        std::fs::create_dir_all(&grub).expect("mkdir");
+        std::fs::write(
+            grub.join("grub.cfg"),
+            "linux\t/boot/vmlinuz inst.stage2=hd:LABEL=Fedora\n",
+        )
+        .expect("write grub.cfg");
+
+        let engine = ForgeIsoEngine::new();
+        fedora(&engine, work.path(), extract.path()).expect("place fedora");
+
+        assert!(extract.path().join("ks.cfg").exists());
+        let body = std::fs::read_to_string(grub.join("grub.cfg")).expect("read");
+        assert!(
+            body.contains("inst.ks=cdrom:/ks.cfg"),
+            "fedora grub.cfg must be patched: {body}"
+        );
+    }
+
+    #[test]
+    fn mint_place_copies_preseed_and_patches_grub() {
+        let work = tempfile::tempdir().expect("work");
+        let extract = tempfile::tempdir().expect("extract");
+        std::fs::write(work.path().join("preseed.cfg"), b"# preseed\n").expect("write");
+        let grub = extract.path().join("boot").join("grub");
+        std::fs::create_dir_all(&grub).expect("mkdir");
+        std::fs::write(
+            grub.join("grub.cfg"),
+            "linux\t/casper/vmlinuz quiet splash ---\n",
+        )
+        .expect("write grub.cfg");
+
+        let engine = ForgeIsoEngine::new();
+        mint(&engine, work.path(), extract.path()).expect("place mint");
+
+        assert!(extract.path().join("preseed.cfg").exists());
+        let body = std::fs::read_to_string(grub.join("grub.cfg")).expect("read");
+        assert!(
+            body.contains("preseed/file=/cdrom/preseed.cfg"),
+            "mint grub.cfg must be patched: {body}"
+        );
+    }
+
+    #[test]
+    fn arch_place_copies_files_and_patches_syslinux() {
+        let work = tempfile::tempdir().expect("work");
+        let extract = tempfile::tempdir().expect("extract");
+        // Put archinstall config + launcher in workspace
+        std::fs::write(work.path().join("archinstall-config.json"), b"{}\n").expect("write json");
+        std::fs::write(
+            work.path().join("run-archinstall.sh"),
+            b"#!/bin/sh\necho hi\n",
+        )
+        .expect("write launcher");
+        // Pre-populate syslinux config the patcher should find
+        let syslinux = extract.path().join("syslinux");
+        std::fs::create_dir_all(&syslinux).expect("mkdir syslinux");
+        std::fs::write(
+            syslinux.join("archiso_sys.conf"),
+            "LABEL arch64\n  APPEND initrd=/arch/boot/x86_64/initramfs-linux.img\n",
+        )
+        .expect("write syslinux conf");
+
+        let engine = ForgeIsoEngine::new();
+        arch(&engine, work.path(), extract.path()).expect("place arch");
+
+        // archinstall files copied into arch/boot/
+        let arch_boot = extract.path().join("arch").join("boot");
+        assert!(arch_boot.join("archinstall-config.json").exists());
+        assert!(arch_boot.join("run-archinstall.sh").exists());
+
+        // syslinux APPEND patched
+        let body = std::fs::read_to_string(syslinux.join("archiso_sys.conf")).expect("read");
+        assert!(
+            body.contains("archiso_script=/arch/boot/run-archinstall.sh"),
+            "syslinux APPEND must contain archiso_script: {body}"
+        );
+    }
+}
