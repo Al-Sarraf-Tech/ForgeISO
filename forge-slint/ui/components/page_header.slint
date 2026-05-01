@@ -1,5 +1,5 @@
 import { Palette, Sizes } from "../theme.slint";
-import { FIconButton } from "design_system.slint";
+import { FImageIconButton } from "design_system.slint";
 
 // ── PageHeader — slim title bar for the content area ───────────────────────
 // Sits ABOVE the active step content, INSIDE the main panel (not global chrome).
@@ -114,14 +114,14 @@ export component PageHeader inherits Rectangle {
             spacing: Sizes.space-2;
             alignment: end;
 
-            FIconButton {
-                icon: "\u{2699}";  // gear (replaces wrench)
+            FImageIconButton {
+                icon-source: @image-url("../icons/settings.svg");
                 active: doctor-open;
                 clicked => { root.doctor-toggled(); }
             }
 
-            if job-running: FIconButton {
-                icon: "\u{2715}";
+            if job-running: FImageIconButton {
+                icon-source: @image-url("../icons/x.svg");
                 variant: "destructive";
                 clicked => { root.cancel(); }
             }

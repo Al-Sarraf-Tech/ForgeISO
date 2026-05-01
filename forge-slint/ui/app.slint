@@ -363,6 +363,14 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             spacing: Sizes.space-2;
             alignment: center;
+            Image {
+                source: @image-url("icons/activity.svg");
+                width: 13px;
+                height: 13px;
+                y: (parent.height - self.height) / 2;
+                colorize: log-btn-ta.has-hover ? Palette.text : Palette.text-secondary;
+                image-fit: contain;
+            }
             Text {
                 text: AppState.log-open ? "Hide Log" : "Activity";
                 font-size: Sizes.font-xs;
@@ -429,12 +437,14 @@ export component AppWindow inherits Window {
                         background: doc-close-ta.has-hover ? Palette.active : transparent;
                         animate background { duration: 100ms; }
                         y: (parent.height - self.height) / 2;
-                        Text {
-                            text: "\u{2715}";
-                            font-size: 11px;
-                            color: Palette.muted;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
+                        Image {
+                            source: @image-url("icons/x.svg");
+                            width: 12px;
+                            height: 12px;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                            colorize: doc-close-ta.has-hover ? Palette.text : Palette.muted;
+                            image-fit: contain;
                         }
                         doc-close-ta := TouchArea {
                             mouse-cursor: MouseCursor.pointer;

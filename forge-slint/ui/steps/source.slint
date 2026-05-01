@@ -1,5 +1,5 @@
 import { Palette, Sizes } from "../theme.slint";
-import { FButton, FIconButton, FBadge, FDivider, FSectionLabel } from "../components/design_system.slint";
+import { FButton, FImageIconButton, FBadge, FDivider, FSectionLabel } from "../components/design_system.slint";
 import { ScrollView } from "std-widgets.slint";
 import { AppState } from "../globals/app_state.slint";
 
@@ -201,8 +201,8 @@ export component StepSource inherits Rectangle {
                     }
 
                     // Clear button
-                    if source-path != "": FIconButton {
-                        icon: "\u{2715}";
+                    if source-path != "": FImageIconButton {
+                        icon-source: @image-url("../icons/x.svg");
                         variant: "destructive";
                         enabled: !running;
                         width: 42px;
@@ -245,8 +245,17 @@ export component StepSource inherits Rectangle {
                 // Detected distro badge
                 if detected-distro != "": HorizontalLayout {
                     alignment: start;
+                    spacing: Sizes.space-2;
+                    Image {
+                        source: @image-url("../icons/check.svg");
+                        width: 14px;
+                        height: 14px;
+                        y: (parent.height - self.height) / 2;
+                        colorize: Palette.green;
+                        image-fit: contain;
+                    }
                     FBadge {
-                        text: "\u{2713} Detected: " + detected-distro;
+                        text: "Detected: " + detected-distro;
                         variant: "success";
                         height: 26px;
                         border-radius: 13px;

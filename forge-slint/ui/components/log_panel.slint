@@ -91,12 +91,14 @@ export component LogPanel inherits Rectangle {
                         border-radius: 11px;
                         background: lp-close-ta.has-hover ? Palette.active : transparent;
                         animate background { duration: 100ms; }
-                        Text {
-                            text: "\u{2715}";
-                            font-size: 11px;
-                            color: Palette.muted;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
+                        Image {
+                            source: @image-url("../icons/x.svg");
+                            width: 12px;
+                            height: 12px;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                            colorize: lp-close-ta.has-hover ? Palette.text : Palette.muted;
+                            image-fit: contain;
                         }
                         lp-close-ta := TouchArea {
                             mouse-cursor: MouseCursor.pointer;

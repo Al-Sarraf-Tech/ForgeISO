@@ -126,6 +126,52 @@ export component FIconButton inherits Rectangle {
     }
 }
 
+// ── FImageIconButton ────────────────────────────────────────────────────────
+// Icon button that renders a vector SVG via @image-url instead of a Unicode glyph.
+// Use this for chrome controls (settings, close, theme toggle, etc.).
+
+export component FImageIconButton inherits Rectangle {
+    in property <image>  icon-source;
+    in property <length> icon-size: 16px;
+    in property <bool>   enabled: true;
+    in property <bool>   active: false;
+    in property <string> variant: "default";  // "default" | "destructive"
+    callback clicked();
+
+    width: 32px;
+    height: 32px;
+    border-radius: Sizes.radius-sm;
+    opacity: enabled ? 1.0 : 0.5;
+
+    background: active ? Palette.accent
+              : variant == "destructive"
+                ? (ta.has-hover && enabled ? Palette.red-soft-hover : Palette.red-soft)
+              : (ta.has-hover && enabled ? Palette.active : transparent);
+    border-width: variant == "destructive" ? 1px : 0px;
+    border-color: variant == "destructive" ? Palette.red-soft-border : transparent;
+    animate background { duration: 120ms; }
+    animate border-color { duration: 120ms; }
+
+    Image {
+        source: icon-source;
+        width: icon-size;
+        height: icon-size;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        image-fit: contain;
+        colorize: active ? Palette.on-accent
+                : variant == "destructive" ? Palette.red
+                : ta.has-hover && enabled ? Palette.text
+                : Palette.text-secondary;
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => { root.clicked(); }
+    }
+}
+
 // ── FTextInput ──────────────────────────────────────────────────────────────
 // Text input with label, placeholder, error state, and help text.
 

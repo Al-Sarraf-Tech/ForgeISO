@@ -1,0 +1,128 @@
+import { Palette, Sizes } from "../theme.slint";
+
+// ── FIcon — single source for vector icons ──────────────────────────────────
+// Each export wraps an SVG file with theme-tinted colorize. Default size 16px,
+// default color Palette.text-secondary. Override via `size` and `color` props.
+//
+// Usage:
+//   FIconSettings { color: Palette.muted; size: 18px; }
+//   FIconCheck { color: Palette.green; size: 14px; }
+//
+// Adding a new icon: drop the SVG into ui/icons/ then add a wrapper here.
+
+export component FIconSettings inherits Image {
+    in property <length> size: 16px;
+    in property <color>  color: Palette.text-secondary;
+    width: size; height: size;
+    source: @image-url("../icons/settings.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconX inherits Image {
+    in property <length> size: 14px;
+    in property <color>  color: Palette.text-secondary;
+    width: size; height: size;
+    source: @image-url("../icons/x.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconCheck inherits Image {
+    in property <length> size: 14px;
+    in property <color>  color: Palette.green;
+    width: size; height: size;
+    source: @image-url("../icons/check.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconMoon inherits Image {
+    in property <length> size: 14px;
+    in property <color>  color: Palette.text-secondary;
+    width: size; height: size;
+    source: @image-url("../icons/moon.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconSun inherits Image {
+    in property <length> size: 14px;
+    in property <color>  color: Palette.text-secondary;
+    width: size; height: size;
+    source: @image-url("../icons/sun.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconAlert inherits Image {
+    in property <length> size: 16px;
+    in property <color>  color: Palette.amber;
+    width: size; height: size;
+    source: @image-url("../icons/alert-triangle.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconInfo inherits Image {
+    in property <length> size: 16px;
+    in property <color>  color: Palette.info;
+    width: size; height: size;
+    source: @image-url("../icons/info.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconActivity inherits Image {
+    in property <length> size: 14px;
+    in property <color>  color: Palette.text-secondary;
+    width: size; height: size;
+    source: @image-url("../icons/activity.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconFolder inherits Image {
+    in property <length> size: 16px;
+    in property <color>  color: Palette.text-secondary;
+    width: size; height: size;
+    source: @image-url("../icons/folder.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconDisc inherits Image {
+    in property <length> size: 16px;
+    in property <color>  color: Palette.text-secondary;
+    width: size; height: size;
+    source: @image-url("../icons/disc.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconShield inherits Image {
+    in property <length> size: 16px;
+    in property <color>  color: Palette.green;
+    width: size; height: size;
+    source: @image-url("../icons/shield-check.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconTerminal inherits Image {
+    in property <length> size: 14px;
+    in property <color>  color: Palette.text-secondary;
+    width: size; height: size;
+    source: @image-url("../icons/terminal.svg");
+    colorize: color;
+    image-fit: contain;
+}
+
+export component FIconChevron inherits Image {
+    in property <length> size: 14px;
+    in property <color>  color: Palette.muted;
+    width: size; height: size;
+    source: @image-url("../icons/chevron-right.svg");
+    colorize: color;
+    image-fit: contain;
+}

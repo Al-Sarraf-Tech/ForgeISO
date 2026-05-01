@@ -33,7 +33,7 @@ component SidebarItem inherits Rectangle {
         spacing: Sizes.space-3;
         alignment: start;
 
-        // Step badge — checkmark when done, number otherwise
+        // Step badge — vector check when done, number when current/pending
         Rectangle {
             width: 26px;
             height: 26px;
@@ -46,13 +46,20 @@ component SidebarItem inherits Rectangle {
             border-color: Palette.border;
             animate background { duration: 200ms; }
 
-            Text {
-                text: done ? "\u{2713}" : num;
+            if done: Image {
+                source: @image-url("../icons/check.svg");
+                width: 14px;
+                height: 14px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                colorize: Palette.on-accent;
+                image-fit: contain;
+            }
+            if !done: Text {
+                text: num;
                 font-size: Sizes.font-xs;
                 font-weight: 700;
-                color: done ? Palette.on-accent
-                     : current ? Palette.on-accent
-                     : Palette.muted;
+                color: current ? Palette.on-accent : Palette.muted;
                 vertical-alignment: center;
                 horizontal-alignment: center;
             }

@@ -123,11 +123,15 @@ export component StatusBar inherits Rectangle {
                     padding-right: Sizes.space-3;
                     spacing: Sizes.space-2;
                     alignment: start;
-                    Text {
-                        text: Theme.mode == "light" ? "\u{263E}" : "\u{2600}"; // crescent / sun
-                        font-size: Sizes.font-sm;
-                        color: Palette.text-secondary;
-                        vertical-alignment: center;
+                    Image {
+                        source: Theme.mode == "light"
+                            ? @image-url("../icons/moon.svg")
+                            : @image-url("../icons/sun.svg");
+                        width: 14px;
+                        height: 14px;
+                        y: (parent.height - self.height) / 2;
+                        colorize: Palette.text-secondary;
+                        image-fit: contain;
                     }
                     Text {
                         text: Theme.mode == "light" ? "DARK" : "LIGHT";

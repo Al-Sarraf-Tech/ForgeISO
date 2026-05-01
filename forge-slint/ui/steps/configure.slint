@@ -201,10 +201,13 @@ export component StepConfigure inherits Rectangle {
                     HorizontalLayout {
                         spacing: 8px;
                         alignment: start;
-                        Text {
-                            text: "\u{1F4C0}";
-                            font-size: 16px;
-                            vertical-alignment: center;
+                        Image {
+                            source: @image-url("../icons/disc.svg");
+                            width: 16px;
+                            height: 16px;
+                            y: (parent.height - self.height) / 2;
+                            colorize: Palette.accent;
+                            image-fit: contain;
                         }
                         Text {
                             text: source-display;
@@ -238,10 +241,13 @@ export component StepConfigure inherits Rectangle {
                     HorizontalLayout {
                         spacing: 6px;
                         alignment: start;
-                        Text {
-                            text: "\u{2699}";
-                            font-size: 14px;
-                            vertical-alignment: center;
+                        Image {
+                            source: @image-url("../icons/settings.svg");
+                            width: 14px;
+                            height: 14px;
+                            y: (parent.height - self.height) / 2;
+                            colorize: Palette.green;
+                            image-fit: contain;
                         }
                         Text {
                             text: "Defaults: " + defaults-summary;
@@ -382,13 +388,25 @@ export component StepConfigure inherits Rectangle {
                                 background: Palette.red-soft;
                                 border-width: 1px;
                                 border-color: Palette.red-soft-border;
-                                Text {
-                                    text: "\u{26A0} Passwords do not match";
-                                    font-size: Sizes.font-xs;
-                                    color: Palette.red;
-                                    vertical-alignment: center;
-                                    horizontal-alignment: left;
-                                    x: 12px;
+                                HorizontalLayout {
+                                    padding-left: 10px;
+                                    padding-right: 10px;
+                                    spacing: 6px;
+                                    alignment: start;
+                                    Image {
+                                        source: @image-url("../icons/alert-triangle.svg");
+                                        width: 13px;
+                                        height: 13px;
+                                        y: (parent.height - self.height) / 2;
+                                        colorize: Palette.red;
+                                        image-fit: contain;
+                                    }
+                                    Text {
+                                        text: "Passwords do not match";
+                                        font-size: Sizes.font-xs;
+                                        color: Palette.red;
+                                        vertical-alignment: center;
+                                    }
                                 }
                             }
 
