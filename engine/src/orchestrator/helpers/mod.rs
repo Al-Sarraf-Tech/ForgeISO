@@ -388,4 +388,210 @@ menuentry 'Mint' {\n\
             "podman must be in archinstall packages: {pkg_names:?}"
         );
     }
+
+    // ── cache helpers ────────────────────────────────────────────────────────
+
+    #[test]
+    fn cache_default_root_uses_forgeiso_cache_dir_env() {
+        let tmp = tempfile::tempdir().expect("tmp dir");
+        let custom = tmp.path().join("my-cache");
+        let prior = std::env::var("FORGEISO_CACHE_DIR").ok();
+        // SAFETY: this test mutates a process-wide env var. Other tests in this
+        // module that depend on FORGEISO_CACHE_DIR run sequentially within the
+        // same #[cfg(test)] mod via cargo's per-test isolation when run with
+        // --test-threads=1 in CI; here we simply restore on exit.
+        unsafe {
+            std::env::set_var("FORGEISO_CACHE_DIR", &custom);
+        }
+        let root = default_cache_root().expect("default_cache_root");
+        assert_eq!(root, custom, "FORGEISO_CACHE_DIR must take precedence");
+        assert!(custom.exists(), "directory must be created");
+        match prior {
+            Some(v) => unsafe {
+                std::env::set_var("FORGEISO_CACHE_DIR", v);
+            },
+            None => unsafe {
+                std::env::remove_var("FORGEISO_CACHE_DIR");
+            },
+        }
+    }
+
+    #[test]
+    fn cache_subdir_creates_nested_directory() {
+        let tmp = tempfile::tempdir().expect("tmp dir");
+        let prior = std::env::var("FORGEISO_CACHE_DIR").ok();
+        unsafe {
+            std::env::set_var("FORGEISO_CACHE_DIR", tmp.path());
+        }
+        let sub = cache_subdir("inject-test").expect("cache_subdir");
+        assert!(sub.ends_with("inject-test"));
+        assert!(sub.exists(), "subdirectory must be created");
+        match prior {
+            Some(v) => unsafe {
+                std::env::set_var("FORGEISO_CACHE_DIR", v);
+            },
+            None => unsafe {
+                std::env::remove_var("FORGEISO_CACHE_DIR");
+            },
+        }
+    }
+
+    // ── host helpers ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn ensure_linux_host_succeeds_on_linux() {
+        if std::env::consts::OS == "linux" {
+            assert!(ensure_linux_host().is_ok());
+        } else {
+            assert!(ensure_linux_host().is_err());
+        }
+    }
+
+    #[test]
+    fn require_tools_succeeds_for_well_known_tool() {
+        // `sh` is essentially always present on Unix runners.
+        if std::env::consts::OS == "linux" && which::which("sh").is_ok() {
+            assert!(require_tools(&["sh"]).is_ok());
+        }
+    }
+
+    #[test]
+    fn require_tools_returns_missingtool_error_for_nonexistent_tool() {
+        let r = require_tools(&["definitely-not-a-real-tool-xyz123"]);
+        assert!(matches!(r, Err(crate::error::EngineError::MissingTool(_))));
+    }
+
+    #[test]
+    fn ovmf_path_returns_existing_path_or_missingtool_error() {
+        match ovmf_path() {
+            Ok(p) => assert!(p.exists(), "returned path must exist"),
+            Err(crate::error::EngineError::MissingTool(_)) => {} // valid: not installed
+            Err(other) => panic!("unexpected error type: {other:?}"),
+        }
+    }
+
+    // ── process helpers ──────────────────────────────────────────────────────
+
+    #[test]
+    fn run_command_capture_returns_stdout_for_success() {
+        if which::which("printf").is_err() {
+            return;
+        }
+        let out = run_command_capture("printf", &["hello".to_string()], None)
+            .expect("printf must succeed");
+        assert_eq!(out.stdout, "hello");
+        assert_eq!(out.status, 0);
+        assert_eq!(out.program, "printf");
+    }
+
+    #[test]
+    fn run_command_capture_returns_runtime_error_for_nonzero_exit() {
+        if !std::path::Path::new("/bin/false").exists() {
+            return;
+        }
+        let out = run_command_capture("/bin/false", &[], None);
+        assert!(matches!(out, Err(crate::error::EngineError::Runtime(_))));
+    }
+
+    #[test]
+    fn run_command_capture_returns_runtime_error_for_missing_program() {
+        let out = run_command_capture("definitely-not-a-real-binary-zxcvb", &[], None);
+        assert!(matches!(out, Err(crate::error::EngineError::Runtime(_))));
+    }
+
+    #[test]
+    fn run_command_lossy_succeeds_even_for_nonzero_exit() {
+        if !std::path::Path::new("/bin/false").exists() {
+            return;
+        }
+        let out = run_command_lossy("/bin/false", &[], None)
+            .expect("lossy must not error on non-zero exit");
+        assert_eq!(out.status, 1, "must report status 1 for /bin/false");
+    }
+
+    #[tokio::test]
+    async fn run_command_capture_async_propagates_success() {
+        if which::which("printf").is_err() {
+            return;
+        }
+        let out = run_command_capture_async("printf", &["x".to_string()], None)
+            .await
+            .expect("printf must succeed");
+        assert_eq!(out.stdout, "x");
+    }
+
+    #[tokio::test]
+    async fn run_command_lossy_async_returns_status_for_nonzero_exit() {
+        if !std::path::Path::new("/bin/false").exists() {
+            return;
+        }
+        let out = run_command_lossy_async("/bin/false", &[], None)
+            .await
+            .expect("lossy async must succeed");
+        assert_eq!(out.status, 1);
+    }
+
+    // ── paths helpers ────────────────────────────────────────────────────────
+
+    #[test]
+    fn is_squashfs_path_recognizes_known_extensions() {
+        assert!(is_squashfs_path("/casper/filesystem.squashfs"));
+        assert!(is_squashfs_path("/live/foo.SFS"));
+        assert!(is_squashfs_path("/arch/x86_64/airootfs.erofs"));
+        assert!(!is_squashfs_path("/casper/initrd.img"));
+        assert!(!is_squashfs_path("/iso/boot.cat"));
+    }
+
+    #[test]
+    fn copy_dir_contents_replicates_tree_structure() {
+        let src = tempfile::tempdir().expect("src");
+        let dst = tempfile::tempdir().expect("dst");
+        std::fs::create_dir_all(src.path().join("a")).expect("mkdir a");
+        std::fs::write(src.path().join("a").join("file.txt"), b"hi").expect("write");
+        std::fs::write(src.path().join("root.txt"), b"root").expect("write root");
+
+        copy_dir_contents(src.path(), dst.path()).expect("copy");
+
+        assert!(dst.path().join("a").join("file.txt").exists());
+        assert!(dst.path().join("root.txt").exists());
+        let body = std::fs::read_to_string(dst.path().join("a").join("file.txt")).expect("read");
+        assert_eq!(body, "hi");
+    }
+
+    #[test]
+    fn chmod_recursive_writable_marks_files_writable() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().expect("dir");
+        let f = dir.path().join("ro.txt");
+        std::fs::write(&f, b"x").expect("write");
+        let mut perms = std::fs::metadata(&f).expect("meta").permissions();
+        perms.set_mode(0o400); // read-only owner
+        std::fs::set_permissions(&f, perms).expect("set readonly");
+
+        chmod_recursive_writable(dir.path());
+
+        let after = std::fs::metadata(&f).expect("meta").permissions().mode() & 0o777;
+        assert!(
+            after & 0o200 != 0,
+            "owner-write bit must be set, got mode {:o}",
+            after
+        );
+    }
+
+    #[test]
+    fn remove_dir_all_force_removes_readonly_files() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().expect("dir");
+        let f = dir.path().join("ro.txt");
+        std::fs::write(&f, b"x").expect("write");
+        let mut perms = std::fs::metadata(&f).expect("meta").permissions();
+        perms.set_mode(0o400);
+        std::fs::set_permissions(&f, perms).expect("set readonly");
+        // Take ownership of the path so the TempDir destructor doesn't race
+        // with our explicit removal (it would log a warning on already-gone path).
+        let path = dir.keep();
+
+        remove_dir_all_force(&path).expect("remove");
+        assert!(!path.exists(), "tree must be removed");
+    }
 }

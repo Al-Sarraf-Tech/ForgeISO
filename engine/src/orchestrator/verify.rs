@@ -281,4 +281,96 @@ mod tests {
         // Verify mismatch is rejected
         assert!(check_expected_sha256(path, expected).is_err());
     }
+
+    #[test]
+    fn sha256_file_matches_known_digest_for_hello_world() {
+        // SHA-256 of the exact byte sequence "hello world" (no trailing newline)
+        // -- cross-checked with `printf 'hello world' | sha256sum`.
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("hello.txt");
+        std::fs::write(&path, b"hello world").expect("write");
+        let actual = sha256_file(&path).expect("hash");
+        assert_eq!(
+            actual,
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_iso9660_returns_compliant_false_for_missing_file() {
+        let engine = ForgeIsoEngine::new();
+        let report = engine
+            .validate_iso9660("/definitely-not-here-12345.iso")
+            .await
+            .expect("validate must succeed and report failure structurally");
+        assert!(
+            !report.compliant,
+            "missing file must be marked non-compliant"
+        );
+        assert!(report.error.is_some(), "error message must be populated");
+        assert_eq!(report.size_bytes, 0);
+        assert_eq!(report.check_method, "iso9660_header");
+    }
+
+    #[tokio::test]
+    async fn validate_iso9660_rejects_too_small_file() {
+        // A file shorter than 16*2048 bytes cannot contain the primary volume
+        // descriptor and must be reported as non-compliant.
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("tiny.iso");
+        std::fs::write(&path, b"not an iso").expect("write");
+        let engine = ForgeIsoEngine::new();
+        let report = engine
+            .validate_iso9660(path.to_str().expect("path"))
+            .await
+            .expect("validate");
+        assert!(!report.compliant);
+        assert_eq!(report.size_bytes, 10);
+        assert!(report.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn validate_iso9660_rejects_file_without_cd001_signature() {
+        // 16*2048 bytes of zeros + 2048 bytes of zeros for the would-be PVD.
+        // Bytes [1..6] of the PVD sector must be "CD001"; with all zeros the
+        // signature check fails and we get InvalidConfig.
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("blob.iso");
+        let blob = vec![0_u8; 17 * 2048];
+        std::fs::write(&path, &blob).expect("write");
+        let engine = ForgeIsoEngine::new();
+        let report = engine
+            .validate_iso9660(path.to_str().expect("path"))
+            .await
+            .expect("validate");
+        assert!(!report.compliant, "missing CD001 sig must fail compliance");
+        assert!(
+            report.error.as_deref().unwrap_or("").contains("ISO-9660"),
+            "error must mention ISO-9660: {:?}",
+            report.error
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_iso9660_accepts_minimal_valid_pvd() {
+        // Build a synthetic ISO with valid CD001 signature at sector 16.
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("min.iso");
+        let mut blob = vec![0_u8; 17 * 2048];
+        // Sector 16 starts at offset 16*2048. Bytes 1..6 of the sector must be "CD001".
+        let pvd_start = 16 * 2048;
+        blob[pvd_start + 1..pvd_start + 6].copy_from_slice(b"CD001");
+        // Volume ID at bytes 40..72 of the PVD sector — fill with a label.
+        blob[pvd_start + 40..pvd_start + 48].copy_from_slice(b"FORGEISO");
+        std::fs::write(&path, &blob).expect("write");
+
+        let engine = ForgeIsoEngine::new();
+        let report = engine
+            .validate_iso9660(path.to_str().expect("path"))
+            .await
+            .expect("validate");
+        assert!(report.compliant, "minimal ISO with CD001 must be compliant");
+        assert_eq!(report.size_bytes, 17 * 2048);
+        assert!(report.error.is_none());
+    }
 }

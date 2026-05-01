@@ -73,6 +73,51 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::DoctorReport;
+    use crate::orchestrator::ForgeIsoEngine;
+
+    #[tokio::test]
+    async fn doctor_returns_report_with_required_keys() {
+        // Calls the actual doctor() method to exercise the body of the function
+        // (not just the struct shape). Hermetic: only checks tool presence via
+        // `which::which`, no subprocess execution.
+        let engine = ForgeIsoEngine::new();
+        let report = engine.doctor().await;
+
+        for key in ["ubuntu", "fedora", "mint", "arch", "scan", "test"] {
+            assert!(
+                report.distro_readiness.contains_key(key),
+                "distro_readiness missing key '{key}'"
+            );
+        }
+        // Tooling map must contain every well-known tool name that doctor probes.
+        for tool in [
+            "xorriso",
+            "mtools",
+            "unsquashfs",
+            "mksquashfs",
+            "qemu-system-x86_64",
+            "trivy",
+            "syft",
+            "grype",
+            "oscap",
+        ] {
+            assert!(
+                report.tooling.contains_key(tool),
+                "tooling map missing key '{tool}'"
+            );
+        }
+        // Host details must be populated.
+        assert!(!report.host_os.is_empty());
+        assert!(!report.host_arch.is_empty());
+        assert!(!report.timestamp.is_empty());
+    }
+
+    #[tokio::test]
+    async fn doctor_linux_supported_matches_runtime_os() {
+        let engine = ForgeIsoEngine::new();
+        let report = engine.doctor().await;
+        assert_eq!(report.linux_supported, std::env::consts::OS == "linux");
+    }
 
     #[test]
     fn doctor_report_has_required_distro_readiness_keys() {
