@@ -1,81 +1,33 @@
+//! TUI application state.
+//!
+//! Public surface (preserved from the previous single-file `state.rs`):
+//! * [`App`] — the entire wizard state struct.
+//! * [`LogEntry`], [`LogLevel`] — log pane entries.
+//! * [`SourceFocus`], [`WizardStep`], [`ConfigTab`] — navigation enums.
+//! * [`WorkerMsg`] — async worker → UI message type.
+//! * [`FieldDef`], [`FieldKind`] — Configure-tab form descriptors.
+//!
+//! Internal layout:
+//! * [`nav`] — navigation enums and worker message.
+//! * [`fields`] — `FieldDef` / `FieldKind` form descriptors.
+//!
+//! All items below are re-exported at `crate::state::*` so existing
+//! `use crate::state::{...}` paths in `main.rs`, `ui::*`, and `worker.rs`
+//! continue to compile unchanged.
+
+mod fields;
+mod nav;
+
+pub(crate) use fields::{FieldDef, FieldKind};
+pub(crate) use nav::{ConfigTab, LogEntry, LogLevel, SourceFocus, WizardStep, WorkerMsg};
+
 use std::path::PathBuf;
 
 use forgeiso_engine::{
-    all_presets, BuildResult, ContainerConfig, Distro, FirewallConfig, GrubConfig,
-    GuidedWorkflowProgress, GuidedWorkflowStep, InjectConfig, Iso9660Compliance, IsoMetadata,
-    IsoSource, NetworkConfig, ProxyConfig, SshConfig, SwapConfig, UserConfig, VerifyResult,
+    all_presets, ContainerConfig, Distro, FirewallConfig, GrubConfig, GuidedWorkflowProgress,
+    InjectConfig, Iso9660Compliance, IsoSource, NetworkConfig, ProxyConfig, SshConfig, SwapConfig,
+    UserConfig, VerifyResult,
 };
-
-#[allow(dead_code)]
-pub(crate) enum WorkerMsg {
-    InspectOk(Box<IsoMetadata>),
-    InjectOk(Box<BuildResult>),
-    EngineEvent(String, LogLevel),
-    VerifyOk(Box<VerifyResult>),
-    Iso9660Ok(Box<Iso9660Compliance>),
-    OpError(String),
-}
-
-pub(crate) type WizardStep = GuidedWorkflowStep;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ConfigTab {
-    Identity,
-    Network,
-    Packages,
-    Services,
-    Advanced,
-    Output,
-}
-
-impl ConfigTab {
-    pub(crate) const ALL: [Self; 6] = [
-        Self::Identity,
-        Self::Network,
-        Self::Packages,
-        Self::Services,
-        Self::Advanced,
-        Self::Output,
-    ];
-
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Self::Identity => "Identity",
-            Self::Network => "Network",
-            Self::Packages => "Packages",
-            Self::Services => "Services",
-            Self::Advanced => "Advanced",
-            Self::Output => "Output",
-        }
-    }
-
-    pub(crate) fn index(self) -> usize {
-        Self::ALL.iter().position(|&t| t == self).unwrap_or(0)
-    }
-
-    pub(crate) fn next(self) -> Self {
-        let i = (self.index() + 1) % Self::ALL.len();
-        Self::ALL[i]
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SourceFocus {
-    PresetList,
-    ManualInput,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LogLevel {
-    Info,
-    Warn,
-    Error,
-}
-
-pub(crate) struct LogEntry {
-    pub(crate) text: String,
-    pub(crate) level: LogLevel,
-}
 
 pub(crate) struct App {
     // Navigation
@@ -724,64 +676,7 @@ impl App {
         add(&mut lines, "Output Label", &self.output_label);
         lines
     }
-}
 
-pub(crate) enum FieldKind {
-    Text,
-    Password,
-    Toggle(bool),
-}
-
-pub(crate) struct FieldDef {
-    pub(crate) label: &'static str,
-    pub(crate) kind: FieldKind,
-    pub(crate) value_str: String,
-}
-
-impl FieldDef {
-    pub(crate) fn text(label: &'static str, value: &str) -> Self {
-        Self {
-            label,
-            kind: FieldKind::Text,
-            value_str: value.to_string(),
-        }
-    }
-
-    pub(crate) fn password(label: &'static str, value: &str) -> Self {
-        Self {
-            label,
-            kind: FieldKind::Password,
-            value_str: value.to_string(),
-        }
-    }
-
-    pub(crate) fn toggle(label: &'static str, value: bool) -> Self {
-        Self {
-            label,
-            kind: FieldKind::Toggle(value),
-            value_str: if value { "ON" } else { "OFF" }.into(),
-        }
-    }
-
-    pub(crate) fn display_value(&self) -> String {
-        match &self.kind {
-            FieldKind::Password => {
-                if self.value_str.is_empty() {
-                    String::new()
-                } else {
-                    "*".repeat(self.value_str.len())
-                }
-            }
-            _ => self.value_str.clone(),
-        }
-    }
-
-    pub(crate) fn is_toggle(&self) -> bool {
-        matches!(self.kind, FieldKind::Toggle(_))
-    }
-}
-
-impl App {
     pub(crate) fn get_field_string_raw(&self, idx: usize) -> String {
         match self.config_tab {
             ConfigTab::Identity => match idx {
