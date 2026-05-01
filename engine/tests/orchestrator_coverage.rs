@@ -562,6 +562,163 @@ fn integration_generate_arch_with_firewall_does_not_pull_ufw() {
     );
 }
 
+// ── generate_autoinstall_yaml — section-emission negation guards ────────────
+
+#[test]
+fn integration_generate_omits_packages_block_for_minimal_config() {
+    // Kill-test for `if !all_packages.is_empty()` — without it, an empty
+    // packages: list would still emit the `packages:` key as `[]`, which
+    // is valid YAML but breaks the round-trip with cloud-init's strict mode.
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{InjectConfig, IsoSource};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        !yaml.contains("packages:"),
+        "minimal config must NOT emit packages: block, got:\n{yaml}"
+    );
+}
+
+#[test]
+fn integration_generate_emits_packages_block_when_extra_packages_set() {
+    // Anchors the positive case for the same `if !all_packages.is_empty()`
+    // guard — extra_packages must surface in the YAML.
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{InjectConfig, IsoSource};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        extra_packages: vec!["htop".to_string(), "vim".to_string()],
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        yaml.contains("packages:"),
+        "extra_packages must emit packages: block, got:\n{yaml}"
+    );
+    assert!(
+        yaml.contains("htop") && yaml.contains("vim"),
+        "extra_packages contents must surface in packages: block, got:\n{yaml}"
+    );
+}
+
+#[test]
+fn integration_generate_omits_nameservers_block_when_dns_empty() {
+    // Kill-test for `if !cfg.network.dns_servers.is_empty()` — without
+    // the guard the nameservers block would be emitted with an empty
+    // addresses: list, which cloud-init treats as "wipe all DNS".
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{InjectConfig, IsoSource};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        static_ip: Some("192.0.2.10/24".to_string()), // forces network: block
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        !yaml.contains("nameservers:"),
+        "DNS-empty config must NOT emit nameservers: block, got:\n{yaml}"
+    );
+}
+
+#[test]
+fn integration_generate_emits_nameservers_block_when_dns_present() {
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{InjectConfig, IsoSource, NetworkConfig};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        static_ip: Some("192.0.2.10/24".to_string()),
+        network: NetworkConfig {
+            dns_servers: vec!["1.1.1.1".to_string(), "8.8.8.8".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        yaml.contains("nameservers:") && yaml.contains("1.1.1.1") && yaml.contains("8.8.8.8"),
+        "DNS-present config must emit nameservers: block with addresses, got:\n{yaml}"
+    );
+}
+
+#[test]
+fn integration_generate_emits_identity_block_for_each_solo_field() {
+    // Kill-test for `||` chain in identity guard
+    // (hostname.is_some() || username.is_some() || password.is_some() || realname.is_some()).
+    // The lib-side tests cover this; mirroring at integration so a future
+    // build-cache regression doesn't mask the lib-side failure.
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{InjectConfig, IsoSource};
+
+    for (label, cfg) in [
+        (
+            "hostname",
+            InjectConfig {
+                source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+                out_name: "out.iso".to_string(),
+                hostname: Some("only-host".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "username",
+            InjectConfig {
+                source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+                out_name: "out.iso".to_string(),
+                username: Some("only-user".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "password",
+            InjectConfig {
+                source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+                out_name: "out.iso".to_string(),
+                password: Some("only-pw".to_string()),
+                ..Default::default()
+            },
+        ),
+        (
+            "realname",
+            InjectConfig {
+                source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+                out_name: "out.iso".to_string(),
+                realname: Some("Only Name".to_string()),
+                ..Default::default()
+            },
+        ),
+    ] {
+        let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+        assert!(
+            yaml.contains("identity:"),
+            "{label}-only config must emit identity: block, got:\n{yaml}"
+        );
+    }
+}
+
+#[test]
+fn integration_generate_omits_identity_block_when_all_identity_fields_empty() {
+    // Negative case anchoring all four operands of the `||` chain at once.
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{InjectConfig, IsoSource};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        !yaml.contains("identity:"),
+        "no-identity config must NOT emit identity: block, got:\n{yaml}"
+    );
+}
+
 // ── Engine event emission shape ──────────────────────────────────────────────
 
 #[test]
