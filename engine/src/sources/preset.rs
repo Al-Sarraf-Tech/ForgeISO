@@ -27,7 +27,7 @@ pub struct IsoPreset {
 
 /// Return all built-in presets.
 pub fn all_presets() -> &'static [IsoPreset] {
-    super::catalog::ALL_PRESETS
+    super::catalog::ALL_PRESETS.as_slice()
 }
 
 /// Find a preset by its PresetId.
