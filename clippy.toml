@@ -1,0 +1,45 @@
+# clippy configuration — ForgeISO
+#
+# This file pins clippy lint thresholds the project considers part of its
+# "code-quality gate". They show up in CI through:
+#
+#     cargo clippy --workspace --all-targets -- -D warnings
+#
+# (any clippy warning becomes a hard error, including the
+# `cognitive_complexity` lint configured below).
+#
+# See docs/COMPLEXITY.md for the rationale, the refactor playbook, and the
+# operator workflow for raising or lowering the threshold.
+
+# Cognitive-complexity ceiling per function.
+#
+# Clippy's `cognitive_complexity` lint scores nested control flow, short-
+# circuiting boolean logic, and `?` propagation. The default is 25 (this
+# value mirrors the upstream default — we set it explicitly so a future
+# clippy bump cannot silently relax the gate without an ADR).
+#
+# Functions whose score exceeds 25 fail clippy. The expected response is to
+# split the function into smaller helpers (see docs/COMPLEXITY.md for the
+# extraction recipes). Suppression via `#[allow(clippy::cognitive_complexity)]`
+# is permitted only with an inline `// reason: ...` comment explaining why
+# the function legitimately resists decomposition (typically: a generated
+# match arm or a state machine where extracting helpers would obscure the
+# control flow).
+cognitive-complexity-threshold = 25
+
+# Function-argument count ceiling. Default is 7. We keep the default but
+# pin it to make CI behaviour reproducible across clippy versions.
+too-many-arguments-threshold = 7
+
+# Function-line-count ceiling. Default is 100. Pinned so the gate doesn't
+# drift when clippy releases bump the default.
+too-many-lines-threshold = 100
+
+# Single-character binding name allowance. Default is 4. The engine's
+# error-handling and iterator pipelines occasionally reach 4; raising past
+# this would mask poor naming, so we leave it at the default.
+single-char-binding-names-threshold = 4
+
+# Type-complexity ceiling. Default is 250 (a heuristic over the type AST).
+# Pinned so clippy upgrades don't change PR feedback unexpectedly.
+type-complexity-threshold = 250
