@@ -416,6 +416,152 @@ fn inspect_iso_recognises_arm64_arch() {
     assert_eq!(md.architecture.as_deref(), Some("aarch64"));
 }
 
+// ── generate_autoinstall_yaml — kill-tests for the is_ubuntu_like guard ─────
+// These mirror the lib-level tests in engine/src/autoinstall/ubuntu/tests.rs
+// but live in the integration test layer so cargo-mutants compiles them as a
+// separate test crate. This belt-and-braces approach is here because earlier
+// full mutation runs reported the lib-side `delete ! in is_ubuntu_like`
+// mutant as MISSED — rerunning under the integration crate confirms whether
+// the survivor is a real test gap or a build-cache artifact.
+
+#[test]
+fn integration_generate_ubuntu_with_ppa_pulls_software_properties_common() {
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{InjectConfig, IsoSource};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        distro: None, // None defaults to Ubuntu (is_ubuntu_like = true).
+        apt_repos: vec!["ppa:deadsnakes/ppa".to_string()],
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    // Slice the `packages:` section so we don't accidentally count the ppa
+    // string in `late-commands:` (which adds the same PPA via add-apt-repository).
+    let packages_block = yaml.split("late-commands:").next().unwrap_or(&yaml);
+    assert!(
+        packages_block.contains("software-properties-common"),
+        "Ubuntu + PPA must add software-properties-common to the packages: section, got:\n{packages_block}"
+    );
+}
+
+#[test]
+fn integration_generate_arch_with_ppa_does_not_pull_software_properties_common() {
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{Distro, InjectConfig, IsoSource};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        distro: Some(Distro::Arch),
+        apt_repos: vec!["ppa:deadsnakes/ppa".to_string()],
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        !yaml.contains("software-properties-common"),
+        "Arch must NEVER auto-add software-properties-common (no apt): {yaml}"
+    );
+}
+
+#[test]
+fn integration_generate_fedora_with_ppa_does_not_pull_software_properties_common() {
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{Distro, InjectConfig, IsoSource};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        distro: Some(Distro::Fedora),
+        apt_repos: vec!["ppa:deadsnakes/ppa".to_string()],
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        !yaml.contains("software-properties-common"),
+        "Fedora must NEVER auto-add software-properties-common: {yaml}"
+    );
+}
+
+#[test]
+fn integration_generate_ubuntu_with_apt_mirror_emits_apt_section() {
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{InjectConfig, IsoSource};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        distro: None,
+        apt_mirror: Some("http://mirrors.example.com/ubuntu".to_string()),
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        yaml.contains("apt:") && yaml.contains("mirrors.example.com"),
+        "Ubuntu + apt_mirror must emit apt: section with the mirror URL, got:\n{yaml}"
+    );
+}
+
+#[test]
+fn integration_generate_arch_with_apt_mirror_omits_apt_section() {
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{Distro, InjectConfig, IsoSource};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        distro: Some(Distro::Arch),
+        apt_mirror: Some("http://mirrors.example.com/ubuntu".to_string()),
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    // Arch has no apt; the apt: section must not appear regardless of apt_mirror.
+    assert!(
+        !yaml.contains("apt:\n"),
+        "Arch must NEVER emit an apt: block: {yaml}"
+    );
+}
+
+#[test]
+fn integration_generate_ubuntu_with_firewall_pulls_ufw() {
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{FirewallConfig, InjectConfig, IsoSource};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        distro: None,
+        firewall: FirewallConfig {
+            enabled: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    assert!(
+        yaml.contains("ufw"),
+        "Ubuntu + firewall.enabled must auto-add ufw, got:\n{yaml}"
+    );
+}
+
+#[test]
+fn integration_generate_arch_with_firewall_does_not_pull_ufw() {
+    use forgeiso_engine::autoinstall::generate_autoinstall_yaml;
+    use forgeiso_engine::config::{Distro, FirewallConfig, InjectConfig, IsoSource};
+    let cfg = InjectConfig {
+        source: IsoSource::from_raw("/tmp/coverage.iso".to_string()),
+        out_name: "out.iso".to_string(),
+        distro: Some(Distro::Arch),
+        firewall: FirewallConfig {
+            enabled: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let yaml = generate_autoinstall_yaml(&cfg).expect("generate must succeed");
+    // Arch uses iptables/nftables, never ufw.
+    let packages_block = yaml.split("late-commands:").next().unwrap_or(&yaml);
+    assert!(
+        !packages_block.contains("- ufw\n"),
+        "Arch must NEVER add ufw to the packages: section, got:\n{packages_block}"
+    );
+}
+
 // ── Engine event emission shape ──────────────────────────────────────────────
 
 #[test]
