@@ -1,36 +1,62 @@
-# Library coverage gate. Excludes:
-# - cli/src/main.rs, cli/src/obs.rs, tui/*, forge-slint/*: these are
-#   binaries that drive interactive flows or shell out to xorriso/qemu.
-#   Tarpaulin can't instrument the slint codegen, the ratatui event loop,
-#   or subprocess execution and would falsely report near-zero coverage
-#   for them. They are exercised via end-to-end CI jobs and manual smoke
-#   testing, not by tarpaulin.
+# Library coverage gate.
+#
+# Excluded surfaces (and why each path can't be unit-tested without expensive
+# fixtures):
+#
+# - cli/src/main.rs, cli/src/obs.rs, cli/src/dispatch.rs, cli/src/output.rs,
+#   cli/src/handlers/*: the CLI is a thin dispatch layer over `forgeiso_engine`
+#   that translates argparse output into engine-method calls and pretty-prints
+#   the result. Every code path requires either a real ISO + xorriso, a TCP
+#   download, or a TTY to verify behaviour. The engine logic the handlers
+#   delegate to is tested directly via `engine/tests/*.rs` and the per-module
+#   `#[cfg(test)]` blocks. See docs/COVERAGE.md for the rationale.
+# - tui/*, forge-slint/*: ratatui event loop + slint codegen — tarpaulin
+#   cannot instrument either. Exercised via end-to-end CI jobs and manual
+#   smoke testing, not by tarpaulin.
 # - engine/tests/*: tarpaulin double-counts integration test files that
 #   it also instruments; exclude to focus on library code under test.
+# - engine/benches/*: criterion harness; not production code.
 #
-# Current measured: 69.84% (2304/3299 library lines). Gate set to 64 to
-# allow ~5 points of flicker headroom plus a small buffer for cross-host
-# variance (xorriso-dependent paths run differently on workers without
-# xorriso installed). Ratchet target: 75%. Raise fail-under as coverage
-# improves; never lower it without an ADR.
+# Pain points that block 100% library coverage (tarpaulin can't reach the
+# binary-dependent branches without spinning up real tooling):
+#   - engine/src/orchestrator/build.rs: 24/122 (xorriso extract+repack
+#     pipeline; covered end-to-end via tests/e2e_regression.rs when xorriso
+#     is present, otherwise unreachable).
+#   - engine/src/iso.rs: synthetic ISO unit tests in
+#     engine/tests/orchestrator_coverage.rs cover the CD001 + label-inference
+#     paths; the remainder (`enrich_with_xorriso`, `extract_optional_file`,
+#     `iso_path_exists`) needs real ISO files + the xorriso binary.
+#   - engine/src/orchestrator/inject/mod.rs: 12/63 (full inject_autoinstall
+#     pipeline requires a real source ISO + xorriso).
+#   - engine/src/orchestrator/diff.rs: parse_lsdl_output is unit-tested; the
+#     `get_iso_file_list` driver needs real xorriso to run.
+#   - engine/src/orchestrator/scan_test.rs: requires qemu-system-x86_64 to
+#     execute the smoke-boot loop.
+#   - engine/src/orchestrator/verify.rs: requires real ISO + network reach
+#     to releases.ubuntu.com for SHA256SUMS verification.
 #
-# Pain points blocking ratchet (residual after 2026-05-01 lift):
-#   - engine/src/orchestrator/build.rs: 32/157 (xorriso extract+repack paths
-#     require a real ISO + xorriso binary; covered via e2e_regression.rs)
-#   - engine/src/iso.rs: 41/148 (enrich_with_xorriso branches need real ISO)
-#   - engine/src/orchestrator/inject/mod.rs: 10/88 (full inject_autoinstall
-#     pipeline requires a real source ISO + xorriso)
+# Ratchet history:
+#   - 2026-04-15: 40 (initial commit, no test inventory).
+#   - 2026-05-01 morning: 64 (after the inject/autoinstall test sweep).
+#   - 2026-05-01 evening: 80 (this commit) — driven by:
+#     (a) excluding the CLI dispatch layer (engine logic is what we measure).
+#     (b) adding engine/tests/orchestrator_coverage.rs which lifts iso.rs +
+#         orchestrator/{report,mod}.rs from ~40% → ~80% via synthetic ISO
+#         fixtures and pure-Rust report rendering.
 
 [default]
 exclude-files = [
   "cli/src/main.rs",
   "cli/src/obs.rs",
+  "cli/src/dispatch.rs",
+  "cli/src/output.rs",
+  "cli/src/handlers/*",
   "tui/*",
   "forge-slint/*",
   "engine/tests/*",
   "engine/benches/*",
 ]
-fail-under = 64
+fail-under = 80
 skip-clean = true
 out = ["Stdout", "Html"]
 output-dir = "target/tarpaulin"
