@@ -277,6 +277,17 @@ impl ForgeApp {
         })
     }
 
+    /// Persist UI theme preference. Reads current inject + verify state from
+    /// the live UI so we don't clobber unrelated fields.
+    pub fn persist_theme(&self, mode: &str) {
+        let inject = self.snap_inject().unwrap_or_default();
+        let verify = self.snap_verify().unwrap_or_default();
+        let ui = crate::state::UiState {
+            theme: mode.to_string(),
+        };
+        crate::persist::save_state(&crate::state::PersistedState { inject, verify, ui });
+    }
+
     pub(crate) fn collect_inject_config(&self) -> Result<(InjectState, InjectConfig), String> {
         let w = self
             .win

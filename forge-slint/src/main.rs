@@ -52,12 +52,18 @@ fn main() -> anyhow::Result<()> {
     // Create Slint window.
     let win = AppWindow::new()?;
 
-    // Surface build metadata in the StatusBar.
+    // Surface build metadata + restore persisted theme in the StatusBar.
     {
         let theme = win.global::<Theme>();
         theme.set_app_version(format!("v{}", env!("CARGO_PKG_VERSION")).into());
         theme.set_build_hash(option_env!("FORGEISO_BUILD_HASH").unwrap_or("").into());
         theme.set_license("MIT".into());
+        // Restore persisted theme mode (defaults to "dark" if file missing/invalid).
+        let mode = match saved.ui.theme.as_str() {
+            "light" => "light",
+            _ => "dark",
+        };
+        theme.set_mode(mode.into());
     }
 
     // Populate window from persisted state.
@@ -89,7 +95,7 @@ fn main() -> anyhow::Result<()> {
         with_app(|a| a.cancel_job());
     });
 
-    // theme-toggle — flip dark/light mode
+    // theme-toggle — flip dark/light mode and persist immediately
     {
         let weak = win.as_weak();
         win.on_theme_toggle(move || {
@@ -101,6 +107,7 @@ fn main() -> anyhow::Result<()> {
                     "light"
                 };
                 theme.set_mode(next.into());
+                with_app(|a| a.persist_theme(next));
             }
         });
     }
@@ -601,6 +608,9 @@ fn main() -> anyhow::Result<()> {
                     .and_then(|rc| rc.borrow().snap_verify())
             })
             .unwrap_or_default(),
+        ui: crate::state::UiState {
+            theme: win.global::<Theme>().get_mode().to_string(),
+        },
     };
     save_state(&state);
 

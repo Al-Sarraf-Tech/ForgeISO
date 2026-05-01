@@ -148,12 +148,31 @@ pub struct VerifyState {
     pub sums_url: String,
 }
 
+// ── UI preferences (theme, layout choices) ────────────────────────────────────
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct UiState {
+    /// "dark" | "light"
+    pub theme: String,
+}
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self {
+            theme: "dark".into(),
+        }
+    }
+}
+
 // ── Full persisted state ──────────────────────────────────────────────────────
 
 #[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PersistedState {
     pub inject: InjectState,
     pub verify: VerifyState,
+    pub ui: UiState,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
