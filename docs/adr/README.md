@@ -19,6 +19,8 @@ ADR-NNNN | Deprecated.
 | [0007](0007-testing-strategy-seven-layer.md) | Seven-layer testing (unit + integration + e2e + property + mutation + contract + perf) | Accepted |
 | [0008](0008-reliability-contract-desktop-tool.md) | Reliability contract — desktop-tool adaptation of S-rubric service criteria | Accepted |
 | [0009](0009-spec-driven-development-workflow.md) | Spec-driven development workflow (brainstorm → spec → ADR → plan → review → implement) | Accepted |
+| [0010](0010-security-contract-desktop-tool.md) | Security contract — cosign keyless as desktop-tool SLSA equivalent | Accepted |
+| [0011](0011-observability-contract-desktop-tool.md) | Observability contract — desktop-tool adaptation of S+ rubric | Accepted |
 
 When adding an ADR, copy the format from any existing entry and number
 it sequentially. Don't renumber; reference older ADRs by number when
