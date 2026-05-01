@@ -467,6 +467,93 @@ on the remote.
 
 ---
 
+## Engine Public-API Contract
+
+The `forgeiso-engine` crate is consumed by `cli`, `tui`, `forge-slint`, and
+external integrators. Drift in its public surface — adding, removing, or
+changing the signature of any `pub` item — is a breaking change and must
+be deliberated, not accidental.
+
+### Mechanism
+
+A goldenfile snapshot of every public item lives at
+`engine/tests/public-api.golden`. It is produced by
+[`cargo public-api`](https://github.com/cargo-public-api/cargo-public-api),
+which emits a deterministic, line-per-item dump of the crate's API
+surface (modules, types, fns, impls, blanket-impls).
+
+The contract test `engine/tests/api_contract.rs::engine_public_api_matches_golden`
+re-runs `cargo public-api -p forgeiso-engine` and diffs the result
+against the golden. Any divergence fails the test with a summary of
+added/removed lines.
+
+### What triggers a failure
+
+- A new `pub` item (struct, enum, fn, trait, type alias, module) reaches the API surface.
+- An existing `pub` item is removed, renamed, made private, or relocated.
+- A signature change: parameter list, generics, return type, lifetime bounds.
+- A new derived trait (`Clone`, `Debug`, `Serialize`, etc.) on a `pub` type — adding/removing.
+- A re-export change in `engine/src/lib.rs`.
+
+The test is opt-in via `FORGEISO_RUN_API_CONTRACT=1` because it shells
+out to nightly rustdoc; the CI gate sets the variable so PRs are
+checked, while local devs without nightly are not blocked.
+
+### How to update the golden
+
+When the change is intentional:
+
+1. Re-capture the golden:
+
+   ```bash
+   ./scripts/regenerate-api-golden.sh
+   ```
+
+   (Equivalent to `cargo public-api -p forgeiso-engine > engine/tests/public-api.golden`.)
+
+2. Inspect the diff:
+
+   ```bash
+   git diff -- engine/tests/public-api.golden
+   ```
+
+3. Write an ADR under `docs/adr/NNNN-<short-title>.md` and link it from
+   `docs/adr/README.md`. The ADR must cover:
+
+   - **Context** — why the existing API surface was insufficient or wrong.
+   - **Decision** — what changed (additions, removals, signature changes).
+   - **Alternatives** — what was rejected and why.
+   - **Consequences** — downstream impact on `cli`, `tui`, `forge-slint`,
+     external consumers, MSRV, and semver (a removal/signature change is
+     a major bump under semver; an addition is minor).
+
+4. Stage the golden, the ADR, and the index update **in the same commit**:
+
+   ```bash
+   git add engine/tests/public-api.golden \
+     docs/adr/NNNN-*.md docs/adr/README.md
+   git commit
+   ```
+
+### When NOT to update the golden
+
+- "It's just a one-line refactor" — if the surface changed, the consumers care.
+- A blanket-impl shows up because a dependency added a new trait — investigate
+  the dep upgrade first; spurious blanket impls usually mean the public surface
+  leaks an internal type that should not be `pub`.
+- The test fails on someone else's branch — they own the ADR; do not silently
+  regenerate over their change.
+
+### Local validation
+
+```bash
+cargo install cargo-public-api --locked   # one-time
+rustup toolchain install nightly          # one-time, cargo-public-api needs rustdoc JSON
+FORGEISO_RUN_API_CONTRACT=1 cargo test -p forgeiso-engine --test api_contract
+```
+
+---
+
 ## Health Check Procedure
 
 Run after any change to host tooling, output paths, or the cache layer:
