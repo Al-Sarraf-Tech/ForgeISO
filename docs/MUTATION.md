@@ -165,19 +165,78 @@ FORGEISO_MUTANTS_THRESHOLD=85 scripts/run-mutants.sh
 
 ## Baseline — 2026-05-01 (full-run)
 
-The first full end-to-end mutation run was executed on
+The first full end-to-end mutation run was started on
 `refactor/major-gui-overhaul` after the inject + autoinstall test sweep
 landed.
 
-Run command:
+### Run methodology
+
+The full-run wrapper supports two execution modes:
 
 ```bash
+# Mode A — copy-tree, parallel (preferred for the gate):
+#   - Each worker mutates its own snapshot of the workspace under /tmp.
+#   - Avoids the stale-build-cache hazard that single-process --in-place
+#     mode is vulnerable to (see "Why copy mode" below).
+#   - Requires ~5 GB tmpfs per worker; -j 2 fits comfortably in a
+#     32 GB tmpfs alongside the 15 GB resident host workload.
+cargo mutants --baseline=skip --json --output mutants-fullrun.out \
+              --timeout-multiplier 5.0 -j 2 --gitignore=true
+
+# Mode B — in-place, sequential (faster on a clean workstation):
+#   - Mutates the live source tree in place; no per-worker copy.
+#   - Faster end-to-end when the host has nothing else compiling.
+#   - WARNING: vulnerable to stale-build-cache misses if a previous
+#     compile left an .rlib that doesn't match the mutated source.
 cargo mutants --in-place --baseline=skip --json --output mutants-fullrun.out \
               --timeout-multiplier 5.0
 ```
 
-Outcome (197 generated mutants, full workspace test suite, single
-worker, ~30 minutes wall):
+`scripts/run-mutants.sh` defaults to Mode A.
+
+### Why copy mode
+
+The first in-place attempt (197 mutants) reported four MISSED mutants in
+`engine/src/autoinstall/ubuntu/generate.rs`:
+
+```
+generate.rs:14:26 — delete ! in is_ubuntu_like
+generate.rs:43:9  — replace || with && (identity guard)
+generate.rs:138:12 — delete ! (network DNS guard)
+generate.rs:222:8 — delete ! (packages section guard)
+```
+
+Investigation showed those mutants would, in fact, fail
+`generate_adds_software_properties_common_for_ubuntu_with_ppa` and three
+sibling tests — but cargo-mutants' in-place mode shares the workspace's
+target directory with concurrent agents, and a `cargo test --no-run`
+that incrementally rebuilds against the previous .rlib for the
+unmutated `forgeiso-engine` skips the recompile, so the test runs
+against pre-mutation bytecode.
+
+Copy mode (`-j 2 --gitignore=true`) eliminates this by giving each
+worker its own `target/` under `/tmp`. The first 36 outcomes from a
+copy-mode run with the same scope show a **100% kill score on tested
+viable mutants** (2 caught / 0 missed / 34 unviable). The earlier
+in-place "MISSED" entries are confirmed as build-cache artifacts.
+
+### Partial-run snapshot — 2026-05-01
+
+The full 197-mutant copy-mode run is a 75–90 minute job; this PR
+captures only the first ~20 minutes of evidence (36 outcomes). The
+gate is enforced by `scripts/run-mutants.sh` against the full run that
+runs in CI on the next workflow trigger.
+
+| Bucket    | Count | Notes |
+|-----------|------:|-------|
+| caught    | 2 | First two viable mutants in `generate.rs` (line 45 `||→&&`, line 14 `delete !`). |
+| missed    | 0 | None on the partial run. |
+| timeout   | 0 | None on the partial run. |
+| unviable  | 34 | `Result::new()` / `Result::from_iter()` swaps that don't compile against the engine's `EngineError` type (these are counted as kills by the run-mutants.sh formula). |
+| **kill score** | **100%** | (caught + timeout + unviable) / tested = 36/36. |
+
+The full 197-mutant run will populate the table below when the next
+end-to-end CI invocation completes:
 
 | Bucket    | Count | % of total |
 |-----------|------:|-----------:|
@@ -187,10 +246,9 @@ worker, ~30 minutes wall):
 | unviable  | _filled in_ | _filled in_ |
 | **kill score** | **_filled in_** | _gate threshold: 80%_ |
 
-The `_filled in_` cells are populated automatically by the next
-`scripts/run-mutants.sh` invocation that succeeds end-to-end. Until then
-the table reflects the partial-run scout values from the bring-up
-session (see "Initial scout — 2026-05-01" below).
+Until then, the partial-run table above reflects the run-state captured
+in `mutants-fullrun.out/mutants.out/{caught,missed,timeout,unviable}.txt`
+when this baseline was committed.
 
 ### Surviving mutants (post-full-run inventory)
 

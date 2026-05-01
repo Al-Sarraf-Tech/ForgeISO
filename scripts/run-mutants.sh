@@ -63,7 +63,19 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-CMD=(cargo mutants --in-place --baseline=skip)
+# Default to copy-tree mode with -j 2: each worker mutates its own snapshot
+# under /tmp, avoiding the stale-build-cache hazard that --in-place mode is
+# vulnerable to when other agents are concurrently editing the workspace.
+# See docs/MUTATION.md "Why copy mode" for the full rationale.
+#
+# -j is incompatible with --in-place; if the operator opts back into in-place
+# mode (FORGEISO_MUTANTS_IN_PLACE=1) the -j 2 flag is dropped automatically.
+CMD=(cargo mutants --baseline=skip --gitignore=true)
+if [[ "${FORGEISO_MUTANTS_IN_PLACE:-0}" == "1" ]]; then
+    CMD+=(--in-place)
+else
+    CMD+=(-j "${FORGEISO_MUTANTS_JOBS:-2}")
+fi
 
 if (( CHECK_ONLY )); then
     CMD+=(--check)
