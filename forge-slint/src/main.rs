@@ -52,6 +52,14 @@ fn main() -> anyhow::Result<()> {
     // Create Slint window.
     let win = AppWindow::new()?;
 
+    // Surface build metadata in the StatusBar.
+    {
+        let theme = win.global::<Theme>();
+        theme.set_app_version(format!("v{}", env!("CARGO_PKG_VERSION")).into());
+        theme.set_build_hash(option_env!("FORGEISO_BUILD_HASH").unwrap_or("").into());
+        theme.set_license("MIT".into());
+    }
+
     // Populate window from persisted state.
     restore_inject(&win, &saved.inject);
     restore_verify(&win, &saved.verify);
@@ -80,6 +88,22 @@ fn main() -> anyhow::Result<()> {
     win.on_cancel_job(|| {
         with_app(|a| a.cancel_job());
     });
+
+    // theme-toggle — flip dark/light mode
+    {
+        let weak = win.as_weak();
+        win.on_theme_toggle(move || {
+            if let Some(w) = weak.upgrade() {
+                let theme = w.global::<Theme>();
+                let next = if theme.get_mode() == "light" {
+                    "dark"
+                } else {
+                    "light"
+                };
+                theme.set_mode(next.into());
+            }
+        });
+    }
 
     // doctor-toggle
     {
