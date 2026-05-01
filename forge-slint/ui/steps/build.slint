@@ -171,13 +171,13 @@ export component StepBuild inherits Rectangle {
                     spacing: Sizes.space-2;
                     alignment: end;
                     FButton {
-                        label: "← Choose ISO";
+                        label: "\u{2190} Choose ISO";
                         variant: "secondary";
                         enabled: !running;
                         clicked => { back-to-source(); }
                     }
                     FButton {
-                        label: "← Edit Settings";
+                        label: "\u{2190} Edit Settings";
                         variant: "secondary";
                         enabled: !running;
                         clicked => { back-clicked(); }
@@ -351,35 +351,57 @@ export component StepBuild inherits Rectangle {
                 }
             }
 
-            // ── Start Build button ──────────────────────────────────────
-            if artifact-path == "": HorizontalLayout {
-                spacing: Sizes.space-4;
-                alignment: start;
+            // ── Actions: Start Build ────────────────────────────────────
+            if artifact-path == "": FCard {
+                title: "ACTIONS";
+                VerticalLayout {
+                    padding: Sizes.space-5;
+                    spacing: Sizes.space-3;
 
-                FButton {
-                    height: 50px;
-                    min-width: 220px;
-                    label: running ? "Building…" : "Start Build";
-                    icon: running ? "" : "🔨";
-                    variant: running ? "secondary" : "primary";
-                    enabled: !running;
-                    clicked => { run-clicked(); }
+                    Text {
+                        text: running
+                            ? "Build is running. Watch the log panel for progress."
+                            : "Click Start Build to generate your ISO. The plan above is final.";
+                        font-size: Sizes.font-sm;
+                        color: Palette.muted;
+                        wrap: word-wrap;
+                    }
+
+                    HorizontalLayout {
+                        spacing: Sizes.space-4;
+                        alignment: start;
+                        FButton {
+                            height: 50px;
+                            min-width: 220px;
+                            label: running ? "Building\u{2026}" : "Start Build";
+                            variant: running ? "secondary" : "primary";
+                            enabled: !running;
+                            clicked => { run-clicked(); }
+                        }
+                    }
                 }
             }
 
-            // ── Rebuild section (post-build) ────────────────────────────
-            if artifact-path != "": VerticalLayout {
-                spacing: Sizes.space-2;
-                Text {
-                    text: "Need another artifact after changing settings?";
-                    font-size: Sizes.font-sm;
-                    color: Palette.muted;
-                }
-                FButton {
-                    label: "Rebuild ISO";
-                    variant: "secondary";
-                    enabled: !running;
-                    clicked => { run-clicked(); }
+            // ── Actions: Rebuild (post-build) ───────────────────────────
+            if artifact-path != "": FCard {
+                title: "REBUILD";
+                VerticalLayout {
+                    padding: Sizes.space-5;
+                    spacing: Sizes.space-3;
+                    Text {
+                        text: "Need another artifact after changing settings?";
+                        font-size: Sizes.font-sm;
+                        color: Palette.muted;
+                    }
+                    HorizontalLayout {
+                        alignment: start;
+                        FButton {
+                            label: "Rebuild ISO";
+                            variant: "secondary";
+                            enabled: !running;
+                            clicked => { run-clicked(); }
+                        }
+                    }
                 }
             }
 
@@ -393,11 +415,13 @@ export component StepBuild inherits Rectangle {
                     spacing: Sizes.space-3;
                     HorizontalLayout {
                         spacing: Sizes.space-2;
-                        Text {
-                            text: "✓";
-                            font-size: 18px;
-                            color: Palette.green;
-                            vertical-alignment: center;
+                        Image {
+                            source: @image-url("../icons/check.svg");
+                            width: 18px;
+                            height: 18px;
+                            y: (parent.height - self.height) / 2;
+                            colorize: Palette.green;
+                            image-fit: contain;
                         }
                         Text {
                             text: "Build complete";
@@ -430,7 +454,7 @@ export component StepBuild inherits Rectangle {
                         alignment: start;
 
                         FButton {
-                            label: "Optional Checks →";
+                            label: "Optional Checks \u{2192}";
                             variant: "primary";
                             clicked => { view-results(); }
                         }
