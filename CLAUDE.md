@@ -40,6 +40,9 @@ Release profile: `codegen-units = 1`, `lto = true`, `strip = true`.
 ## Runbooks
 - `docs/RUNBOOKS.md` — failure-mode taxonomy by error code (E001-E100) plus operational scenarios
 
+## Architecture Decisions
+- `docs/adr/README.md` — index of load-bearing decisions; read these before changing the workspace layout, ISO repack tool, front-end strategy, error taxonomy, or distro injection logic
+
 ## Benchmarks
 - `cargo bench -p forgeiso-engine` — sha256, autoinstall/kickstart/preseed generators, event builder
 - HTML report: `target/criterion/report/index.html`
