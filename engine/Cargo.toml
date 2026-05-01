@@ -24,4 +24,9 @@ walkdir.workspace = true
 which.workspace = true
 
 [dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
 tempfile.workspace = true
+
+[[bench]]
+name = "engine_hot_paths"
+harness = false
