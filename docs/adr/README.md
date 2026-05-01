@@ -17,6 +17,7 @@ ADR-NNNN | Deprecated.
 | [0005](0005-iso-injection-strategy.md) | Distro-specific autoinstall injection (not generic overlay) | Accepted |
 | [0006](0006-post-decomposition-module-taxonomy.md) | Module-directory layout for files >800 LOC                   | Accepted |
 | [0007](0007-testing-strategy-seven-layer.md) | Seven-layer testing (unit + integration + e2e + property + mutation + contract + perf) | Accepted |
+| [0008](0008-reliability-contract-desktop-tool.md) | Reliability contract — desktop-tool adaptation of S-rubric service criteria | Accepted |
 
 When adding an ADR, copy the format from any existing entry and number
 it sequentially. Don't renumber; reference older ADRs by number when
