@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "note": "Placeholder baseline. Run `scripts/perf-bench.sh bench` then `scripts/perf-bench.sh capture` once the engine refactor is settled to populate real numbers. Until populated, `compare` will skip benches that have no baseline entry.",
+  "timestamp": 0,
+  "benches": {}
+}
