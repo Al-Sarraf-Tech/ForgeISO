@@ -21,6 +21,12 @@ jq 'select(.level == "ERROR" or .level == "WARN")' \
 The TUI writes to `forgeiso-tui.log.<date>` and the GUI to
 `forgeiso-gui.log.<date>` in the same directory.
 
+For the engine-side guarantee that each error code below is actually
+produced by the engine (rather than panicking, hanging, or silently
+producing a corrupt artefact), see [`docs/CHAOS.md`](CHAOS.md) — the
+chaos / fault-injection suite that pairs each runbook entry with an
+`EngineError`-asserting test in `engine/tests/chaos.rs`.
+
 ---
 
 ## E001 — Source ISO Not Found
