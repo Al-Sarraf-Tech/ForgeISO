@@ -4,6 +4,7 @@ mod app;
 mod config;
 mod defaults;
 mod jobs;
+mod obs;
 mod persist;
 mod state;
 mod worker;
@@ -23,7 +24,8 @@ use state::{InjectState, PersistedState, VerifyState};
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    // JSON tracing — fail-open. Guard held for program lifetime.
+    let _tracing_guard = obs::init_tracing();
 
     if !has_display_env(
         std::env::var_os("DISPLAY").as_deref(),

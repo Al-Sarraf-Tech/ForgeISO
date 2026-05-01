@@ -33,7 +33,9 @@ tempfile = "3.23.0"
 thiserror = "2.0.17"
 tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread", "sync", "process", "fs", "time"] }
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt", "json"] }
+tracing-appender = "0.2.3"
+dirs = "5.0.1"
 uuid = { version = "1.18.1", features = ["serde", "v4"] }
 walkdir = "2.5.0"
 which = "8.0.0"

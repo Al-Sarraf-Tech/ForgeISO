@@ -1,3 +1,4 @@
+mod obs;
 mod state;
 mod ui;
 mod worker;
@@ -19,6 +20,9 @@ use state::{App, LogLevel, SourceFocus, WizardStep, WorkerMsg};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // JSON tracing — fail-open. Guard held for program lifetime.
+    let _tracing_guard = obs::init_tracing();
+
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = disable_raw_mode();
@@ -33,6 +37,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     let engine = Arc::new(ForgeIsoEngine::new());
+    // Parallel structured-log channel — does not replace in-app log pane.
+    let _trace_task = obs::spawn_event_tracer(&engine);
     let mut app = App::new(engine.doctor().await);
     let (tx, mut rx_worker) = mpsc::unbounded_channel::<WorkerMsg>();
 

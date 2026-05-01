@@ -12,7 +12,11 @@ path = "src/main.rs"
 
 [dependencies]
 crossterm.workspace = true
+dirs.workspace = true
 ratatui.workspace = true
 tokio.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
 forgeiso-engine = { path = "../engine" }
 serde_json.workspace = true

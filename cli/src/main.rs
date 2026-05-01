@@ -1,4 +1,5 @@
 mod handlers;
+mod obs;
 mod output;
 
 use std::path::PathBuf;
@@ -396,11 +397,16 @@ enum VmCmd {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // JSON tracing — fail-open. Guard held for program lifetime.
+    let _tracing_guard = obs::init_tracing();
+
     let cli = Cli::parse();
     let engine = ForgeIsoEngine::new();
 
     // Subscribe to engine events and spawn event handler
     let _event_task = output::spawn_event_subscriber(&engine);
+    // Parallel structured-log channel — does not replace user-facing stderr.
+    let _trace_task = obs::spawn_event_tracer(&engine);
 
     match cli.command {
         Commands::Doctor { json } => {
