@@ -10,6 +10,9 @@ export struct PresetCard {
     desc: string,
 }
 
+// Brand-colored monogram circle per distro family. Uses card.id prefix to
+// pick the brand color so the swatch is consistent across themes (brand
+// identity is the same in dark + light). Falls back to neutral on unknown.
 component DistroCard inherits Rectangle {
     in property <PresetCard> card;
     in property <bool>       selected: false;
@@ -33,18 +36,54 @@ component DistroCard inherits Rectangle {
 
     property <bool> hovered: touch.has-hover;
 
+    // Brand color per distro family. These are the distros' actual brand
+    // colors (Ubuntu orange, Fedora blue, Arch blue, Mint green, Rocky
+    // green, AlmaLinux teal, CentOS purple, Debian red). Brand identity
+    // doesn't shift between dark/light themes.
+    property <color> brand: card.id == "ubuntu-server-lts" || card.id == "ubuntu-server-jammy" ? #E95420
+                          : card.id == "fedora-server" ? #294172
+                          : card.id == "arch-linux" ? #1793D1
+                          : card.id == "linux-mint-cinnamon" ? #86BE43
+                          : card.id == "rocky-linux" ? #10B981
+                          : card.id == "almalinux" ? #0FB37D
+                          : card.id == "centos-stream" ? #932279
+                          : Palette.muted;
+
+    // First letter of distro name (after stripping "Linux " prefix). Single
+    // glyph, white on brand. The actual brand wordmark is the card.name text
+    // below — this is a recognizable shorthand, not a logo claim.
+    property <string> mono: card.id == "ubuntu-server-lts" || card.id == "ubuntu-server-jammy" ? "U"
+                          : card.id == "fedora-server" ? "F"
+                          : card.id == "arch-linux" ? "A"
+                          : card.id == "linux-mint-cinnamon" ? "M"
+                          : card.id == "rocky-linux" ? "R"
+                          : card.id == "almalinux" ? "A"
+                          : card.id == "centos-stream" ? "C"
+                          : "L";
+
     VerticalLayout {
         alignment: center;
-        spacing: Sizes.space-1;
+        spacing: Sizes.space-2;
         padding-left: Sizes.space-4;
         padding-right: Sizes.space-4;
         padding-top: Sizes.space-3;
         padding-bottom: Sizes.space-3;
 
-        if card.emoji != "": Text {
-            text: card.emoji;
-            font-size: 22px;
-            horizontal-alignment: center;
+        // Brand monogram circle
+        Rectangle {
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
+            background: brand;
+            horizontal-stretch: 0;
+            Text {
+                text: mono;
+                font-size: 16px;
+                font-weight: 800;
+                color: #ffffff;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
         }
         Text {
             text: card.name;
