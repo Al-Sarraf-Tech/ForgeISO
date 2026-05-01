@@ -480,3 +480,22 @@ tail -5 "${FORGEISO_LOG_DIR:-$HOME/.local/state/forgeiso}"/forgeiso.log.$(date -
 
 All four should produce non-empty, non-error output. If any fails, find
 the matching E-code section above.
+
+---
+
+## Mutation Testing (engine quality gate)
+
+`docs/MUTATION.md` documents the cargo-mutants setup that protects the
+inject + autoinstall/ubuntu modules. Operator cheat-sheet:
+
+```bash
+scripts/run-mutants.sh                              # full run, enforce threshold
+scripts/run-mutants.sh --check-only                 # fast compile-only smoke
+scripts/run-mutants.sh --in-diff origin/main        # PR / pre-push gate
+FORGEISO_MUTANTS_THRESHOLD=85 scripts/run-mutants.sh
+```
+
+Threshold is 80 % by default. Survivors that escape are triaged via the
+recipe in `docs/MUTATION.md` (read mutant -> add unit test in the
+matching `engine/src/config/inject/tests/<concern>.rs` -> re-run
+`--in-diff`).
