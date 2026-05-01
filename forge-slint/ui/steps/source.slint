@@ -19,11 +19,11 @@ component DistroCard inherits Rectangle {
     width: 180px;
     height: 110px;
     border-radius: Sizes.radius-md;
-    background: selected ? rgba(69, 194, 107, 0.08)
+    background: selected ? Palette.green-soft
               : hovered && !running ? Palette.active
               : Palette.elevated;
     border-width: selected ? 1.5px : 1px;
-    border-color: selected ? Palette.green
+    border-color: selected ? Palette.green-soft-border
                : hovered && !running ? Palette.border-focus
                : Palette.border-subtle;
     opacity: running ? 0.6 : 1.0;

@@ -36,17 +36,35 @@ export global Palette {
     out property <color> accent-hover: Theme.mode == "light" ? #0860ca : #58a6ff;
     out property <color> on-accent:    #ffffff;
 
-    // ── Status colors (consistent across themes; alpha shifts handle bg) ──
+    // ── Status colors (text-readable on bg in BOTH themes — WCAG AA ≥4.5:1) ──
     out property <color> green: Theme.mode == "light" ? #1a7f37 : #3fb950;
     out property <color> red:   Theme.mode == "light" ? #cf222e : #f85149;
     out property <color> amber: Theme.mode == "light" ? #9a6700 : #d29922;
     out property <color> info:  Theme.mode == "light" ? #0969da : #58a6ff;
 
-    // ── Text scale ─────────────────────────────────────────────────────────
+    // ── Status soft fills (status pills, destructive button bg, etc.) ──────
+    // Theme-aware tinted backgrounds. Use *-soft-border for the matching outline.
+    out property <color> green-soft:        Theme.mode == "light" ? #dafbe1 : rgba(63, 185, 80, 0.16);
+    out property <color> green-soft-border: Theme.mode == "light" ? #b7e4c4 : rgba(63, 185, 80, 0.4);
+    out property <color> red-soft:          Theme.mode == "light" ? #ffebe9 : rgba(248, 81, 73, 0.16);
+    out property <color> red-soft-border:   Theme.mode == "light" ? #ffcecb : rgba(248, 81, 73, 0.4);
+    out property <color> red-soft-hover:    Theme.mode == "light" ? #ffd8d3 : rgba(248, 81, 73, 0.24);
+    out property <color> amber-soft:        Theme.mode == "light" ? #fff8c5 : rgba(210, 153, 34, 0.16);
+    out property <color> amber-soft-border: Theme.mode == "light" ? #f0d97f : rgba(210, 153, 34, 0.4);
+    out property <color> accent-soft:       Theme.mode == "light" ? #ddf4ff : rgba(47, 129, 247, 0.16);
+    out property <color> accent-soft-border: Theme.mode == "light" ? #b6e3ff : rgba(47, 129, 247, 0.4);
+    out property <color> neutral-soft:      Theme.mode == "light" ? #eaeef2 : rgba(110, 118, 129, 0.2);
+    out property <color> neutral-soft-border: Theme.mode == "light" ? #d0d7de : rgba(110, 118, 129, 0.4);
+
+    // ── Text scale (every level passes WCAG AA 4.5:1 for body text) ────────
+    // text:           primary body — ≥13:1 both themes
+    // text-secondary: secondary body — ≥6:1 both themes
+    // muted:          tertiary text — ≥4.5:1 both themes
+    // subtle:         decorative use only (icons, dividers); also ≥4.5:1 for safety
     out property <color> text:           Theme.mode == "light" ? #1f2328 : #e6edf3;
     out property <color> text-secondary: Theme.mode == "light" ? #57606a : #8b949e;
-    out property <color> muted:          Theme.mode == "light" ? #6e7781 : #6e7681;
-    out property <color> subtle:         Theme.mode == "light" ? #848d97 : #484f58;
+    out property <color> muted:          Theme.mode == "light" ? #6e7781 : #7d8590;
+    out property <color> subtle:         Theme.mode == "light" ? #6e7781 : #7d8590;
 
     // ── Interactive states ─────────────────────────────────────────────────
     out property <color> active:  Theme.mode == "light" ? #f0f3f7 : #21262d;

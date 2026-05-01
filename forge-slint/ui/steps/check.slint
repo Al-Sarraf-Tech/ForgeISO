@@ -8,11 +8,11 @@ component ResultCard inherits FCard {
     in property <string> detail;
 
     border-color: !has-result ? Palette.border
-               : passed ? rgba(69, 194, 107, 0.4)
-               : rgba(240, 82, 75, 0.4);
+               : passed ? Palette.green-soft-border
+               : Palette.red-soft-border;
     background: !has-result ? Palette.surface
-              : passed ? rgba(69, 194, 107, 0.06)
-              : rgba(240, 82, 75, 0.06);
+              : passed ? Palette.green-soft
+              : Palette.red-soft;
 
     animate background { duration: 250ms; }
     animate border-color { duration: 250ms; }
@@ -126,8 +126,8 @@ export component StepCheck inherits Rectangle {
 
         // ── Build success banner ─────────────────────────────────────
         if artifact-path != "": FCard {
-            border-color: rgba(69, 194, 107, 0.35);
-            background: rgba(69, 194, 107, 0.05);
+            border-color: Palette.green-soft-border;
+            background: Palette.green-soft;
 
             VerticalLayout {
                 padding: Sizes.space-5;

@@ -25,9 +25,9 @@ export component FButton inherits Rectangle {
           : ta.has-hover && enabled ? Palette.accent-hover
           : Palette.accent)
       : variant == "destructive"
-        ? (ta.pressed && enabled ? rgba(240, 82, 75, 0.24)
-          : ta.has-hover && enabled ? rgba(240, 82, 75, 0.16)
-          : rgba(240, 82, 75, 0.08))
+        ? (ta.pressed && enabled ? Palette.red-soft-hover
+          : ta.has-hover && enabled ? Palette.red-soft-hover
+          : Palette.red-soft)
       : variant == "ghost"
         ? (ta.has-hover && enabled ? Palette.active : transparent)
       : /* secondary */
@@ -40,11 +40,11 @@ export component FButton inherits Rectangle {
                : variant == "ghost" ? 0px
                : 1px;
     border-color: variant == "destructive"
-        ? (ta.has-hover && enabled ? rgba(240, 82, 75, 0.5) : rgba(240, 82, 75, 0.3))
+        ? Palette.red-soft-border
         : Palette.border;
 
-    drop-shadow-blur: variant == "primary" && enabled ? 8px : 0px;
-    drop-shadow-color: variant == "primary" && enabled ? rgba(77, 142, 247, 0.15) : transparent;
+    drop-shadow-blur: variant == "primary" && enabled ? 4px : 0px;
+    drop-shadow-color: variant == "primary" && enabled ? Palette.shadow-md : transparent;
 
     animate background { duration: 120ms; }
     animate border-color { duration: 120ms; }
@@ -97,12 +97,12 @@ export component FIconButton inherits Rectangle {
 
     background: active ? Palette.accent
               : variant == "destructive"
-                ? (ta.has-hover && enabled ? rgba(240, 82, 75, 0.16) : rgba(240, 82, 75, 0.08))
+                ? (ta.has-hover && enabled ? Palette.red-soft-hover : Palette.red-soft)
               : (ta.has-hover && enabled ? Palette.active : Palette.elevated);
     border-width: 1px;
     border-color: active ? Palette.accent
                 : variant == "destructive"
-                  ? rgba(240, 82, 75, 0.5)
+                  ? Palette.red-soft-border
                 : ta.has-hover && enabled ? Palette.border-focus : Palette.border;
 
     animate background { duration: 120ms; }
@@ -139,7 +139,7 @@ export component FTextInput inherits Rectangle {
 
     height: 40px;
     border-radius: Sizes.radius-sm;
-    background: Palette.bg;
+    background: Palette.surface;
     border-width: 1px;
     border-color: error ? Palette.red
                 : field.has-focus ? Palette.border-focus
@@ -184,7 +184,7 @@ export component FTextarea inherits Rectangle {
 
     height: 100px;
     border-radius: Sizes.radius-sm;
-    background: Palette.bg;
+    background: Palette.surface;
     border-width: 1px;
     border-color: editor.has-focus ? Palette.border-focus : Palette.border;
     animate border-color { duration: 150ms; }
@@ -272,15 +272,15 @@ export component FBadge inherits Rectangle {
 
     height: 20px;
     border-radius: 10px;
-    background: variant == "success" ? rgba(69, 194, 107, 0.15)
-              : variant == "error"   ? rgba(240, 82, 75, 0.15)
-              : variant == "warning" ? rgba(227, 166, 44, 0.15)
-              : rgba(122, 134, 150, 0.15);
+    background: variant == "success" ? Palette.green-soft
+              : variant == "error"   ? Palette.red-soft
+              : variant == "warning" ? Palette.amber-soft
+              : Palette.neutral-soft;
     border-width: 1px;
-    border-color: variant == "success" ? rgba(69, 194, 107, 0.3)
-               : variant == "error"   ? rgba(240, 82, 75, 0.3)
-               : variant == "warning" ? rgba(227, 166, 44, 0.3)
-               : Palette.border;
+    border-color: variant == "success" ? Palette.green-soft-border
+               : variant == "error"   ? Palette.red-soft-border
+               : variant == "warning" ? Palette.amber-soft-border
+               : Palette.neutral-soft-border;
 
     HorizontalLayout {
         padding-left: Sizes.space-2;

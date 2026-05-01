@@ -187,8 +187,8 @@ export component StepBuild inherits Rectangle {
 
             // ── Confirmation banner ─────────────────────────────────────
             if artifact-path == "": FCard {
-                border-color: rgba(77, 142, 247, 0.25);
-                background: rgba(77, 142, 247, 0.06);
+                border-color: Palette.accent-soft-border;
+                background: Palette.accent-soft;
                 drop-shadow-blur: 0px;
 
                 VerticalLayout {
@@ -327,8 +327,8 @@ export component StepBuild inherits Rectangle {
 
             // ── Unattended warning banner ───────────────────────────────
             if unattended && artifact-path == "": FCard {
-                border-color: rgba(227, 166, 44, 0.35);
-                background: rgba(227, 166, 44, 0.06);
+                border-color: Palette.amber-soft-border;
+                background: Palette.amber-soft;
                 drop-shadow-blur: 0px;
 
                 VerticalLayout {
@@ -385,8 +385,8 @@ export component StepBuild inherits Rectangle {
 
             // ── Success banner (post-build) ─────────────────────────────
             if artifact-path != "": FCard {
-                border-color: rgba(69, 194, 107, 0.35);
-                background: rgba(69, 194, 107, 0.05);
+                border-color: Palette.green-soft-border;
+                background: Palette.green-soft;
 
                 VerticalLayout {
                     padding: Sizes.space-5;
