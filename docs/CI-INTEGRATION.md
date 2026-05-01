@@ -115,7 +115,77 @@ contract:
       run: cargo test -p forgeiso-engine --test api_contract
 ```
 
-### 4. s-tier-audit job (release-tag only)
+### 4. release-sign job (release-tag only)
+
+Sign every release artifact (binaries, packages, checksums, SBOM) with cosign
+keyless OIDC, then verify the signatures before the release is announced. This
+is the desktop-tool equivalent of SLSA L3+ build provenance — the canonical
+SLSA tooling (`actions/attest-build-provenance`) is banned per CLAUDE.md
+absolute, so we use cosign sign-blob + Sigstore transparency log instead. See
+`docs/SECURITY.md` and ADR 0010 for the full security contract.
+
+The job needs `id-token: write` permission so cosign can trade the GitHub
+Actions OIDC token at Fulcio for a short-lived signing certificate.
+
+```yaml
+release-sign:
+  name: Release Sign
+  runs-on: [self-hosted, rust-slim]
+  if: startsWith(github.ref, 'refs/tags/')
+  needs: release
+  permissions:
+    id-token: write
+    contents: write
+  timeout-minutes: 30
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Install cosign
+      shell: bash
+      run: |
+        if ! command -v cosign >/dev/null; then
+          curl -sfLo /tmp/cosign https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+          install -m 0755 /tmp/cosign /usr/local/bin/cosign
+        fi
+        cosign version
+    - name: Download release artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: release-assets
+        path: release-assets/
+    - name: Sign release artifacts (cosign keyless)
+      shell: bash
+      timeout-minutes: 15
+      env:
+        REL_DIR: release-assets/
+        SIG_DIR: release-assets/signatures/
+      run: scripts/sign-release.sh
+    - name: Verify signatures (round-trip check)
+      shell: bash
+      timeout-minutes: 10
+      env:
+        REL_DIR: release-assets/
+        SIG_DIR: release-assets/signatures/
+      run: scripts/verify-release.sh
+    - name: Upload signatures to release
+      uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe
+      with:
+        files: release-assets/signatures/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Caveats for the orchestrator config:
+
+- The `id-token: write` permission is mandatory for keyless cosign. Without
+  it cosign falls back to interactive browser OIDC, which fails in CI.
+- The job depends on Sigstore Fulcio + Rekor reachability from the runner
+  network. Add an outbound allow for `fulcio.sigstore.dev` and
+  `rekor.sigstore.dev` if the runner egress is restricted.
+- `actions/attest-build-provenance` MUST NOT be added by the orchestrator
+  here or anywhere — it is banned by CLAUDE.md absolute.
+
+### 5. s-tier-audit job (release-tag only)
 
 ```yaml
 s-tier-audit:
@@ -123,7 +193,7 @@ s-tier-audit:
   runs-on: [self-hosted, rust-slim]
   if: startsWith(github.ref, 'refs/tags/v')
   timeout-minutes: 60
-  needs: [test, security, perf, contract]
+  needs: [test, security, perf, contract, release-sign]
   steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -159,6 +229,12 @@ scripts/run-mutants.sh &
 
 # Just contract:
 FORGEISO_RUN_API_CONTRACT=1 cargo test -p forgeiso-engine --test api_contract
+
+# Sign release artifacts (after building release-assets/ via scripts/release/make-packages.sh):
+scripts/sign-release.sh
+
+# Verify the signatures:
+scripts/verify-release.sh
 ```
 
 ## Status
