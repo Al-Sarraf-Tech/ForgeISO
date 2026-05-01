@@ -1,0 +1,109 @@
+import { Sizes } from "../../theme.slint";
+import { FTextInput, FTextarea, FSectionLabel, FFieldHelp, FSwitch, FCard } from "../../components/design_system.slint";
+
+// ── TAB 3: Services & Security ───────────────────────────────────────────────
+
+export component TabServices inherits VerticalLayout {
+    // Services
+    in-out property <string> enable-services;
+    in-out property <string> disable-services;
+
+    // Containers
+    in-out property <bool>   docker: false;
+    in-out property <bool>   podman: false;
+    in-out property <string> docker-users;
+
+    // Firewall
+    in-out property <bool>   firewall-enabled: false;
+    in-out property <string> firewall-policy;
+    in-out property <string> allow-ports;
+    in-out property <string> deny-ports;
+
+    // Runtime
+    in property <bool> running: false;
+
+    callback field-edited(string);
+    callback docker-changed();
+
+    spacing: 16px;
+
+    // Services card
+    FCard {
+        title: "SERVICES";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "ENABLE  (one per line)"; }
+                    FTextarea { value <=> enable-services; hint: "docker\nnginx"; enabled: !running; changed(_t) => { field-edited("enable_services"); } }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "DISABLE  (one per line)"; }
+                    FTextarea { value <=> disable-services; hint: "snapd"; enabled: !running; changed(_t) => { field-edited("disable_services"); } }
+                }
+            }
+        }
+    }
+
+    // Containers card
+    FCard {
+        title: "CONTAINERS";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            HorizontalLayout {
+                spacing: Sizes.space-6;
+                FSwitch {
+                    label: "Install Docker";
+                    checked <=> docker;
+                    enabled: !running;
+                    toggled => { docker-changed(); }
+                }
+                FSwitch { label: "Install Podman"; checked <=> podman; enabled: !running; }
+            }
+            if docker: VerticalLayout {
+                spacing: 4px;
+                FSectionLabel { text: "ADD USERS TO DOCKER GROUP  (one per line)"; }
+                FTextInput { value <=> docker-users; hint: "admin"; enabled: !running; changed(_t) => { field-edited("docker_users"); } }
+                FFieldHelp {
+                    text: "When Docker is enabled, ForgeISO pre-fills this with the primary username unless you override it.";
+                }
+            }
+        }
+    }
+
+    // Firewall card
+    FCard {
+        title: "FIREWALL";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            FSwitch { label: "Enable firewall"; checked <=> firewall-enabled; enabled: !running; }
+            if firewall-enabled: VerticalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "DEFAULT POLICY"; }
+                    FTextInput { value <=> firewall-policy; hint: "deny  (or allow / reject)"; enabled: !running; changed(_t) => { field-edited("firewall_policy"); } }
+                }
+                HorizontalLayout {
+                    spacing: Sizes.space-4;
+                    VerticalLayout {
+                        spacing: 4px;
+                        FSectionLabel { text: "ALLOWED PORTS  (space-separated)"; }
+                        FTextInput { value <=> allow-ports; hint: "22 80 443"; enabled: !running; changed(_t) => { field-edited("allow_ports"); } }
+                    }
+                    VerticalLayout {
+                        spacing: 4px;
+                        FSectionLabel { text: "DENIED PORTS"; }
+                        FTextInput { value <=> deny-ports; hint: "23 21"; enabled: !running; }
+                    }
+                }
+            }
+        }
+    }
+}

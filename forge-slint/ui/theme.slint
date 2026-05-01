@@ -1,50 +1,89 @@
 // ── ForgeISO Design System ───────────────────────────────────────────────────
-// Refined dark palette + spacing tokens.  Import in every component.
+// Theme + tokens. Two modes (dark default, light optional) drive Palette.
+// Inspired by GitHub Primer + Grafana for an enterprise ops-console aesthetic.
+// Import { Palette, Sizes, Theme } in every component.
+
+export global Theme {
+    // "dark" | "light"
+    in-out property <string> mode: "dark";
+
+    // Build metadata surfaced in the status bar. Set from Rust at startup.
+    in-out property <string> app-version: "v0.2.1";
+    in-out property <string> build-hash: "";
+    in-out property <string> license: "MIT";
+}
 
 export global Palette {
-    // Backgrounds — deeper, richer dark with subtle blue undertone
-    out property <color> bg:       #0b0f14;
-    out property <color> surface:  #12171e;
-    out property <color> panel:    #0e1319;
-    out property <color> elevated: #1a2029;
+    // ── Surfaces (deepest → most elevated) ────────────────────────────────
+    out property <color> bg:       Theme.mode == "light" ? #f6f8fa : #0d1117;
+    out property <color> panel:    Theme.mode == "light" ? #ffffff : #010409;
+    out property <color> surface:  Theme.mode == "light" ? #ffffff : #161b22;
+    out property <color> elevated: Theme.mode == "light" ? #f0f3f7 : #1c2128;
 
-    // Borders
-    out property <color> border:       #252d38;
-    out property <color> border-focus: #4d8ef7;
-    out property <color> border-subtle: #1e2530;
+    // Sidebar/footer chrome — deliberately distinct from content surface
+    out property <color> chrome:        Theme.mode == "light" ? #ffffff : #010409;
+    out property <color> chrome-hover:  Theme.mode == "light" ? #f0f3f7 : #21262d;
+    out property <color> chrome-active: Theme.mode == "light" ? #ddf4ff : #1f6feb;
+    out property <color> chrome-border: Theme.mode == "light" ? #d0d7de : #30363d;
 
-    // Semantic
-    out property <color> accent:       #4d8ef7;
-    out property <color> accent-hover: #6ba1fa;
-    out property <color> green:        #45c26b;
-    out property <color> red:          #f0524b;
-    out property <color> amber:        #e3a62c;
+    // ── Borders ────────────────────────────────────────────────────────────
+    out property <color> border:        Theme.mode == "light" ? #d0d7de : #30363d;
+    out property <color> border-subtle: Theme.mode == "light" ? #e4e8ed : #21262d;
+    out property <color> border-focus:  Theme.mode == "light" ? #0969da : #58a6ff;
 
-    // Text
-    out property <color> text:           #e8edf4;
-    out property <color> text-secondary: #a3adb8;
-    out property <color> muted:          #7a8696;
-    out property <color> subtle:         #5a6470;
-    out property <color> on-accent:      #ffffff;
+    // ── Semantic accent (single brand color) ───────────────────────────────
+    out property <color> accent:       Theme.mode == "light" ? #0969da : #2f81f7;
+    out property <color> accent-hover: Theme.mode == "light" ? #0860ca : #58a6ff;
+    out property <color> on-accent:    #ffffff;
 
-    // Interactive states
-    out property <color> active:  #1f2937;
-    out property <color> pressed: #172033;
+    // ── Status colors (text-readable on bg in BOTH themes — WCAG AA ≥4.5:1) ──
+    out property <color> green: Theme.mode == "light" ? #1a7f37 : #3fb950;
+    out property <color> red:   Theme.mode == "light" ? #cf222e : #f85149;
+    out property <color> amber: Theme.mode == "light" ? #9a6700 : #d29922;
+    out property <color> info:  Theme.mode == "light" ? #0969da : #58a6ff;
 
-    // Depth
-    out property <color> shadow-sm: rgba(0, 0, 0, 0.12);
-    out property <color> shadow-md: rgba(0, 0, 0, 0.20);
-    out property <color> shadow-lg: rgba(0, 0, 0, 0.32);
+    // ── Status soft fills (status pills, destructive button bg, etc.) ──────
+    // Theme-aware tinted backgrounds. Use *-soft-border for the matching outline.
+    out property <color> green-soft:        Theme.mode == "light" ? #dafbe1 : rgba(63, 185, 80, 0.16);
+    out property <color> green-soft-border: Theme.mode == "light" ? #b7e4c4 : rgba(63, 185, 80, 0.4);
+    out property <color> red-soft:          Theme.mode == "light" ? #ffebe9 : rgba(248, 81, 73, 0.16);
+    out property <color> red-soft-border:   Theme.mode == "light" ? #ffcecb : rgba(248, 81, 73, 0.4);
+    out property <color> red-soft-hover:    Theme.mode == "light" ? #ffd8d3 : rgba(248, 81, 73, 0.24);
+    out property <color> amber-soft:        Theme.mode == "light" ? #fff8c5 : rgba(210, 153, 34, 0.16);
+    out property <color> amber-soft-border: Theme.mode == "light" ? #f0d97f : rgba(210, 153, 34, 0.4);
+    out property <color> accent-soft:       Theme.mode == "light" ? #ddf4ff : rgba(47, 129, 247, 0.16);
+    out property <color> accent-soft-border: Theme.mode == "light" ? #b6e3ff : rgba(47, 129, 247, 0.4);
+    out property <color> neutral-soft:      Theme.mode == "light" ? #eaeef2 : rgba(110, 118, 129, 0.2);
+    out property <color> neutral-soft-border: Theme.mode == "light" ? #d0d7de : rgba(110, 118, 129, 0.4);
+
+    // ── Text scale (every level passes WCAG AA 4.5:1 for body text) ────────
+    // text:           primary body — ≥13:1 both themes
+    // text-secondary: secondary body — ≥6:1 both themes
+    // muted:          tertiary text — ≥4.5:1 both themes
+    // subtle:         decorative use only (icons, dividers); also ≥4.5:1 for safety
+    out property <color> text:           Theme.mode == "light" ? #1f2328 : #e6edf3;
+    out property <color> text-secondary: Theme.mode == "light" ? #57606a : #8b949e;
+    out property <color> muted:          Theme.mode == "light" ? #6e7781 : #7d8590;
+    out property <color> subtle:         Theme.mode == "light" ? #6e7781 : #7d8590;
+
+    // ── Interactive states ─────────────────────────────────────────────────
+    out property <color> active:  Theme.mode == "light" ? #f0f3f7 : #21262d;
+    out property <color> pressed: Theme.mode == "light" ? #d8dee4 : #2d333b;
+
+    // ── Depth ──────────────────────────────────────────────────────────────
+    out property <color> shadow-sm: Theme.mode == "light" ? rgba(31, 35, 40, 0.04) : rgba(0, 0, 0, 0.16);
+    out property <color> shadow-md: Theme.mode == "light" ? rgba(31, 35, 40, 0.08) : rgba(0, 0, 0, 0.24);
+    out property <color> shadow-lg: Theme.mode == "light" ? rgba(31, 35, 40, 0.16) : rgba(0, 0, 0, 0.40);
 }
 
 export global Sizes {
-    // Border radii
+    // ── Border radii (Primer-aligned: 6 / 8 / 12) ──────────────────────────
     out property <length> radius-sm:  6px;
-    out property <length> radius-md:  10px;
-    out property <length> radius-lg:  14px;
-    out property <length> radius-xl:  18px;
+    out property <length> radius-md:  8px;
+    out property <length> radius-lg:  12px;
+    out property <length> radius-xl:  16px;
 
-    // 8px grid spacing
+    // ── 4px grid spacing ───────────────────────────────────────────────────
     out property <length> space-1:  4px;
     out property <length> space-2:  8px;
     out property <length> space-3:  12px;
@@ -53,20 +92,35 @@ export global Sizes {
     out property <length> space-6:  24px;
     out property <length> space-8:  32px;
     out property <length> space-10: 40px;
+    out property <length> space-12: 48px;
 
-    // Legacy gap aliases (for existing components during migration)
+    // Legacy gap aliases (existing components during migration)
     out property <length> gap-xs: 4px;
     out property <length> gap-sm: 8px;
-    out property <length> gap-md: 14px;
+    out property <length> gap-md: 12px;
     out property <length> gap-lg: 24px;
 
-    // Typography scale
+    // ── Typography scale ───────────────────────────────────────────────────
     out property <length> font-2xs: 10px;
     out property <length> font-xs:  11px;
     out property <length> font-sm:  12px;
-    out property <length> font-md:  14px;
-    out property <length> font-lg:  16px;
-    out property <length> font-xl:  20px;
-    out property <length> font-2xl: 26px;
-    out property <length> font-3xl: 32px;
+    out property <length> font-md:  13px;
+    out property <length> font-lg:  15px;
+    out property <length> font-xl:  18px;
+    out property <length> font-2xl: 24px;
+    out property <length> font-3xl: 30px;
+
+    // ── Layout primitives ──────────────────────────────────────────────────
+    out property <length> sidebar-width:    220px;
+    out property <length> sidebar-collapsed: 64px;
+    out property <length> footer-height:    28px;
+    out property <length> header-height:    56px;
+}
+
+// ── Font families ────────────────────────────────────────────────────────────
+// Empty string = OS default sans. "monospace" maps to platform monospace.
+// Component-level Text can override via font-family for technical fields.
+export global Fonts {
+    out property <string> sans: "";
+    out property <string> mono: "monospace";
 }

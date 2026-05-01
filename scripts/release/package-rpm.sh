@@ -34,8 +34,8 @@ fpm \
   --architecture x86_64 \
   --license     "Apache-2.0" \
   --vendor      "ForgeISO" \
-  --maintainer  "Jamal Al-Sarraf <https://github.com/jalsarraf0>" \
-  --url         "https://github.com/jalsarraf0/ForgeISO" \
+  --maintainer  "Jamal Al-Sarraf <https://github.com/Al-Sarraf-Tech>" \
+  --url         "https://github.com/Al-Sarraf-Tech/ForgeISO" \
   --description "Linux ISO builder and autoinstall injection tool.
 ForgeISO builds custom Linux ISOs locally on bare metal with no cloud agents.
 It supports cloud-init autoinstall injection (60+ config flags), SHA-256

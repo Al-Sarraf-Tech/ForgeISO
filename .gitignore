@@ -5,6 +5,10 @@ target/
 Cargo.lock
 .cargo-tmp/
 
+# cargo-mutants — per-run output, not source-controlled
+mutants.out/
+mutants.out.old/
+
 # Node/Tauri
 gui/node_modules/
 gui/dist/

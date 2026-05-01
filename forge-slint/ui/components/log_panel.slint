@@ -91,12 +91,14 @@ export component LogPanel inherits Rectangle {
                         border-radius: 11px;
                         background: lp-close-ta.has-hover ? Palette.active : transparent;
                         animate background { duration: 100ms; }
-                        Text {
-                            text: "\u{2715}";
-                            font-size: 11px;
-                            color: Palette.muted;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
+                        Image {
+                            source: @image-url("../icons/x.svg");
+                            width: 12px;
+                            height: 12px;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                            colorize: lp-close-ta.has-hover ? Palette.text : Palette.muted;
+                            image-fit: contain;
                         }
                         lp-close-ta := TouchArea {
                             mouse-cursor: MouseCursor.pointer;
@@ -132,7 +134,7 @@ export component LogPanel inherits Rectangle {
                             border-radius: 1px;
                             background: entry.level == 2 ? Palette.red
                                       : entry.level == 1 ? Palette.amber
-                                      : rgba(77, 142, 247, 0.5);
+                                      : Palette.accent;
                         }
 
                         VerticalLayout {
@@ -157,8 +159,8 @@ export component LogPanel inherits Rectangle {
                             Text {
                                 text: entry.message;
                                 font-size: Sizes.font-xs;
-                                color: entry.level == 2 ? rgba(240, 82, 75, 0.9)
-                                     : entry.level == 1 ? rgba(227, 166, 44, 0.9)
+                                color: entry.level == 2 ? Palette.red
+                                     : entry.level == 1 ? Palette.amber
                                      : Palette.text-secondary;
                                 wrap: word-wrap;
                             }

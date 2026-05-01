@@ -306,4 +306,110 @@ mod tests {
         assert_eq!(ev.substage.as_deref(), Some("step1"));
         assert_eq!(ev.percent, Some(42.0));
     }
+
+    #[test]
+    fn debug_event_uses_debug_level() {
+        let ev = EngineEvent::debug(EventPhase::Configure, "hi");
+        assert_eq!(ev.level, EventLevel::Debug);
+        assert_eq!(ev.phase, EventPhase::Configure);
+        assert_eq!(ev.message, "hi");
+    }
+
+    #[test]
+    fn warn_event_uses_warn_level() {
+        let ev = EngineEvent::warn(EventPhase::Doctor, "watch out");
+        assert_eq!(ev.level, EventLevel::Warn);
+    }
+
+    #[test]
+    fn error_event_uses_error_level() {
+        let ev = EngineEvent::error(EventPhase::Build, "boom");
+        assert_eq!(ev.level, EventLevel::Error);
+    }
+
+    #[test]
+    fn with_substage_attaches_label_and_returns_self() {
+        let ev = EngineEvent::info(EventPhase::Build, "x").with_substage("step-foo");
+        assert_eq!(ev.substage.as_deref(), Some("step-foo"));
+    }
+
+    #[test]
+    fn with_percent_clamps_to_valid_range() {
+        let too_low = EngineEvent::info(EventPhase::Build, "x").with_percent(-5.0);
+        assert_eq!(too_low.percent, Some(0.0));
+        let too_high = EngineEvent::info(EventPhase::Build, "x").with_percent(150.0);
+        assert_eq!(too_high.percent, Some(100.0));
+    }
+
+    #[test]
+    fn phase_start_event_carries_phasestart_kind_with_label() {
+        let ev = EngineEvent::phase_start(EventPhase::Inject, "config-ubuntu");
+        assert_eq!(ev.level, EventLevel::Info);
+        match &ev.kind {
+            EventKind::PhaseStart { label } => assert_eq!(label, "config-ubuntu"),
+            other => panic!("expected PhaseStart kind, got {other:?}"),
+        }
+        assert!(ev.message.contains("config-ubuntu"));
+    }
+
+    #[test]
+    fn phase_end_success_sets_info_level_and_kind() {
+        let ev = EngineEvent::phase_end(EventPhase::Build, true);
+        assert_eq!(ev.level, EventLevel::Info);
+        match &ev.kind {
+            EventKind::PhaseEnd { success } => assert!(*success),
+            other => panic!("expected PhaseEnd kind, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn phase_end_failure_sets_error_level() {
+        let ev = EngineEvent::phase_end(EventPhase::Build, false);
+        assert_eq!(ev.level, EventLevel::Error);
+        match ev.kind {
+            EventKind::PhaseEnd { success } => assert!(!success),
+            _ => panic!("expected PhaseEnd kind"),
+        }
+    }
+
+    #[test]
+    fn artifact_event_carries_artifactready_kind_with_path() {
+        let ev = EngineEvent::artifact(EventPhase::Complete, std::path::PathBuf::from("/x.iso"));
+        match &ev.kind {
+            EventKind::ArtifactReady { path } => {
+                assert_eq!(path, &std::path::PathBuf::from("/x.iso"));
+            }
+            other => panic!("expected ArtifactReady, got {other:?}"),
+        }
+        assert!(ev.message.contains("/x.iso"));
+    }
+
+    #[test]
+    fn with_kind_overrides_default_log_kind() {
+        let ev =
+            EngineEvent::info(EventPhase::Build, "msg").with_kind(EventKind::ValidationResult {
+                field: "hostname".into(),
+                error: Some("bad chars".into()),
+            });
+        match ev.kind {
+            EventKind::ValidationResult { field, error } => {
+                assert_eq!(field, "hostname");
+                assert_eq!(error.as_deref(), Some("bad chars"));
+            }
+            _ => panic!("with_kind must replace kind"),
+        }
+    }
+
+    #[test]
+    fn event_round_trips_through_json_serialization() {
+        let ev = EngineEvent::warn(EventPhase::Diff, "delta")
+            .with_substage("compare")
+            .with_percent(75.0);
+        let json = serde_json::to_string(&ev).expect("serialize");
+        let back: EngineEvent = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.level, EventLevel::Warn);
+        assert_eq!(back.phase, EventPhase::Diff);
+        assert_eq!(back.substage.as_deref(), Some("compare"));
+        assert_eq!(back.percent, Some(75.0));
+    }
 }

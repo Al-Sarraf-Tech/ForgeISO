@@ -1,7 +1,11 @@
 import { Palette, Sizes } from "../theme.slint";
 import { ScrollView } from "std-widgets.slint";
 import { TabRail } from "../components/tab_rail.slint";
-import { FTextInput, FTextarea, FSectionLabel, FFieldHelp, FSwitch } from "../components/design_system.slint";
+import { TabIdentity } from "configure/tab_identity.slint";
+import { TabAccess }   from "configure/tab_access.slint";
+import { TabSystem }   from "configure/tab_system.slint";
+import { TabServices } from "configure/tab_services.slint";
+import { TabStorage }  from "configure/tab_storage.slint";
 
 // ── Main configure step ──────────────────────────────────────────────────────
 
@@ -22,8 +26,7 @@ export component StepConfigure inherits Rectangle {
     in-out property <string> realname;
     in property <bool>       passwords-match: true;
 
-    // Derived: real-time mismatch — true when both fields are filled and differ.
-    // Updates on every keystroke without waiting for the Rust callback.
+    // Derived: real-time mismatch
     property <bool> pw-live-mismatch: password != "" && password-confirm != ""
                                        && password != password-confirm;
 
@@ -84,9 +87,25 @@ export component StepConfigure inherits Rectangle {
     // GRUB
     in-out property <string> grub-timeout;
     in-out property <string> grub-cmdline;
+    in-out property <string> grub-default;
 
     // Sysctl
     in-out property <string> sysctl-pairs;
+
+    // Distro-specific repos
+    in-out property <string> dnf-mirror;
+    in-out property <string> pacman-repos;
+    in-out property <string> pacman-mirror;
+
+    // Extra access
+    in-out property <string> sudo-commands;
+
+    // Swap tuning
+    in-out property <string> swap-filename;
+    in-out property <string> swap-swappiness;
+
+    // Desktop
+    in-out property <string> wallpaper-path;
 
     // Output
     in-out property <string> output-dir;
@@ -97,7 +116,7 @@ export component StepConfigure inherits Rectangle {
     // Unattended
     in-out property <bool>   no-user-interaction: false;
 
-    // Active tab (replaces 10 s-*-open booleans)
+    // Active tab
     in-out property <int> active-tab: 0;
 
     // Defaults
@@ -119,48 +138,54 @@ export component StepConfigure inherits Rectangle {
     VerticalLayout {
         spacing: 0px;
 
-        // ── Title bar ────────────────────────────────────────────────────
+        // ── Summary bar (under PageHeader) ───────────────────────────────
+        // The PageHeader in app.slint already shows the step title + subtitle
+        // and houses the doctor + cancel actions. This section is a slim
+        // context summary: source ISO + apply-defaults + back-to-source.
         VerticalLayout {
-            padding-left: 40px;
-            padding-right: 40px;
-            padding-top: 24px;
-            padding-bottom: 16px;
-            spacing: 12px;
+            padding-left: 32px;
+            padding-right: 32px;
+            padding-top: 16px;
+            padding-bottom: 12px;
+            spacing: 10px;
             alignment: start;
 
-            // Title row
+            // Back-to-source row (vector chevron icon, secondary action)
             HorizontalLayout {
                 spacing: 12px;
                 alignment: space-between;
-                VerticalLayout {
-                    spacing: 4px;
-                    Text {
-                        text: "Configure Installer";
-                        font-size: Sizes.font-xl;
-                        font-weight: 700;
-                        color: Palette.text;
-                    }
-                    Text {
-                        text: "Start with Identity and Output. The rest is optional.";
-                        font-size: Sizes.font-sm;
-                        color: Palette.muted;
-                    }
-                }
-                // Back link
+
+                // Empty left slot — title is in PageHeader now
+                Rectangle { horizontal-stretch: 1; }
+
                 Rectangle {
-                    width: 110px;
-                    height: 32px;
+                    width: 124px;
+                    height: 30px;
                     border-radius: Sizes.radius-sm;
                     background: cfg-back-ta.has-hover ? Palette.active : Palette.elevated;
                     border-width: 1px;
                     border-color: Palette.border;
                     animate background { duration: 100ms; }
-                    Text {
-                        text: "\u{2190} Change ISO";
-                        font-size: Sizes.font-xs;
-                        color: Palette.text;
-                        vertical-alignment: center;
-                        horizontal-alignment: center;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 12px;
+                        spacing: 6px;
+                        alignment: center;
+                        Image {
+                            source: @image-url("../icons/chevron-left.svg");
+                            width: 12px;
+                            height: 12px;
+                            y: (parent.height - self.height) / 2;
+                            colorize: Palette.text-secondary;
+                            image-fit: contain;
+                        }
+                        Text {
+                            text: "Change ISO";
+                            font-size: Sizes.font-xs;
+                            font-weight: 500;
+                            color: Palette.text;
+                            vertical-alignment: center;
+                        }
                     }
                     cfg-back-ta := TouchArea {
                         mouse-cursor: MouseCursor.pointer;
@@ -173,9 +198,9 @@ export component StepConfigure inherits Rectangle {
             Rectangle {
                 height: selected-preset-name != "" ? 62px : 44px;
                 border-radius: Sizes.radius-sm;
-                background: rgba(47, 129, 247, 0.08);
+                background: Palette.accent-soft;
                 border-width: 1px;
-                border-color: rgba(47, 129, 247, 0.3);
+                border-color: Palette.accent-soft-border;
                 VerticalLayout {
                     padding-left: 14px;
                     padding-right: 14px;
@@ -186,10 +211,13 @@ export component StepConfigure inherits Rectangle {
                     HorizontalLayout {
                         spacing: 8px;
                         alignment: start;
-                        Text {
-                            text: "\u{1F4C0}";
-                            font-size: 16px;
-                            vertical-alignment: center;
+                        Image {
+                            source: @image-url("../icons/disc.svg");
+                            width: 16px;
+                            height: 16px;
+                            y: (parent.height - self.height) / 2;
+                            colorize: Palette.accent;
+                            image-fit: contain;
                         }
                         Text {
                             text: source-display;
@@ -212,9 +240,9 @@ export component StepConfigure inherits Rectangle {
             if defaults-summary != "": Rectangle {
                 height: 44px;
                 border-radius: Sizes.radius-sm;
-                background: rgba(63, 185, 80, 0.06);
+                background: Palette.green-soft;
                 border-width: 1px;
-                border-color: rgba(63, 185, 80, 0.25);
+                border-color: Palette.green-soft-border;
                 HorizontalLayout {
                     padding-left: 14px;
                     padding-right: 8px;
@@ -223,10 +251,13 @@ export component StepConfigure inherits Rectangle {
                     HorizontalLayout {
                         spacing: 6px;
                         alignment: start;
-                        Text {
-                            text: "\u{2699}";
-                            font-size: 14px;
-                            vertical-alignment: center;
+                        Image {
+                            source: @image-url("../icons/settings.svg");
+                            width: 14px;
+                            height: 14px;
+                            y: (parent.height - self.height) / 2;
+                            colorize: Palette.green;
+                            image-fit: contain;
                         }
                         Text {
                             text: "Defaults: " + defaults-summary;
@@ -243,10 +274,10 @@ export component StepConfigure inherits Rectangle {
                             height: 28px;
                             border-radius: Sizes.radius-sm;
                             background: apply-ta.has-hover && !running
-                                ? rgba(63, 185, 80, 0.16)
-                                : rgba(63, 185, 80, 0.08);
+                                ? Palette.green-soft
+                                : Palette.green-soft;
                             border-width: 1px;
-                            border-color: rgba(63, 185, 80, 0.35);
+                            border-color: Palette.green-soft-border;
                             animate background { duration: 100ms; }
                             Text {
                                 text: "Apply Defaults";
@@ -300,8 +331,7 @@ export component StepConfigure inherits Rectangle {
             // Left: tab rail (fixed 200px)
             TabRail {
                 active-index: active-tab;
-                identity-complete: hostname != "" && username != "" && password != "" && password-confirm != "" && !pw-live-mismatch;
-                output-complete: output-dir != "" && out-name != "";
+                essentials-complete: hostname != "" && username != "" && output-dir != "" && out-name != "";
                 tab-clicked(idx) => { active-tab = idx; }
             }
 
@@ -317,457 +347,96 @@ export component StepConfigure inherits Rectangle {
                         spacing: 14px;
                         alignment: start;
 
-                        // ── TAB 0: Identity ──────────────────────────────
-                        if active-tab == 0: VerticalLayout {
-                            spacing: 14px;
-
-                            Text {
-                                text: "Machine Identity";
-                                font-size: Sizes.font-lg;
-                                font-weight: 700;
-                                color: Palette.text;
-                            }
-                            FFieldHelp {
-                                text: "Required fields. Set the hostname, login user, and password for the installed system.";
-                            }
-
-                            HorizontalLayout {
-                                spacing: 16px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "HOSTNAME"; }
-                                    FTextInput { value <=> hostname; hint: "myserver"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "USERNAME"; }
-                                    FTextInput { value <=> username; hint: "admin"; enabled: !running; changed(t) => { username-changed(t); } }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "FULL NAME"; }
-                                    FTextInput { value <=> realname; hint: "Admin User"; enabled: !running; }
-                                }
-                            }
-                            HorizontalLayout {
-                                spacing: 16px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "PASSWORD"; }
-                                    FTextInput { value <=> password; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "CONFIRM PASSWORD"; }
-                                    FTextInput { value <=> password-confirm; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; error: pw-live-mismatch; }
-                                }
-                            }
-                            if !passwords-match || pw-live-mismatch: Rectangle {
-                                height: 28px;
-                                border-radius: Sizes.radius-sm;
-                                background: rgba(248, 81, 73, 0.1);
-                                border-width: 1px;
-                                border-color: rgba(248, 81, 73, 0.4);
-                                Text {
-                                    text: "\u{26A0} Passwords do not match";
-                                    font-size: Sizes.font-xs;
-                                    color: Palette.red;
-                                    vertical-alignment: center;
-                                    horizontal-alignment: left;
-                                    x: 12px;
-                                }
-                            }
+                        // ── TAB 0: Identity & Output ────────────────────
+                        if active-tab == 0: TabIdentity {
+                            hostname <=> root.hostname;
+                            username <=> root.username;
+                            password <=> root.password;
+                            password-confirm <=> root.password-confirm;
+                            realname <=> root.realname;
+                            passwords-match: root.passwords-match;
+                            pw-live-mismatch: root.pw-live-mismatch;
+                            output-dir <=> root.output-dir;
+                            out-name <=> root.out-name;
+                            output-label <=> root.output-label;
+                            expected-sha256 <=> root.expected-sha256;
+                            running: root.running;
+                            username-changed(t) => { root.username-changed(t); }
+                            browse-output-dir => { root.browse-output-dir(); }
                         }
 
-                        // ── TAB 1: Access & SSH ──────────────────────────
-                        if active-tab == 1: VerticalLayout {
-                            spacing: 14px;
-
-                            Text {
-                                text: "Access & SSH";
-                                font-size: Sizes.font-lg;
-                                font-weight: 700;
-                                color: Palette.text;
-                            }
-
-                            FSectionLabel { text: "AUTHORIZED SSH KEYS  (one per line)"; }
-                            FTextarea { value <=> ssh-keys; hint: "ssh-ed25519 AAAA\u{2026} user@host"; enabled: !running; }
-                            FFieldHelp {
-                                text: "Paste one public key per line. Leave blank if you plan to log in another way.";
-                            }
-                            HorizontalLayout {
-                                spacing: 24px;
-                                FSwitch { label: "Install SSH server"; checked <=> ssh-install-server; enabled: !running; }
-                                FSwitch { label: "Allow password authentication"; checked <=> ssh-password-auth; enabled: !running; }
-                            }
-
-                            // User access
-                            HorizontalLayout {
-                                spacing: 16px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "GROUPS  (one per line)"; }
-                                    FTextarea { value <=> user-groups; hint: "docker\nsudo"; enabled: !running; changed(_t) => { field-edited("user_groups"); } }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "LOGIN SHELL"; }
-                                    FTextInput { value <=> user-shell; hint: "/bin/bash"; enabled: !running; changed(_t) => { field-edited("user_shell"); } }
-                                }
-                            }
-                            FFieldHelp {
-                                text: "ForgeISO fills in your private group plus "
-                                    + (distro == "fedora" || distro == "arch" ? "wheel" : "sudo")
-                                    + " for admin access once you choose a username. Edit the list only if you need something custom.";
-                            }
-                            FSwitch { label: "Passwordless sudo (NOPASSWD:ALL)"; checked <=> sudo-nopasswd; enabled: !running; }
+                        // ── TAB 1: Access & Network ─────────────────────
+                        if active-tab == 1: TabAccess {
+                            ssh-keys <=> root.ssh-keys;
+                            ssh-password-auth <=> root.ssh-password-auth;
+                            ssh-install-server <=> root.ssh-install-server;
+                            distro: root.distro;
+                            user-groups <=> root.user-groups;
+                            user-shell <=> root.user-shell;
+                            sudo-nopasswd <=> root.sudo-nopasswd;
+                            sudo-commands <=> root.sudo-commands;
+                            dns-servers <=> root.dns-servers;
+                            ntp-servers <=> root.ntp-servers;
+                            static-ip <=> root.static-ip;
+                            gateway <=> root.gateway;
+                            http-proxy <=> root.http-proxy;
+                            https-proxy <=> root.https-proxy;
+                            no-proxy <=> root.no-proxy;
+                            running: root.running;
+                            field-edited(name) => { root.field-edited(name); }
                         }
 
-                        // ── TAB 2: Network ───────────────────────────────
-                        if active-tab == 2: VerticalLayout {
-                            spacing: 14px;
-
-                            Text {
-                                text: "Network";
-                                font-size: Sizes.font-lg;
-                                font-weight: 700;
-                                color: Palette.text;
-                            }
-
-                            HorizontalLayout {
-                                spacing: 16px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "DNS SERVERS"; }
-                                    FTextInput { value <=> dns-servers; hint: "1.1.1.1, 8.8.8.8"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "NTP SERVERS"; }
-                                    FTextInput { value <=> ntp-servers; hint: "pool.ntp.org"; enabled: !running; }
-                                }
-                            }
-                            HorizontalLayout {
-                                spacing: 16px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "STATIC IP / CIDR"; }
-                                    FTextInput { value <=> static-ip; hint: "192.168.1.100/24  (blank = DHCP)"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "GATEWAY"; }
-                                    FTextInput { value <=> gateway; hint: "192.168.1.1"; enabled: !running; }
-                                }
-                            }
-                            HorizontalLayout {
-                                spacing: 16px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "HTTP PROXY"; }
-                                    FTextInput { value <=> http-proxy; hint: "http://proxy:3128"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "HTTPS PROXY"; }
-                                    FTextInput { value <=> https-proxy; hint: "http://proxy:3128"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "NO PROXY"; }
-                                    FTextInput { value <=> no-proxy; hint: "localhost,127.0.0.1"; enabled: !running; }
-                                }
-                            }
+                        // ── TAB 2: System & Packages ────────────────────
+                        if active-tab == 2: TabSystem {
+                            distro: root.distro;
+                            timezone <=> root.timezone;
+                            locale <=> root.locale;
+                            keyboard-layout <=> root.keyboard-layout;
+                            storage-layout <=> root.storage-layout;
+                            apt-mirror <=> root.apt-mirror;
+                            packages <=> root.packages;
+                            apt-repos <=> root.apt-repos;
+                            dnf-repos <=> root.dnf-repos;
+                            dnf-mirror <=> root.dnf-mirror;
+                            pacman-repos <=> root.pacman-repos;
+                            pacman-mirror <=> root.pacman-mirror;
+                            running: root.running;
+                            field-edited(name) => { root.field-edited(name); }
                         }
 
-                        // ── TAB 3: System ────────────────────────────────
-                        if active-tab == 3: VerticalLayout {
-                            spacing: 14px;
-
-                            Text {
-                                text: "System";
-                                font-size: Sizes.font-lg;
-                                font-weight: 700;
-                                color: Palette.text;
-                            }
-
-                            HorizontalLayout {
-                                spacing: 16px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "TIMEZONE"; }
-                                    FTextInput { value <=> timezone; hint: "America/New_York"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "LOCALE"; }
-                                    FTextInput { value <=> locale; hint: "en_US.UTF-8"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "KEYBOARD LAYOUT"; }
-                                    FTextInput { value <=> keyboard-layout; hint: "us"; enabled: !running; }
-                                }
-                            }
-                            HorizontalLayout {
-                                spacing: 16px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "STORAGE LAYOUT"; }
-                                    FTextInput { value <=> storage-layout; hint: "lvm  /  direct"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "APT MIRROR"; }
-                                    FTextInput { value <=> apt-mirror; hint: "https://mirror.example.com/ubuntu"; enabled: !running; }
-                                }
-                            }
+                        // ── TAB 3: Services & Security ──────────────────
+                        if active-tab == 3: TabServices {
+                            enable-services <=> root.enable-services;
+                            disable-services <=> root.disable-services;
+                            docker <=> root.docker;
+                            podman <=> root.podman;
+                            docker-users <=> root.docker-users;
+                            firewall-enabled <=> root.firewall-enabled;
+                            firewall-policy <=> root.firewall-policy;
+                            allow-ports <=> root.allow-ports;
+                            deny-ports <=> root.deny-ports;
+                            running: root.running;
+                            field-edited(name) => { root.field-edited(name); }
+                            docker-changed => { root.docker-changed(); }
                         }
 
-                        // ── TAB 4: Packages ──────────────────────────────
-                        if active-tab == 4: VerticalLayout {
-                            spacing: 14px;
-
-                            Text {
-                                text: "Packages";
-                                font-size: Sizes.font-lg;
-                                font-weight: 700;
-                                color: Palette.text;
-                            }
-
-                            FSectionLabel { text: "PACKAGES  (space-separated)"; }
-                            FTextarea { value <=> packages; hint: "curl git vim htop"; enabled: !running; changed(_t) => { field-edited("packages"); } }
-                            FFieldHelp { text: "Use a short list of must-have packages. You can add more later in the installed system."; }
-                            FSectionLabel { text: "EXTRA APT / DNF / PACMAN REPOS  (one per line)"; }
-                            FTextarea { value <=> apt-repos; hint: "ppa:ondrej/php\ndeb https://\u{2026}"; enabled: !running; }
-                        }
-
-                        // ── TAB 5: Firewall ──────────────────────────────
-                        if active-tab == 5: VerticalLayout {
-                            spacing: 14px;
-
-                            Text {
-                                text: "Firewall";
-                                font-size: Sizes.font-lg;
-                                font-weight: 700;
-                                color: Palette.text;
-                            }
-
-                            FSwitch { label: "Enable firewall"; checked <=> firewall-enabled; enabled: !running; }
-                            if firewall-enabled: VerticalLayout {
-                                spacing: 14px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "DEFAULT POLICY"; }
-                                    FTextInput { value <=> firewall-policy; hint: "deny  (or allow / reject)"; enabled: !running; changed(_t) => { field-edited("firewall_policy"); } }
-                                }
-                                HorizontalLayout {
-                                    spacing: 16px;
-                                    VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "ALLOWED PORTS  (space-separated)"; }
-                                        FTextInput { value <=> allow-ports; hint: "22 80 443"; enabled: !running; changed(_t) => { field-edited("allow_ports"); } }
-                                    }
-                                    VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "DENIED PORTS"; }
-                                        FTextInput { value <=> deny-ports; hint: "23 21"; enabled: !running; }
-                                    }
-                                }
-                            }
-                        }
-
-                        // ── TAB 6: Services & Containers ─────────────────
-                        if active-tab == 6: VerticalLayout {
-                            spacing: 14px;
-
-                            Text {
-                                text: "Services & Containers";
-                                font-size: Sizes.font-lg;
-                                font-weight: 700;
-                                color: Palette.text;
-                            }
-
-                            // Services
-                            HorizontalLayout {
-                                spacing: 16px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "ENABLE  (one per line)"; }
-                                    FTextarea { value <=> enable-services; hint: "docker\nnginx"; enabled: !running; changed(_t) => { field-edited("enable_services"); } }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "DISABLE  (one per line)"; }
-                                    FTextarea { value <=> disable-services; hint: "snapd"; enabled: !running; changed(_t) => { field-edited("disable_services"); } }
-                                }
-                            }
-                            // Containers
-                            HorizontalLayout {
-                                spacing: 24px;
-                                FSwitch {
-                                    label: "Install Docker";
-                                    checked <=> docker;
-                                    enabled: !running;
-                                    toggled => { docker-changed(); }
-                                }
-                                FSwitch { label: "Install Podman"; checked <=> podman; enabled: !running; }
-                            }
-                            if docker: VerticalLayout {
-                                spacing: 4px;
-                                FSectionLabel { text: "ADD USERS TO DOCKER GROUP  (one per line)"; }
-                                FTextInput { value <=> docker-users; hint: "admin"; enabled: !running; changed(_t) => { field-edited("docker_users"); } }
-                                FFieldHelp {
-                                    text: "When Docker is enabled, ForgeISO pre-fills this with the primary username unless you override it.";
-                                }
-                            }
-                        }
-
-                        // ── TAB 7: Storage & Boot ────────────────────────
-                        if active-tab == 7: VerticalLayout {
-                            spacing: 14px;
-
-                            Text {
-                                text: "Storage & Boot";
-                                font-size: Sizes.font-lg;
-                                font-weight: 700;
-                                color: Palette.text;
-                            }
-
-                            // Storage & encryption
-                            FSectionLabel { text: "SWAP SIZE  (MB, blank = no swap)"; }
-                            FTextInput { value <=> swap-size-mb; hint: "2048"; enabled: !running; }
-                            FSwitch { label: "Enable LUKS disk encryption"; checked <=> encrypt; enabled: !running; }
-                            if encrypt: VerticalLayout {
-                                spacing: 4px;
-                                FSectionLabel { text: "LUKS PASSPHRASE"; }
-                                FTextInput { value <=> encrypt-passphrase; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; }
-                            }
-                            VerticalLayout {
-                                spacing: 4px;
-                                FSectionLabel { text: "CUSTOM MOUNTS  (one fstab entry per line)"; }
-                                FTextarea { value <=> mounts; hint: "/dev/sdb1  /data  ext4  defaults  0 2"; enabled: !running; }
-                            }
-                            // GRUB bootloader
-                            HorizontalLayout {
-                                spacing: 16px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "GRUB TIMEOUT  (seconds)"; }
-                                    FTextInput { value <=> grub-timeout; hint: "5"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "EXTRA KERNEL ARGS"; }
-                                    FTextInput { value <=> grub-cmdline; hint: "quiet splash"; enabled: !running; }
-                                }
-                            }
-                        }
-
-                        // ── TAB 8: Advanced ──────────────────────────────
-                        if active-tab == 8: VerticalLayout {
-                            spacing: 14px;
-
-                            Text {
-                                text: "Advanced";
-                                font-size: Sizes.font-lg;
-                                font-weight: 700;
-                                color: Palette.text;
-                            }
-
-                            // Custom commands
-                            FSectionLabel { text: "RUN COMMANDS  (before install)"; }
-                            FTextarea { value <=> run-commands; hint: "echo 'setup starting'"; enabled: !running; }
-                            FFieldHelp { text: "Use for simple pre-install tasks. Leave blank unless you need custom behavior."; }
-                            FSectionLabel { text: "LATE COMMANDS  (after install, in chroot)"; }
-                            FTextarea { value <=> late-commands; hint: "curtin in-target -- apt-get install -y vim"; enabled: !running; }
-                            // Sysctl
-                            FSectionLabel { text: "SYSCTL PAIRS  (key=value, one per line)"; }
-                            FTextarea { value <=> sysctl-pairs; hint: "vm.swappiness=10\nnet.ipv4.ip_forward=1"; enabled: !running; }
-                            FSwitch { label: "Unattended installation (no user interaction)"; checked <=> no-user-interaction; enabled: !running; }
-                        }
-
-                        // ── TAB 9: Output ────────────────────────────────
-                        if active-tab == 9: VerticalLayout {
-                            spacing: 14px;
-
-                            Text {
-                                text: "Output";
-                                font-size: Sizes.font-lg;
-                                font-weight: 700;
-                                color: Palette.text;
-                            }
-                            FFieldHelp {
-                                text: "ForgeISO writes the finished ISO here. Verification is optional and can be run after the build succeeds.";
-                            }
-
-                            HorizontalLayout {
-                                spacing: 8px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "OUTPUT DIRECTORY"; }
-                                    Rectangle {
-                                        height: 38px;
-                                        border-radius: Sizes.radius-sm;
-                                        background: Palette.surface;
-                                        border-width: 1px;
-                                        border-color: Palette.border;
-                                        HorizontalLayout {
-                                            padding-left: 10px;
-                                            Text {
-                                                text: output-dir;
-                                                font-size: Sizes.font-sm;
-                                                color: Palette.text;
-                                                vertical-alignment: center;
-                                                overflow: elide;
-                                            }
-                                        }
-                                    }
-                                }
-                                VerticalLayout {
-                                    alignment: end;
-                                    Rectangle {
-                                        width: 90px;
-                                        height: 38px;
-                                        border-radius: Sizes.radius-sm;
-                                        background: out-brw-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                                        border-width: 1px;
-                                        border-color: Palette.border;
-                                        opacity: running ? 0.5 : 1.0;
-                                        animate background { duration: 100ms; }
-                                        Text {
-                                            text: "Browse\u{2026}";
-                                            font-size: Sizes.font-sm;
-                                            color: Palette.text;
-                                            vertical-alignment: center;
-                                            horizontal-alignment: center;
-                                        }
-                                        out-brw-ta := TouchArea {
-                                            enabled: !running;
-                                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                                            clicked => { browse-output-dir(); }
-                                        }
-                                    }
-                                }
-                            }
-                            HorizontalLayout {
-                                spacing: 16px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "OUTPUT FILENAME"; }
-                                    FTextInput { value <=> out-name; hint: "forgeiso-local.iso"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "VOLUME LABEL  (max 32 chars)"; }
-                                    FTextInput { value <=> output-label; hint: "MYISO"; enabled: !running; }
-                                }
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    FSectionLabel { text: "EXPECTED SHA-256  (optional)"; }
-                                    FTextInput { value <=> expected-sha256; hint: "a1b2c3\u{2026}"; enabled: !running; }
-                                }
-                            }
+                        // ── TAB 4: Storage & Advanced ───────────────────
+                        if active-tab == 4: TabStorage {
+                            swap-size-mb <=> root.swap-size-mb;
+                            encrypt <=> root.encrypt;
+                            encrypt-passphrase <=> root.encrypt-passphrase;
+                            mounts <=> root.mounts;
+                            swap-filename <=> root.swap-filename;
+                            swap-swappiness <=> root.swap-swappiness;
+                            grub-timeout <=> root.grub-timeout;
+                            grub-cmdline <=> root.grub-cmdline;
+                            grub-default <=> root.grub-default;
+                            run-commands <=> root.run-commands;
+                            late-commands <=> root.late-commands;
+                            wallpaper-path <=> root.wallpaper-path;
+                            sysctl-pairs <=> root.sysctl-pairs;
+                            no-user-interaction <=> root.no-user-interaction;
+                            running: root.running;
                         }
                     }
                 }
@@ -785,22 +454,35 @@ export component StepConfigure inherits Rectangle {
                     alignment: start;
                     Rectangle {
                         width: 280px;
-                        height: 46px;
+                        height: 42px;
                         border-radius: Sizes.radius-sm;
                         property <bool> btn-active: can-continue && !pw-live-mismatch;
                         background: btn-active
-                            ? (cfg-fwd-ta.has-hover ? #3d90ff : Palette.accent)
+                            ? (cfg-fwd-ta.has-hover ? Palette.accent-hover : Palette.accent)
                             : Palette.elevated;
                         opacity: btn-active ? 1.0 : 0.6;
                         animate background { duration: 120ms; }
                         animate opacity  { duration: 180ms; }
-                        Text {
-                            text: "Continue to Build Summary \u{2192}";
-                            font-size: Sizes.font-sm;
-                            font-weight: 700;
-                            color: btn-active ? Palette.on-accent : Palette.subtle;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 14px;
+                            spacing: 8px;
+                            alignment: center;
+                            Text {
+                                text: "Continue to Build Summary";
+                                font-size: Sizes.font-sm;
+                                font-weight: 600;
+                                color: btn-active ? Palette.on-accent : Palette.subtle;
+                                vertical-alignment: center;
+                            }
+                            Image {
+                                source: @image-url("../icons/chevron-right.svg");
+                                width: 12px;
+                                height: 12px;
+                                y: (parent.height - self.height) / 2;
+                                colorize: btn-active ? Palette.on-accent : Palette.subtle;
+                                image-fit: contain;
+                            }
                         }
                         cfg-fwd-ta := TouchArea {
                             enabled: btn-active && !running;

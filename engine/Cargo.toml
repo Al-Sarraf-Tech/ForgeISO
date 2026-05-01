@@ -18,10 +18,40 @@ sha2.workspace = true
 shell-words.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 walkdir.workspace = true
 which.workspace = true
 
+# Optional OpenTelemetry stack — enabled via the `otel` feature. When the
+# feature is off none of these crates is compiled, so default builds carry
+# no extra dependency cost.
+tracing-subscriber = { workspace = true, optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+opentelemetry-otlp = { workspace = true, optional = true }
+opentelemetry-stdout = { workspace = true, optional = true }
+
+[features]
+default = []
+# Wire OpenTelemetry tracing into the engine. Off by default; enable with
+# `--features otel` to ship spans to an OTLP collector or stdout.
+otel = [
+    "dep:tracing-subscriber",
+    "dep:tracing-opentelemetry",
+    "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
+    "dep:opentelemetry-otlp",
+    "dep:opentelemetry-stdout",
+]
+
 [dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
+proptest = "1"
 tempfile.workspace = true
+
+[[bench]]
+name = "engine_hot_paths"
+harness = false

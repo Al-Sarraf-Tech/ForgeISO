@@ -1,0 +1,162 @@
+import { Palette, Sizes, Theme, Fonts } from "../theme.slint";
+
+// ── StatusBar — bottom chrome with build metadata + indicators ─────────────
+// Datadog/Splunk-style footer: dense, tabular, never animated.
+
+component StatusItem inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <string> variant: "default";  // "default" | "mono"
+
+    HorizontalLayout {
+        padding-left: Sizes.space-3;
+        padding-right: Sizes.space-3;
+        spacing: Sizes.space-2;
+        alignment: start;
+
+        Text {
+            text: label;
+            font-size: Sizes.font-2xs;
+            font-weight: 600;
+            color: Palette.subtle;
+            letter-spacing: 0.5px;
+            vertical-alignment: center;
+        }
+        Text {
+            text: value;
+            font-size: Sizes.font-2xs;
+            color: Palette.text-secondary;
+            font-family: variant == "mono" ? Fonts.mono : Fonts.sans;
+            vertical-alignment: center;
+        }
+    }
+
+    // Right divider between items
+    Rectangle {
+        x: parent.width - 1px;
+        y: 6px;
+        width: 1px;
+        height: parent.height - 12px;
+        background: Palette.chrome-border;
+    }
+}
+
+component HealthDot inherits Rectangle {
+    in property <bool>   ok: true;
+    in property <string> label;
+
+    HorizontalLayout {
+        padding-left: Sizes.space-3;
+        padding-right: Sizes.space-3;
+        spacing: Sizes.space-2;
+        alignment: start;
+
+        Rectangle {
+            width: 7px;
+            height: 7px;
+            border-radius: 4px;
+            y: (parent.height - self.height) / 2;
+            background: ok ? Palette.green : Palette.red;
+        }
+        Text {
+            text: label;
+            font-size: Sizes.font-2xs;
+            color: Palette.text-secondary;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component StatusBar inherits Rectangle {
+    in property <string> job-phase;
+    in property <bool>   job-running: false;
+    in property <int>    log-error-count: 0;
+    in property <bool>   doctor-ok: true;
+    callback theme-toggle();
+
+    height: Sizes.footer-height;
+    background: Palette.chrome;
+
+    // Top border separates footer from main content
+    Rectangle {
+        y: 0;
+        height: 1px;
+        background: Palette.chrome-border;
+    }
+
+    HorizontalLayout {
+        padding-left: 0;
+        padding-right: 0;
+        spacing: 0;
+        alignment: space-between;
+
+        // Left: identity + version + license
+        HorizontalLayout {
+            spacing: 0;
+            alignment: start;
+            HealthDot { ok: !job-running; label: job-running ? "BUSY" : "READY"; width: 80px; }
+            StatusItem { label: "VERSION"; value: Theme.app-version; width: 130px; }
+            if Theme.build-hash != "": StatusItem {
+                label: "BUILD"; value: Theme.build-hash; variant: "mono"; width: 160px;
+            }
+            StatusItem { label: "LICENSE"; value: Theme.license; width: 100px; }
+        }
+
+        // Right: theme toggle + activity indicator
+        HorizontalLayout {
+            spacing: 0;
+            alignment: end;
+
+            if log-error-count > 0: HealthDot {
+                ok: false;
+                label: log-error-count + " errors";
+                width: 90px;
+            }
+
+            Rectangle {
+                width: 100px;
+                background: tt.has-hover ? Palette.chrome-hover : transparent;
+                animate background { duration: 120ms; }
+
+                HorizontalLayout {
+                    padding-left: Sizes.space-3;
+                    padding-right: Sizes.space-3;
+                    spacing: Sizes.space-2;
+                    alignment: start;
+                    Image {
+                        source: Theme.mode == "light"
+                            ? @image-url("../icons/moon.svg")
+                            : @image-url("../icons/sun.svg");
+                        width: 14px;
+                        height: 14px;
+                        y: (parent.height - self.height) / 2;
+                        colorize: Palette.text-secondary;
+                        image-fit: contain;
+                    }
+                    Text {
+                        text: Theme.mode == "light" ? "DARK" : "LIGHT";
+                        font-size: Sizes.font-2xs;
+                        font-weight: 600;
+                        color: Palette.text-secondary;
+                        letter-spacing: 0.5px;
+                        vertical-alignment: center;
+                    }
+                }
+
+                tt := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.theme-toggle(); }
+                }
+
+                // Left divider
+                Rectangle {
+                    x: 0;
+                    y: 6px;
+                    width: 1px;
+                    height: parent.height - 12px;
+                    background: Palette.chrome-border;
+                }
+            }
+        }
+    }
+}

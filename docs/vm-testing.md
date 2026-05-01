@@ -9,8 +9,8 @@ hypervisor for functional validation, both BIOS and UEFI paths.
 
 | Hypervisor | Host OS | BIOS | UEFI | Method |
 |---|---|---|---|---|
-| QEMU | Linux, macOS, Windows (WSL) | yes | yes | Commands (run directly) |
-| VirtualBox | Linux, macOS, Windows | yes | yes | `VBoxManage` commands |
+| QEMU | Linux, Windows (WSL) | yes | yes | Commands (run directly) |
+| VirtualBox | Linux, Windows | yes | yes | `VBoxManage` commands |
 | VMware Workstation/Player | Linux, Windows | yes | yes | Instructions / vmrun |
 | Hyper-V | Windows 10/11, Windows Server | yes (Gen1) | yes (Gen2) | PowerShell script |
 | Proxmox VE | Proxmox node shell | yes | yes | `qm` commands |

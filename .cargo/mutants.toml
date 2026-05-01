@@ -1,0 +1,87 @@
+# cargo-mutants configuration for ForgeISO
+# Targets the recently-decomposed inject + autoinstall/ubuntu modules.
+# Test files (per-concern test submodules + #[cfg(test)] mods) are excluded
+# so we only mutate production code.
+#
+# Run: scripts/run-mutants.sh
+# Docs: docs/MUTATION.md
+
+# Files to examine. Globs are matched against the relative path from the
+# workspace root. Both paths are scoped to engine/ to keep the run fast.
+examine_globs = [
+    "engine/src/config/inject/**/*.rs",
+    "engine/src/autoinstall/ubuntu/**/*.rs",
+]
+
+# Files to exclude from mutation. We never mutate test code itself.
+exclude_globs = [
+    "**/tests/**",
+    "**/tests.rs",
+    "**/test_*.rs",
+    "**/*_test.rs",
+]
+
+# Skip calls to these functions when generating mutants. The defaults
+# (with_capacity) are kept; this list extends them with helpers whose
+# return value is purely cosmetic / log-only.
+skip_calls = [
+    "tracing::trace",
+    "tracing::debug",
+    "tracing::info",
+    "tracing::warn",
+    "tracing::error",
+]
+
+# Use the built-in skip_calls defaults (with_capacity, etc.) in addition
+# to the list above. Kept on so allocations don't spawn noisy mutants.
+skip_calls_defaults = true
+
+# Build/test timing. The base test build is ~30s on this machine; 3.0x
+# gives a 90s ceiling per mutant before it's marked TIMEOUT. cargo-mutants
+# auto-derives the actual baseline from the unmutated run.
+timeout_multiplier = 3.0
+build_timeout_multiplier = 3.0
+
+# Minimum test timeout in seconds — protects against false TIMEOUT
+# verdicts when the baseline run was very fast (e.g. cached builds).
+minimum_test_timeout = 30
+
+# Cargo profile used for builds. release-tests would be faster but the
+# default "test" profile mirrors `cargo test` exactly, which is what CI
+# verifies the kill score against.
+# profile = "test"   # implicit default; left commented for clarity
+
+# Additional cargo arguments passed to every build/test invocation.
+# `--workspace` is REQUIRED so engine tests in sibling crates (cli, tui)
+# that exercise the inject + autoinstall paths also get a chance to
+# kill the mutant. Without this flag cargo-mutants only runs the engine
+# crate's own tests.
+additional_cargo_args = []
+additional_cargo_test_args = []
+
+# Run tests from all workspace packages, not just the engine. Sibling
+# crates (cli, tui) exercise the inject + autoinstall paths; without this
+# their tests don't get a chance to kill the mutant.
+test_workspace = true
+
+# Error values returned from `Result`-returning functions when cargo-mutants
+# generates the "function body returns Err" mutant. The engine's error type
+# is `EngineError`, so plain `anyhow!` won't compile here — we lean on the
+# default behaviour (cargo-mutants only emits this mutant for funcs whose
+# error type implements `From<&str>` or similar) by leaving the list empty.
+error_values = []
+
+# Native exit-code semantics from cargo-mutants 27.0.0:
+#   0 = no missed mutants AND no errors
+#   1 = at least one missed mutant (test gap detected)
+#   2 = invocation error (build failure, file not found, etc.)
+#   3 = command-line / config error
+#   4 = at least one timeout (test loop hung)
+#
+# These are not configurable via .cargo/mutants.toml — they are the binary's
+# fixed convention. The threshold gating (kill_score >= 80%) is layered on
+# top by scripts/run-mutants.sh, which converts any non-zero cargo-mutants
+# exit into either:
+#   - a hard CI failure (score below 80% OR cargo-mutants exit > 1), or
+#   - a documented warning (timeouts only).
+# See docs/MUTATION.md "Threshold" + "Operator Cheat-Sheet" sections.

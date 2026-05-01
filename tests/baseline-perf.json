@@ -1,0 +1,38 @@
+{
+  "benches": {
+    "generate_autoinstall_yaml/populated": {
+      "high": 6.6552,
+      "high_unit": "ms",
+      "low": 6.5618,
+      "low_unit": "ms",
+      "median": 6.5989,
+      "median_unit": "ms"
+    },
+    "generate_kickstart_cfg/populated": {
+      "high": 6.5324,
+      "high_unit": "ms",
+      "low": 6.521,
+      "low_unit": "ms",
+      "median": 6.5267,
+      "median_unit": "ms"
+    },
+    "generate_mint_preseed/populated": {
+      "high": 6.5428,
+      "high_unit": "ms",
+      "low": 6.5373,
+      "low_unit": "ms",
+      "median": 6.54,
+      "median_unit": "ms"
+    },
+    "sha256_file/4MiB_blob/4194304": {
+      "high": 15.778,
+      "high_unit": "ms",
+      "low": 15.757,
+      "low_unit": "ms",
+      "median": 15.768,
+      "median_unit": "ms"
+    }
+  },
+  "timestamp": 1777675068,
+  "version": 1
+}

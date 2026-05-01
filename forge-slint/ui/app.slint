@@ -1,7 +1,8 @@
-import { Palette, Sizes } from "theme.slint";
+import { Palette, Sizes, Theme } from "theme.slint";
 import { ScrollView } from "std-widgets.slint";
-import { Header }    from "components/header.slint";
-import { StepBar }   from "components/step_bar.slint";
+import { Sidebar }     from "components/sidebar.slint";
+import { PageHeader }  from "components/page_header.slint";
+import { StatusBar }   from "components/status_bar.slint";
 import { LogPanel, LogEntry } from "components/log_panel.slint";
 import { StepSource, PresetCard } from "steps/source.slint";
 import { StepConfigure }  from "steps/configure.slint";
@@ -10,7 +11,7 @@ import { StepCheck }      from "steps/check.slint";
 import { FormState } from "globals/form_state.slint";
 import { AppState }  from "globals/app_state.slint";
 
-export { LogEntry, PresetCard, FormState, AppState }
+export { LogEntry, PresetCard, FormState, AppState, Theme }
 
 export component AppWindow inherits Window {
     title: "ForgeISO";
@@ -20,16 +21,16 @@ export component AppWindow inherits Window {
     min-height: 700px;
     background: Palette.bg;
 
-    // ── Model properties (stay on window — ModelRc works best here) ────────
+    // ── Model properties ────────────────────────────────────────────────────
     in property <[LogEntry]>     log-entries;
     in property <[PresetCard]>   presets-row1;
     in property <[PresetCard]>   presets-row2;
 
     // ── Callbacks ───────────────────────────────────────────────────────
-    // Header
     callback cancel-job();
     callback doctor-toggle();
-    // Step bar
+    callback theme-toggle();
+    // Step bar / sidebar
     callback step-bar-clicked(int);
     // Source
     callback preset-clicked(string);
@@ -64,241 +65,293 @@ export component AppWindow inherits Window {
     callback log-toggle();
     callback log-filter-toggle();
 
-    // ── Derived helper: distro display label ─────────────────────────────
+    // ── Derived: distro display label ──────────────────────────────────────
     property <string> distro-display: FormState.distro == "fedora" ? "Fedora / RHEL \u{2014} Kickstart"
                                     : FormState.distro == "arch"   ? "Arch Linux \u{2014} archinstall"
                                     : FormState.distro == "mint"   ? "Linux Mint \u{2014} preseed"
                                     : "Ubuntu / Debian \u{2014} cloud-init";
 
-    // ── Layout ──────────────────────────────────────────────────────────
+    // ── Derived: page title per current step ───────────────────────────────
+    property <string> step-title: AppState.current-step == 1 ? "Choose ISO"
+                                : AppState.current-step == 2 ? "Configure Installer"
+                                : AppState.current-step == 3 ? "Build"
+                                : AppState.current-step == 4 ? "Verify Artifact"
+                                : "ForgeISO";
+
+    property <string> step-subtitle: AppState.current-step == 1 ? "Select source ISO and detect distro"
+                                   : AppState.current-step == 2 ? "Hostname, network, packages, services"
+                                   : AppState.current-step == 3 ? "Review settings and build the unattended ISO"
+                                   : AppState.current-step == 4 ? "Optional checksum and ISO-9660 validation"
+                                   : "";
+
+    // ── Layout: VLayout(HLayout(sidebar | content+log) | status-bar) ───────
     VerticalLayout {
-        Header {
-            job-phase: AppState.job-phase;
-            job-percent: AppState.job-percent;
-            job-running: AppState.job-running;
-            status-text: AppState.status-text;
-            status-is-error: AppState.status-is-error;
-            doctor-open: AppState.doctor-open;
-            cancel => { root.cancel-job(); }
-            doctor-toggled => { root.doctor-toggle(); }
-        }
+        spacing: 0;
 
-        StepBar {
-            current-step: AppState.current-step;
-            step1-done: AppState.step1-done;
-            step2-done: AppState.step2-done;
-            step3-done: AppState.step3-done;
-            step4-done: AppState.verify-done || AppState.iso9660-done;
-            job-running: AppState.job-running;
-            step-clicked(s) => { root.step-bar-clicked(s); }
-        }
-
-        // ── Main body ────────────────────────────────────────────────────
+        // Top row: sidebar + main content area
         HorizontalLayout {
-            // Content area — show one step at a time with fade-in
-            if AppState.current-step == 1: Rectangle {
-                opacity: 0.0;
-                init => { self.opacity = 1.0; }
-                animate opacity { duration: 200ms; easing: ease-out; }
-                StepSource {
-                presets-row1: root.presets-row1;
-                presets-row2: root.presets-row2;
-                source-path: FormState.source-path;
-                selected-preset: FormState.selected-preset;
-                detected-distro: FormState.detected-distro;
-                running: AppState.job-running;
-                can-continue: FormState.source-path != "";
-                preset-clicked(id) => { root.preset-clicked(id); }
-                browse-clicked => { root.browse-source(); }
-                source-changed(t) => { root.source-changed(t); }
-                continue-clicked => { root.source-continue(); }
-                clear-clicked => { root.clear-source(); }
-            }}
+            spacing: 0;
 
-            if AppState.current-step == 2: Rectangle {
-                opacity: 0.0;
-                init => { self.opacity = 1.0; }
-                animate opacity { duration: 200ms; easing: ease-out; }
-                StepConfigure {
-                source-display: FormState.source-path;
-                distro: FormState.distro;
-                selected-preset-name: FormState.selected-preset-name;
-                distro-display: root.distro-display;
-                defaults-summary: AppState.defaults-summary;
-                hostname <=> FormState.hostname;
-                username <=> FormState.username;
-                password <=> FormState.password;
-                password-confirm <=> FormState.password-confirm;
-                realname <=> FormState.realname;
-                passwords-match: FormState.password == "" || FormState.password == FormState.password-confirm;
-                ssh-keys <=> FormState.ssh-keys;
-                ssh-password-auth <=> FormState.ssh-password-auth;
-                ssh-install-server <=> FormState.ssh-install-server;
-                dns-servers <=> FormState.dns-servers;
-                ntp-servers <=> FormState.ntp-servers;
-                static-ip <=> FormState.static-ip;
-                gateway <=> FormState.gateway;
-                http-proxy <=> FormState.http-proxy;
-                https-proxy <=> FormState.https-proxy;
-                no-proxy <=> FormState.no-proxy;
-                timezone <=> FormState.timezone;
-                locale <=> FormState.locale;
-                keyboard-layout <=> FormState.keyboard-layout;
-                storage-layout <=> FormState.storage-layout;
-                apt-mirror <=> FormState.apt-mirror;
-                packages <=> FormState.packages;
-                apt-repos <=> FormState.apt-repos;
-                dnf-repos <=> FormState.dnf-repos;
-                run-commands <=> FormState.run-commands;
-                late-commands <=> FormState.late-commands;
-                firewall-enabled <=> FormState.firewall-enabled;
-                firewall-policy <=> FormState.firewall-policy;
-                allow-ports <=> FormState.allow-ports;
-                deny-ports <=> FormState.deny-ports;
-                user-groups <=> FormState.user-groups;
-                user-shell <=> FormState.user-shell;
-                sudo-nopasswd <=> FormState.sudo-nopasswd;
-                enable-services <=> FormState.enable-services;
-                disable-services <=> FormState.disable-services;
-                docker <=> FormState.docker;
-                podman <=> FormState.podman;
-                docker-users <=> FormState.docker-users;
-                swap-size-mb <=> FormState.swap-size-mb;
-                encrypt <=> FormState.encrypt;
-                encrypt-passphrase <=> FormState.encrypt-passphrase;
-                mounts <=> FormState.mounts;
-                grub-timeout <=> FormState.grub-timeout;
-                grub-cmdline <=> FormState.grub-cmdline;
-                sysctl-pairs <=> FormState.sysctl-pairs;
-                output-dir <=> FormState.output-dir;
-                out-name <=> FormState.out-name;
-                output-label <=> FormState.output-label;
-                expected-sha256 <=> FormState.expected-sha256;
-                no-user-interaction <=> FormState.no-user-interaction;
-                running: AppState.job-running;
-                can-continue: FormState.source-path != "" && FormState.hostname != "" && FormState.username != "" && FormState.output-dir != "" && FormState.out-name != "";
-                browse-output-dir => { root.browse-output-dir(); }
-                configure-continue => { root.configure-continue(); }
-                back-clicked => { root.configure-back(); }
-                distro-changed(d) => { FormState.distro = d; }
-                clear-source => { root.clear-source(); }
-                apply-defaults => { root.apply-defaults(); }
-                reset-defaults => { root.reset-defaults(); }
-                field-edited(name) => { root.field-edited(name); }
-                username-changed(u) => { root.username-changed(u); }
-                docker-changed => { root.docker-changed(); }
-            }}
-
-            if AppState.current-step == 3: Rectangle {
-                opacity: 0.0;
-                init => { self.opacity = 1.0; }
-                animate opacity { duration: 200ms; easing: ease-out; }
-                StepBuild {
-                distro-display: root.distro-display;
-                admin-group: FormState.distro == "fedora" || FormState.distro == "arch" ? "wheel" : "sudo";
-                source: FormState.source-path;
-                expected-sha256: FormState.expected-sha256;
-                hostname: FormState.hostname;
-                username: FormState.username;
-                realname: FormState.realname;
-                password-set: FormState.password != "";
-                user-groups: FormState.user-groups;
-                user-shell: FormState.user-shell;
-                sudo-nopasswd: FormState.sudo-nopasswd;
-                ssh-password-auth: FormState.ssh-password-auth;
-                ssh-keys: FormState.ssh-keys;
-                timezone: FormState.timezone;
-                locale: FormState.locale;
-                keyboard-layout: FormState.keyboard-layout;
-                static-ip: FormState.static-ip;
-                gateway: FormState.gateway;
-                dns-servers: FormState.dns-servers;
-                ntp-servers: FormState.ntp-servers;
-                firewall-policy: FormState.firewall-policy;
-                allow-ports: FormState.allow-ports;
-                deny-ports: FormState.deny-ports;
-                output-dir: FormState.output-dir;
-                out-name: FormState.out-name;
-                output-label: FormState.output-label;
-                unattended: FormState.no-user-interaction;
-                ssh-server: FormState.ssh-install-server;
-                packages: FormState.packages;
-                extra-repos: FormState.apt-repos != "" ? FormState.apt-repos : FormState.dnf-repos;
-                enable-services: FormState.enable-services;
-                disable-services: FormState.disable-services;
-                firewall-on: FormState.firewall-enabled;
-                docker-on: FormState.docker;
-                podman-on: FormState.podman;
-                docker-users: FormState.docker-users;
-                encrypt-on: FormState.encrypt;
-                storage-layout: FormState.storage-layout;
-                mounts: FormState.mounts;
-                run-commands: FormState.run-commands;
-                late-commands: FormState.late-commands;
-                running: AppState.job-running;
-                artifact-path: AppState.artifact-path;
-                artifact-sha256: AppState.artifact-sha256;
-                verify-summary: AppState.step3-done
-                    ? (AppState.verify-done || AppState.iso9660-done
-                        ? "Optional checks complete"
-                        : "Optional checks skipped for now")
-                    : "";
-                back-clicked => { root.build-back(); }
-                back-to-source => { root.build-back-to-source(); }
-                run-clicked => { root.build-run(); }
-                view-results => { root.build-view-results(); }
-                open-folder => { root.open-folder(); }
-                start-over => { root.clear-forms(); }
-            }}
-
-            if AppState.current-step == 4: Rectangle {
-                opacity: 0.0;
-                init => { self.opacity = 1.0; }
-                animate opacity { duration: 200ms; easing: ease-out; }
-                StepCheck {
-                verify-source <=> AppState.verify-source;
-                sums-url <=> AppState.sums-url;
-                artifact-path: AppState.artifact-path;
-                artifact-sha256: AppState.artifact-sha256;
-                verify-done: AppState.verify-done;
-                verify-matched: AppState.verify-matched;
-                verify-hash-display: AppState.verify-hash-display;
-                iso9660-done: AppState.iso9660-done;
-                iso9660-compliant: AppState.iso9660-compliant;
-                iso9660-boot-bios: AppState.iso9660-boot-bios;
-                iso9660-boot-uefi: AppState.iso9660-boot-uefi;
-                iso9660-volume-id: AppState.iso9660-volume-id;
-                running: AppState.job-running;
-                output-verified: AppState.output-verified;
-                output-verify-matched: AppState.output-verify-matched;
-                back-clicked => { root.check-back(); }
-                browse-verify-source => { root.browse-verify-source(); }
-                run-verify => { root.run-verify(); }
-                run-iso9660 => { root.run-iso9660(); }
-                run-verify-output => { root.run-verify-output(); }
-                copy-sha256 => { root.copy-sha256(); }
-                open-folder => { root.open-folder(); }
-                clear-forms => { root.clear-forms(); }
-            }}
-
-            // Log panel (collapsible)
-            if AppState.log-open: LogPanel {
-                entries: root.log-entries;
-                errors-only: AppState.log-errors-only;
-                error-count: AppState.log-error-count;
-                filter-toggled => { root.log-filter-toggle(); }
-                close-clicked => { root.log-toggle(); }
+            Sidebar {
+                current-step: AppState.current-step;
+                step1-done: AppState.step1-done;
+                step2-done: AppState.step2-done;
+                step3-done: AppState.step3-done;
+                step4-done: AppState.verify-done || AppState.iso9660-done;
+                job-running: AppState.job-running;
+                step-clicked(s) => { root.step-bar-clicked(s); }
             }
+
+            // Main content area: PageHeader + step content + (optional log panel)
+            HorizontalLayout {
+                spacing: 0;
+                horizontal-stretch: 1;
+
+                // Center column: header + active step
+                VerticalLayout {
+                    spacing: 0;
+                    horizontal-stretch: 1;
+
+                    PageHeader {
+                        title: step-title;
+                        subtitle: step-subtitle;
+                        job-phase: AppState.job-phase;
+                        job-percent: AppState.job-percent;
+                        job-running: AppState.job-running;
+                        status-text: AppState.status-text;
+                        status-is-error: AppState.status-is-error;
+                        doctor-open: AppState.doctor-open;
+                        cancel => { root.cancel-job(); }
+                        doctor-toggled => { root.doctor-toggle(); }
+                    }
+
+                    // Active step (one at a time, fade-in)
+                    if AppState.current-step == 1: Rectangle {
+                        opacity: 0.0;
+                        init => { self.opacity = 1.0; }
+                        animate opacity { duration: 200ms; easing: ease-out; }
+                        StepSource {
+                            presets-row1: root.presets-row1;
+                            presets-row2: root.presets-row2;
+                            source-path: FormState.source-path;
+                            selected-preset: FormState.selected-preset;
+                            detected-distro: FormState.detected-distro;
+                            running: AppState.job-running;
+                            can-continue: FormState.source-path != "";
+                            preset-clicked(id) => { root.preset-clicked(id); }
+                            browse-clicked => { root.browse-source(); }
+                            source-changed(t) => { root.source-changed(t); }
+                            continue-clicked => { root.source-continue(); }
+                            clear-clicked => { root.clear-source(); }
+                        }
+                    }
+
+                    if AppState.current-step == 2: Rectangle {
+                        opacity: 0.0;
+                        init => { self.opacity = 1.0; }
+                        animate opacity { duration: 200ms; easing: ease-out; }
+                        StepConfigure {
+                            source-display: FormState.source-path;
+                            distro: FormState.distro;
+                            selected-preset-name: FormState.selected-preset-name;
+                            distro-display: root.distro-display;
+                            defaults-summary: AppState.defaults-summary;
+                            hostname <=> FormState.hostname;
+                            username <=> FormState.username;
+                            password <=> FormState.password;
+                            password-confirm <=> FormState.password-confirm;
+                            realname <=> FormState.realname;
+                            passwords-match: FormState.password == "" || FormState.password == FormState.password-confirm;
+                            ssh-keys <=> FormState.ssh-keys;
+                            ssh-password-auth <=> FormState.ssh-password-auth;
+                            ssh-install-server <=> FormState.ssh-install-server;
+                            dns-servers <=> FormState.dns-servers;
+                            ntp-servers <=> FormState.ntp-servers;
+                            static-ip <=> FormState.static-ip;
+                            gateway <=> FormState.gateway;
+                            http-proxy <=> FormState.http-proxy;
+                            https-proxy <=> FormState.https-proxy;
+                            no-proxy <=> FormState.no-proxy;
+                            timezone <=> FormState.timezone;
+                            locale <=> FormState.locale;
+                            keyboard-layout <=> FormState.keyboard-layout;
+                            storage-layout <=> FormState.storage-layout;
+                            apt-mirror <=> FormState.apt-mirror;
+                            packages <=> FormState.packages;
+                            apt-repos <=> FormState.apt-repos;
+                            dnf-repos <=> FormState.dnf-repos;
+                            run-commands <=> FormState.run-commands;
+                            late-commands <=> FormState.late-commands;
+                            firewall-enabled <=> FormState.firewall-enabled;
+                            firewall-policy <=> FormState.firewall-policy;
+                            allow-ports <=> FormState.allow-ports;
+                            deny-ports <=> FormState.deny-ports;
+                            user-groups <=> FormState.user-groups;
+                            user-shell <=> FormState.user-shell;
+                            sudo-nopasswd <=> FormState.sudo-nopasswd;
+                            enable-services <=> FormState.enable-services;
+                            disable-services <=> FormState.disable-services;
+                            docker <=> FormState.docker;
+                            podman <=> FormState.podman;
+                            docker-users <=> FormState.docker-users;
+                            swap-size-mb <=> FormState.swap-size-mb;
+                            encrypt <=> FormState.encrypt;
+                            encrypt-passphrase <=> FormState.encrypt-passphrase;
+                            mounts <=> FormState.mounts;
+                            grub-timeout <=> FormState.grub-timeout;
+                            grub-cmdline <=> FormState.grub-cmdline;
+                            grub-default <=> FormState.grub-default;
+                            sysctl-pairs <=> FormState.sysctl-pairs;
+                            dnf-mirror <=> FormState.dnf-mirror;
+                            pacman-repos <=> FormState.pacman-repos;
+                            pacman-mirror <=> FormState.pacman-mirror;
+                            sudo-commands <=> FormState.sudo-commands;
+                            swap-filename <=> FormState.swap-filename;
+                            swap-swappiness <=> FormState.swap-swappiness;
+                            wallpaper-path <=> FormState.wallpaper-path;
+                            output-dir <=> FormState.output-dir;
+                            out-name <=> FormState.out-name;
+                            output-label <=> FormState.output-label;
+                            expected-sha256 <=> FormState.expected-sha256;
+                            no-user-interaction <=> FormState.no-user-interaction;
+                            running: AppState.job-running;
+                            can-continue: FormState.source-path != "" && FormState.hostname != "" && FormState.username != "" && FormState.output-dir != "" && FormState.out-name != "";
+                            browse-output-dir => { root.browse-output-dir(); }
+                            configure-continue => { root.configure-continue(); }
+                            back-clicked => { root.configure-back(); }
+                            distro-changed(d) => { FormState.distro = d; }
+                            clear-source => { root.clear-source(); }
+                            apply-defaults => { root.apply-defaults(); }
+                            reset-defaults => { root.reset-defaults(); }
+                            field-edited(name) => { root.field-edited(name); }
+                            username-changed(u) => { root.username-changed(u); }
+                            docker-changed => { root.docker-changed(); }
+                        }
+                    }
+
+                    if AppState.current-step == 3: Rectangle {
+                        opacity: 0.0;
+                        init => { self.opacity = 1.0; }
+                        animate opacity { duration: 200ms; easing: ease-out; }
+                        StepBuild {
+                            distro-display: root.distro-display;
+                            admin-group: FormState.distro == "fedora" || FormState.distro == "arch" ? "wheel" : "sudo";
+                            source: FormState.source-path;
+                            expected-sha256: FormState.expected-sha256;
+                            hostname: FormState.hostname;
+                            username: FormState.username;
+                            realname: FormState.realname;
+                            password-set: FormState.password != "";
+                            user-groups: FormState.user-groups;
+                            user-shell: FormState.user-shell;
+                            sudo-nopasswd: FormState.sudo-nopasswd;
+                            ssh-password-auth: FormState.ssh-password-auth;
+                            ssh-keys: FormState.ssh-keys;
+                            timezone: FormState.timezone;
+                            locale: FormState.locale;
+                            keyboard-layout: FormState.keyboard-layout;
+                            static-ip: FormState.static-ip;
+                            gateway: FormState.gateway;
+                            dns-servers: FormState.dns-servers;
+                            ntp-servers: FormState.ntp-servers;
+                            firewall-policy: FormState.firewall-policy;
+                            allow-ports: FormState.allow-ports;
+                            deny-ports: FormState.deny-ports;
+                            output-dir: FormState.output-dir;
+                            out-name: FormState.out-name;
+                            output-label: FormState.output-label;
+                            unattended: FormState.no-user-interaction;
+                            ssh-server: FormState.ssh-install-server;
+                            packages: FormState.packages;
+                            extra-repos: FormState.apt-repos != "" ? FormState.apt-repos : FormState.dnf-repos;
+                            enable-services: FormState.enable-services;
+                            disable-services: FormState.disable-services;
+                            firewall-on: FormState.firewall-enabled;
+                            docker-on: FormState.docker;
+                            podman-on: FormState.podman;
+                            docker-users: FormState.docker-users;
+                            encrypt-on: FormState.encrypt;
+                            storage-layout: FormState.storage-layout;
+                            mounts: FormState.mounts;
+                            run-commands: FormState.run-commands;
+                            late-commands: FormState.late-commands;
+                            running: AppState.job-running;
+                            artifact-path: AppState.artifact-path;
+                            artifact-sha256: AppState.artifact-sha256;
+                            verify-summary: AppState.step3-done
+                                ? (AppState.verify-done || AppState.iso9660-done
+                                    ? "Verification checks complete"
+                                    : "")
+                                : "";
+                            back-clicked => { root.build-back(); }
+                            back-to-source => { root.build-back-to-source(); }
+                            run-clicked => { root.build-run(); }
+                            view-results => { root.build-view-results(); }
+                            open-folder => { root.open-folder(); }
+                            start-over => { root.clear-forms(); }
+                        }
+                    }
+
+                    if AppState.current-step == 4: Rectangle {
+                        opacity: 0.0;
+                        init => { self.opacity = 1.0; }
+                        animate opacity { duration: 200ms; easing: ease-out; }
+                        StepCheck {
+                            verify-source <=> AppState.verify-source;
+                            sums-url <=> AppState.sums-url;
+                            artifact-path: AppState.artifact-path;
+                            artifact-sha256: AppState.artifact-sha256;
+                            verify-done: AppState.verify-done;
+                            verify-matched: AppState.verify-matched;
+                            verify-hash-display: AppState.verify-hash-display;
+                            iso9660-done: AppState.iso9660-done;
+                            iso9660-compliant: AppState.iso9660-compliant;
+                            iso9660-boot-bios: AppState.iso9660-boot-bios;
+                            iso9660-boot-uefi: AppState.iso9660-boot-uefi;
+                            iso9660-volume-id: AppState.iso9660-volume-id;
+                            running: AppState.job-running;
+                            output-verified: AppState.output-verified;
+                            output-verify-matched: AppState.output-verify-matched;
+                            back-clicked => { root.check-back(); }
+                            browse-verify-source => { root.browse-verify-source(); }
+                            run-verify => { root.run-verify(); }
+                            run-iso9660 => { root.run-iso9660(); }
+                            run-verify-output => { root.run-verify-output(); }
+                            copy-sha256 => { root.copy-sha256(); }
+                            open-folder => { root.open-folder(); }
+                            clear-forms => { root.clear-forms(); }
+                        }
+                    }
+                }
+
+                // Log panel (slides in from right)
+                if AppState.log-open: LogPanel {
+                    entries: root.log-entries;
+                    errors-only: AppState.log-errors-only;
+                    error-count: AppState.log-error-count;
+                    filter-toggled => { root.log-filter-toggle(); }
+                    close-clicked => { root.log-toggle(); }
+                }
+            }
+        }
+
+        // Bottom: status bar (full width)
+        StatusBar {
+            job-phase: AppState.job-phase;
+            job-running: AppState.job-running;
+            log-error-count: AppState.log-error-count;
+            doctor-ok: true;
+            theme-toggle => { root.theme-toggle(); }
         }
     }
 
-    // ── Log toggle button (bottom-right, floating) ────────────────────────
+    // ── Floating activity button (bottom-right above status bar) ───────────
     Rectangle {
-        x: parent.width - 110px;
-        y: parent.height - 44px;
-        width: 100px;
+        x: parent.width - 124px;
+        y: parent.height - Sizes.footer-height - 44px;
+        width: 110px;
         height: 32px;
-        border-radius: 16px;
+        border-radius: Sizes.radius-md;
         background: log-btn-ta.has-hover ? Palette.active : Palette.elevated;
         border-width: 1px;
         border-color: log-btn-ta.has-hover ? Palette.border-focus : Palette.border;
@@ -310,17 +363,25 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             spacing: Sizes.space-2;
             alignment: center;
+            Image {
+                source: @image-url("icons/activity.svg");
+                width: 13px;
+                height: 13px;
+                y: (parent.height - self.height) / 2;
+                colorize: log-btn-ta.has-hover ? Palette.text : Palette.text-secondary;
+                image-fit: contain;
+            }
             Text {
                 text: AppState.log-open ? "Hide Log" : "Activity";
                 font-size: Sizes.font-xs;
                 font-weight: 500;
-                color: log-btn-ta.has-hover ? Palette.text : Palette.muted;
+                color: log-btn-ta.has-hover ? Palette.text : Palette.text-secondary;
                 vertical-alignment: center;
             }
             if AppState.log-error-count > 0 && !AppState.log-open: Rectangle {
-                width: 16px;
-                height: 16px;
-                border-radius: 8px;
+                width: 18px;
+                height: 18px;
+                border-radius: 9px;
                 background: Palette.red;
                 Text {
                     text: AppState.log-error-count > 99 ? "+" : AppState.log-error-count;
@@ -338,10 +399,10 @@ export component AppWindow inherits Window {
         }
     }
 
-    // ── Doctor popup ─────────────────────────────────────────────────────
+    // ── Doctor popup (anchored top-right of content area) ──────────────────
     if AppState.doctor-open: Rectangle {
         x: parent.width - 384px;
-        y: 72px;
+        y: Sizes.header-height + 8px;
         width: 360px;
         height: 380px;
         border-radius: Sizes.radius-lg;
@@ -356,7 +417,7 @@ export component AppWindow inherits Window {
         VerticalLayout {
             // Header
             Rectangle {
-                height: 48px;
+                height: 44px;
                 background: Palette.surface;
                 HorizontalLayout {
                     padding-left: Sizes.space-5;
@@ -376,12 +437,14 @@ export component AppWindow inherits Window {
                         background: doc-close-ta.has-hover ? Palette.active : transparent;
                         animate background { duration: 100ms; }
                         y: (parent.height - self.height) / 2;
-                        Text {
-                            text: "\u{2715}";
-                            font-size: 11px;
-                            color: Palette.muted;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
+                        Image {
+                            source: @image-url("icons/x.svg");
+                            width: 12px;
+                            height: 12px;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                            colorize: doc-close-ta.has-hover ? Palette.text : Palette.muted;
+                            image-fit: contain;
                         }
                         doc-close-ta := TouchArea {
                             mouse-cursor: MouseCursor.pointer;

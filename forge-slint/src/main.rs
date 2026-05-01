@@ -1,7 +1,11 @@
 slint::include_modules!();
 
 mod app;
+mod config;
 mod defaults;
+mod handlers;
+mod jobs;
+mod obs;
 mod persist;
 mod state;
 mod worker;
@@ -12,18 +16,26 @@ use std::sync::Arc;
 
 use slint::ComponentHandle;
 
-use app::{
-    handle_preset_clicked, make_preset_cards, preset_display_name, with_app, with_app_result,
-    ForgeApp, APP,
-};
+use app::{ForgeApp, APP};
+use config::{make_preset_cards, preset_display_name};
 use forgeiso_engine::ForgeIsoEngine;
+use handlers::wire_all_handlers;
 use persist::{load_state, save_state};
 use state::{InjectState, PersistedState, VerifyState};
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    // JSON tracing — fail-open. Guard held for program lifetime.
+    let _tracing_guard = obs::init_tracing();
+
+    // OpenTelemetry tracing — feature-gated. Guard held for program lifetime
+    // so the exporter flushes on Drop. With the `otel` feature off, this is a
+    // zero-cost no-op guard.
+    #[cfg(feature = "otel")]
+    let _otel = forgeiso_engine::observability::init_otel(
+        std::env::var("FORGEISO_OTEL_ENDPOINT").ok().as_deref(),
+    );
 
     if !has_display_env(
         std::env::var_os("DISPLAY").as_deref(),
@@ -50,6 +62,20 @@ fn main() -> anyhow::Result<()> {
     // Create Slint window.
     let win = AppWindow::new()?;
 
+    // Surface build metadata + restore persisted theme in the StatusBar.
+    {
+        let theme = win.global::<Theme>();
+        theme.set_app_version(format!("v{}", env!("CARGO_PKG_VERSION")).into());
+        theme.set_build_hash(option_env!("FORGEISO_BUILD_HASH").unwrap_or("").into());
+        theme.set_license("MIT".into());
+        // Restore persisted theme mode (defaults to "dark" if file missing/invalid).
+        let mode = match saved.ui.theme.as_str() {
+            "light" => "light",
+            _ => "dark",
+        };
+        theme.set_mode(mode.into());
+    }
+
     // Populate window from persisted state.
     restore_inject(&win, &saved.inject);
     restore_verify(&win, &saved.verify);
@@ -74,485 +100,7 @@ fn main() -> anyhow::Result<()> {
 
     // ── Callback wiring ───────────────────────────────────────────────────────
 
-    // cancel-job
-    win.on_cancel_job(|| {
-        with_app(|a| a.cancel_job());
-    });
-
-    // doctor-toggle
-    {
-        let weak = win.as_weak();
-        win.on_doctor_toggle(move || {
-            if let Some(w) = weak.upgrade() {
-                let g = w.global::<AppState>();
-                if g.get_doctor_open() {
-                    g.set_doctor_open(false);
-                } else {
-                    g.set_doctor_open(true);
-                    with_app(|a| a.spawn_doctor());
-                }
-            }
-        });
-    }
-
-    // step-bar-clicked  — free navigation when not building; locked during builds
-    {
-        let weak = win.as_weak();
-        win.on_step_bar_clicked(move |step| {
-            if let Some(w) = weak.upgrade() {
-                let g = w.global::<AppState>();
-                if g.get_job_running() {
-                    return;
-                }
-                // Allow backward navigation freely. Forward navigation
-                // requires that prerequisite steps are complete.
-                let target = step;
-                let allowed = match target {
-                    1 => true,
-                    2 => g.get_step1_done(),
-                    3 => g.get_step2_done(),
-                    4 => g.get_step3_done(),
-                    _ => false,
-                };
-                if allowed {
-                    g.set_current_step(target);
-                }
-            }
-        });
-    }
-
-    // preset-clicked
-    {
-        let weak = win.as_weak();
-        win.on_preset_clicked(move |id| {
-            if let Some(w) = weak.upgrade() {
-                with_app(|a| handle_preset_clicked(&w, id.as_str(), a));
-            }
-        });
-    }
-
-    // browse-source  — spawn zenity; on_picked runs via invoke_from_event_loop
-    {
-        let weak = win.as_weak();
-        win.on_browse_source(move || {
-            worker::pick_iso(
-                weak.clone(),
-                // This closure is Send + 'static. It is called on the event loop
-                // thread (inside invoke_from_event_loop in handle_zenity).
-                |w, path| {
-                    let fs = w.global::<FormState>();
-                    fs.set_source_path(path.clone().into());
-                    fs.set_selected_preset("".into());
-                    fs.set_selected_preset_name("".into());
-                    fs.set_detected_distro("".into());
-                    let gs = w.global::<AppState>();
-                    gs.set_defaults_summary("".into());
-                    gs.set_step1_done(true);
-                    gs.set_step2_done(false);
-                    clear_build_results(&w);
-                    // Access ForgeApp via thread-local — no Rc captured.
-                    with_app(|a| {
-                        a.clear_defaults_state();
-                        a.spawn_detect_iso(path);
-                    });
-                },
-            );
-        });
-    }
-
-    // source-changed  — typed path; trigger detect + mark done
-    {
-        let weak = win.as_weak();
-        win.on_source_changed(move |text| {
-            let t: String = text.into();
-            let not_empty = !t.trim().is_empty();
-            if let Some(w) = weak.upgrade() {
-                let fs = w.global::<FormState>();
-                fs.set_selected_preset("".into());
-                fs.set_selected_preset_name("".into());
-                fs.set_detected_distro("".into());
-                let gs = w.global::<AppState>();
-                gs.set_defaults_summary("".into());
-                gs.set_step1_done(not_empty);
-                gs.set_step2_done(false);
-                clear_build_results(&w);
-            }
-            with_app(|a| a.clear_defaults_state());
-            if not_empty {
-                with_app(|a| a.spawn_detect_iso(t));
-            }
-        });
-    }
-
-    // source-continue  — navigate to step 2
-    {
-        let weak = win.as_weak();
-        win.on_source_continue(move || {
-            if let Some(w) = weak.upgrade() {
-                if !w.global::<FormState>().get_source_path().is_empty() {
-                    let gs = w.global::<AppState>();
-                    gs.set_step1_done(true);
-                    gs.set_current_step(2);
-                }
-            }
-        });
-    }
-
-    // clear-source  — reset step 1 + abort any running tasks
-    {
-        let weak = win.as_weak();
-        win.on_clear_source(move || {
-            if let Some(w) = weak.upgrade() {
-                let fs = w.global::<FormState>();
-                fs.set_source_path("".into());
-                fs.set_selected_preset("".into());
-                fs.set_selected_preset_name("".into());
-                fs.set_detected_distro("".into());
-                let gs = w.global::<AppState>();
-                gs.set_defaults_summary("".into());
-                gs.set_step1_done(false);
-                gs.set_step2_done(false);
-                clear_build_results(&w);
-                gs.set_current_step(1);
-                gs.set_status_text("".into());
-                gs.set_status_is_error(false);
-                gs.set_passwords_match(true);
-            }
-            with_app(|a| {
-                if let Some(h) = a.detect_task.take() {
-                    h.abort();
-                }
-                if let Some(h) = a.current_task.take() {
-                    h.abort();
-                }
-                if let Some(h) = a.sha256_task.take() {
-                    h.abort();
-                }
-                a.clear_defaults_state();
-                a.finish_job();
-            });
-        });
-    }
-
-    // browse-output-dir
-    {
-        let weak = win.as_weak();
-        win.on_browse_output_dir(move || {
-            worker::pick_folder(weak.clone(), |w, path| {
-                w.global::<FormState>().set_output_dir(path.into());
-            });
-        });
-    }
-
-    // configure-continue  — validate passwords + navigate to step 3
-    {
-        let weak = win.as_weak();
-        win.on_configure_continue(move || {
-            if let Some(w) = weak.upgrade() {
-                let gs = w.global::<AppState>();
-                if gs.get_job_running() {
-                    return;
-                }
-
-                let fs = w.global::<FormState>();
-                let pw: String = fs.get_password().into();
-                let pc: String = fs.get_password_confirm().into();
-                if fs.get_hostname().trim().is_empty() {
-                    gs.set_status_text("Hostname is required".into());
-                    gs.set_status_is_error(true);
-                    return;
-                }
-                if fs.get_username().trim().is_empty() {
-                    gs.set_status_text("Username is required".into());
-                    gs.set_status_is_error(true);
-                    return;
-                }
-                let match_ok = pw.is_empty() || pw == pc;
-                gs.set_passwords_match(match_ok);
-                if !match_ok {
-                    gs.set_status_text("Passwords do not match".into());
-                    gs.set_status_is_error(true);
-                    return;
-                }
-
-                let validation = with_app_result(|a| a.validate_inject_form())
-                    .unwrap_or_else(|| Err("application state is unavailable".to_string()));
-                if let Err(msg) = validation {
-                    gs.set_status_text(msg.into());
-                    gs.set_status_is_error(true);
-                    return;
-                }
-
-                gs.set_status_text("".into());
-                gs.set_status_is_error(false);
-                gs.set_step2_done(true);
-                gs.set_current_step(3);
-            }
-        });
-    }
-
-    // configure-back  — navigate to step 1
-    {
-        let weak = win.as_weak();
-        win.on_configure_back(move || {
-            if let Some(w) = weak.upgrade() {
-                w.global::<AppState>().set_current_step(1);
-            }
-        });
-    }
-
-    // apply-defaults  — apply distro defaults to unedited fields
-    {
-        let weak = win.as_weak();
-        win.on_apply_defaults(move || {
-            if let Some(w) = weak.upgrade() {
-                with_app(|a| a.apply_distro_defaults(&w));
-            }
-        });
-    }
-
-    // reset-defaults  — clear edit tracking and reapply defaults
-    {
-        let weak = win.as_weak();
-        win.on_reset_defaults(move || {
-            if let Some(w) = weak.upgrade() {
-                with_app(|a| a.reset_and_apply_defaults(&w));
-            }
-        });
-    }
-
-    // field-edited  — track which default-managed fields the user has touched
-    win.on_field_edited(move |name| {
-        let field: String = name.into();
-        with_app(|a| a.mark_edited(&field));
-    });
-
-    // username-changed  — auto-manage groups and Docker user
-    {
-        let weak = win.as_weak();
-        win.on_username_changed(move |_u| {
-            if let Some(w) = weak.upgrade() {
-                with_app(|a| a.on_username_changed(&w));
-            }
-        });
-    }
-
-    // docker-changed  — auto-manage Docker user membership when appropriate
-    {
-        let weak = win.as_weak();
-        win.on_docker_changed(move || {
-            if let Some(w) = weak.upgrade() {
-                with_app(|a| a.on_docker_changed(&w));
-            }
-        });
-    }
-
-    // build-back  — navigate to step 2
-    {
-        let weak = win.as_weak();
-        win.on_build_back(move || {
-            if let Some(w) = weak.upgrade() {
-                let gs = w.global::<AppState>();
-                if !gs.get_job_running() {
-                    gs.set_current_step(2);
-                }
-            }
-        });
-    }
-
-    // build-back-to-source  — navigate to step 1
-    {
-        let weak = win.as_weak();
-        win.on_build_back_to_source(move || {
-            if let Some(w) = weak.upgrade() {
-                let gs = w.global::<AppState>();
-                if !gs.get_job_running() {
-                    gs.set_current_step(1);
-                }
-            }
-        });
-    }
-
-    // build-run  — kick off the inject pipeline
-    win.on_build_run(|| {
-        with_app(|a| a.spawn_inject());
-    });
-
-    // build-view-results  — jump to check step
-    {
-        let weak = win.as_weak();
-        win.on_build_view_results(move || {
-            if let Some(w) = weak.upgrade() {
-                let gs = w.global::<AppState>();
-                if gs.get_step3_done() {
-                    gs.set_current_step(4);
-                }
-            }
-        });
-    }
-
-    // check-back  — return to build summary
-    {
-        let weak = win.as_weak();
-        win.on_check_back(move || {
-            if let Some(w) = weak.upgrade() {
-                let gs = w.global::<AppState>();
-                if !gs.get_job_running() && gs.get_step3_done() {
-                    gs.set_current_step(3);
-                }
-            }
-        });
-    }
-
-    // browse-verify-source
-    {
-        let weak = win.as_weak();
-        win.on_browse_verify_source(move || {
-            // Abort current verify/iso9660 task when source changes.
-            with_app(|a| {
-                if let Some(h) = a.current_task.take() {
-                    h.abort();
-                }
-                a.finish_job();
-            });
-            worker::pick_iso(weak.clone(), |w, path| {
-                w.global::<AppState>().set_verify_source(path.into());
-                clear_optional_checks(&w);
-            });
-        });
-    }
-
-    // run-verify
-    win.on_run_verify(|| {
-        with_app(|a| a.spawn_verify());
-    });
-
-    // run-iso9660
-    win.on_run_iso9660(|| {
-        with_app(|a| a.spawn_iso9660());
-    });
-
-    // run-verify-output — re-hash output ISO to confirm write integrity
-    {
-        let weak = win.as_weak();
-        win.on_run_verify_output(move || {
-            if let Some(w) = weak.upgrade() {
-                let gs = w.global::<AppState>();
-                let path = gs.get_artifact_path().to_string();
-                let hash = gs.get_artifact_sha256().to_string();
-                if !path.is_empty() && !hash.is_empty() {
-                    app::spawn_verify_output(w.as_weak(), path, hash);
-                }
-            }
-        });
-    }
-
-    // copy-sha256  — write artifact hash to clipboard via wl-copy/xclip/xsel
-    {
-        let weak = win.as_weak();
-        win.on_copy_sha256(move || {
-            if let Some(w) = weak.upgrade() {
-                let hash: String = w.global::<AppState>().get_artifact_sha256().into();
-                if !hash.is_empty() {
-                    let gs = w.global::<AppState>();
-                    match copy_to_clipboard(&hash) {
-                        Ok(()) => {
-                            gs.set_status_text("SHA-256 copied to clipboard".into());
-                            gs.set_status_is_error(false);
-                        }
-                        Err(msg) => {
-                            gs.set_status_text(msg.into());
-                            gs.set_status_is_error(true);
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    // open-folder  — reveal artifact directory in file manager
-    {
-        let weak = win.as_weak();
-        win.on_open_folder(move || {
-            if let Some(w) = weak.upgrade() {
-                let path: String = w.global::<AppState>().get_artifact_path().into();
-                if !path.is_empty() {
-                    let dir = std::path::Path::new(&path)
-                        .parent()
-                        .map(|p| p.to_string_lossy().into_owned())
-                        .unwrap_or(path);
-                    let gs = w.global::<AppState>();
-                    match open_in_file_manager(&dir) {
-                        Ok(()) => {
-                            gs.set_status_text("Opened artifact folder".into());
-                            gs.set_status_is_error(false);
-                        }
-                        Err(msg) => {
-                            gs.set_status_text(msg.into());
-                            gs.set_status_is_error(true);
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    // clear-forms  — reset everything back to defaults
-    {
-        let weak = win.as_weak();
-        win.on_clear_forms(move || {
-            with_app(|a| {
-                if let Some(h) = a.current_task.take() {
-                    h.abort();
-                }
-                if let Some(h) = a.detect_task.take() {
-                    h.abort();
-                }
-                if let Some(h) = a.sha256_task.take() {
-                    h.abort();
-                }
-                a.edited_fields.clear();
-                a.finish_job();
-            });
-            if let Some(w) = weak.upgrade() {
-                restore_inject(&w, &InjectState::default());
-                restore_verify(&w, &VerifyState::default());
-                let gs = w.global::<AppState>();
-                gs.set_defaults_summary("".into());
-                gs.set_step1_done(false);
-                gs.set_step2_done(false);
-                clear_build_results(&w);
-                gs.set_current_step(1);
-                gs.set_status_text("".into());
-                gs.set_status_is_error(false);
-                gs.set_passwords_match(true);
-            }
-        });
-    }
-
-    // log-toggle
-    {
-        let weak = win.as_weak();
-        win.on_log_toggle(move || {
-            if let Some(w) = weak.upgrade() {
-                let gs = w.global::<AppState>();
-                let open = gs.get_log_open();
-                gs.set_log_open(!open);
-            }
-        });
-    }
-
-    // log-filter-toggle
-    {
-        let weak = win.as_weak();
-        win.on_log_filter_toggle(move || {
-            if let Some(w) = weak.upgrade() {
-                let gs = w.global::<AppState>();
-                let errors_only = gs.get_log_errors_only();
-                gs.set_log_errors_only(!errors_only);
-            }
-        });
-    }
+    wire_all_handlers(&win);
 
     // ── Run event loop ────────────────────────────────────────────────────────
 
@@ -575,6 +123,9 @@ fn main() -> anyhow::Result<()> {
                     .and_then(|rc| rc.borrow().snap_verify())
             })
             .unwrap_or_default(),
+        ui: crate::state::UiState {
+            theme: win.global::<Theme>().get_mode().to_string(),
+        },
     };
     save_state(&state);
 
@@ -583,7 +134,7 @@ fn main() -> anyhow::Result<()> {
 
 // ── Restore helpers ───────────────────────────────────────────────────────────
 
-fn restore_inject(w: &AppWindow, s: &InjectState) {
+pub(crate) fn restore_inject(w: &AppWindow, s: &InjectState) {
     let fs = w.global::<FormState>();
     fs.set_source_path(s.source.clone().into());
     fs.set_selected_preset(s.source_preset.clone().into());
@@ -641,7 +192,15 @@ fn restore_inject(w: &AppWindow, s: &InjectState) {
     fs.set_mounts(s.mounts.clone().into());
     fs.set_grub_timeout(s.grub_timeout.clone().into());
     fs.set_grub_cmdline(s.grub_cmdline.clone().into());
+    fs.set_grub_default(s.grub_default.clone().into());
     fs.set_sysctl_pairs(s.sysctl_pairs.clone().into());
+    fs.set_dnf_mirror(s.dnf_mirror.clone().into());
+    fs.set_pacman_repos(s.pacman_repos.clone().into());
+    fs.set_pacman_mirror(s.pacman_mirror.clone().into());
+    fs.set_sudo_commands(s.sudo_commands.clone().into());
+    fs.set_swap_filename(s.swap_filename.clone().into());
+    fs.set_swap_swappiness(s.swap_swappiness.clone().into());
+    fs.set_wallpaper_path(s.wallpaper_path.clone().into());
     fs.set_no_user_interaction(s.no_user_interaction);
     fs.set_expected_sha256(s.expected_sha256.clone().into());
     let defaults_summary = if s.source_preset.is_empty() {
@@ -657,7 +216,7 @@ fn restore_inject(w: &AppWindow, s: &InjectState) {
     gs.set_passwords_match(true);
 }
 
-fn restore_verify(w: &AppWindow, s: &VerifyState) {
+pub(crate) fn restore_verify(w: &AppWindow, s: &VerifyState) {
     let gs = w.global::<AppState>();
     gs.set_verify_source(s.source.clone().into());
     gs.set_sums_url(s.sums_url.clone().into());
@@ -690,7 +249,7 @@ pub(crate) fn clear_build_results(w: &AppWindow) {
 
 // ── Clipboard helper ──────────────────────────────────────────────────────────
 
-fn copy_to_clipboard(text: &str) -> Result<(), &'static str> {
+pub(crate) fn copy_to_clipboard(text: &str) -> Result<(), &'static str> {
     if let Some(message) = clipboard_unavailable_message(has_graphical_session()) {
         return Err(message);
     }
@@ -703,7 +262,7 @@ fn copy_to_clipboard(text: &str) -> Result<(), &'static str> {
     Err("Clipboard helper not found — install wl-clipboard, xclip, or xsel")
 }
 
-fn open_in_file_manager(path: &str) -> Result<(), &'static str> {
+pub(crate) fn open_in_file_manager(path: &str) -> Result<(), &'static str> {
     if !has_graphical_session() {
         return Err(
             "Open Folder requires a graphical session — open the output directory manually",

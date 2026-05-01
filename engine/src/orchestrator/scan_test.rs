@@ -18,6 +18,11 @@ impl ForgeIsoEngine {
         policy_file: Option<&Path>,
         out_dir: &Path,
     ) -> EngineResult<ScanResult> {
+        // Top-level span for the scan operation. Wraps policy load + scan
+        // execution + report serialization for OTLP grouping.
+        let _scan_span =
+            tracing::info_span!("scan_phase", artifact = %artifact.display()).entered();
+
         let policy = if let Some(path) = policy_file {
             let raw = std::fs::read_to_string(path)?;
             serde_yaml::from_str(&raw)?
@@ -151,4 +156,72 @@ async fn run_qemu_smoke(iso: &Path, firmware: Option<&Path>, log_path: &Path) ->
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn scan_with_default_policy_writes_report_json() {
+        let target = tempfile::tempdir().expect("target");
+        std::fs::write(target.path().join("hello.txt"), b"world").expect("write");
+        let out = tempfile::tempdir().expect("out");
+        let engine = ForgeIsoEngine::new();
+
+        let result = engine
+            .scan(target.path(), None, out.path())
+            .await
+            .expect("scan must succeed in default policy mode");
+        assert!(
+            result.report_json.exists(),
+            "scan-report.json must be written"
+        );
+        // Default policy enables sbom + secrets, both hermetic.
+        assert!(result.report.sbom_spdx.is_some());
+    }
+
+    #[tokio::test]
+    async fn scan_with_inline_policy_file_overrides_defaults() {
+        let target = tempfile::tempdir().expect("target");
+        let out = tempfile::tempdir().expect("out");
+        let policy_dir = tempfile::tempdir().expect("policy");
+        let policy_file = policy_dir.path().join("policy.yaml");
+        // Disable everything → no reports, no SBOM
+        std::fs::write(
+            &policy_file,
+            "enable_sbom: false\n\
+             enable_trivy: false\n\
+             enable_syft_grype: false\n\
+             enable_open_scap: false\n\
+             enable_secrets_scan: false\n\
+             strict_secrets: false\n",
+        )
+        .expect("write");
+        let engine = ForgeIsoEngine::new();
+
+        let result = engine
+            .scan(target.path(), Some(&policy_file), out.path())
+            .await
+            .expect("scan with inline policy");
+        assert!(result.report.reports.is_empty());
+        assert!(result.report.sbom_spdx.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_iso_returns_error_for_missing_file() {
+        // qemu-system-x86_64 must be present for this branch to fire; if not,
+        // we still get an error (MissingTool) — both are acceptable failures.
+        let out = tempfile::tempdir().expect("out");
+        let engine = ForgeIsoEngine::new();
+        let result = engine
+            .test_iso(
+                std::path::Path::new("/nonexistent/path.iso"),
+                true,
+                false,
+                out.path(),
+            )
+            .await;
+        assert!(result.is_err(), "must return some error for missing ISO");
+    }
 }

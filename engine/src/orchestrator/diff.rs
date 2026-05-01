@@ -148,3 +148,62 @@ fn parse_lsdl_output(text: &str) -> std::collections::HashMap<String, u64> {
     }
     files
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_lsdl_output_extracts_path_and_size() {
+        let text = "\
+-rwxr--r--    1 1000     1000       966664 Aug 13  2024 '/EFI/boot/bootx64.efi'
+-rw-r--r--    1 root     root           42 Jan 01  2025 '/casper/initrd'
+";
+        let map = parse_lsdl_output(text);
+        assert_eq!(map.get("/EFI/boot/bootx64.efi").copied(), Some(966664));
+        assert_eq!(map.get("/casper/initrd").copied(), Some(42));
+    }
+
+    #[test]
+    fn parse_lsdl_output_skips_blank_and_non_file_lines() {
+        // Lines beginning with anything other than perm chars must be ignored.
+        let text = "\
+some-summary-line
+total: 5
+
+-rw-r--r--    1 a b 10 Jan 1 2024 '/x'
+";
+        let map = parse_lsdl_output(text);
+        assert_eq!(map.len(), 1, "only the file line should parse");
+        assert_eq!(map.get("/x").copied(), Some(10));
+    }
+
+    #[test]
+    fn parse_lsdl_output_handles_paths_with_spaces() {
+        let text = "-rw-r--r-- 1 a b 99 Jan 1 2024 '/dir with space/file name.txt'\n";
+        let map = parse_lsdl_output(text);
+        assert_eq!(map.get("/dir with space/file name.txt").copied(), Some(99));
+    }
+
+    #[test]
+    fn parse_lsdl_output_returns_empty_for_empty_input() {
+        assert!(parse_lsdl_output("").is_empty());
+    }
+
+    #[test]
+    fn parse_lsdl_output_skips_relative_paths() {
+        // Without a leading slash the entry must be discarded — IsoDiff
+        // requires absolute paths to compare across base/target trees.
+        let text = "-rw-r--r-- 1 a b 1 Jan 1 2024 'relative/path.txt'\n";
+        let map = parse_lsdl_output(text);
+        assert!(map.is_empty(), "relative paths must not be inserted");
+    }
+
+    #[test]
+    fn parse_lsdl_output_skips_unparseable_size_field() {
+        // size column is not a number → discard the row
+        let text = "-rw-r--r-- 1 a b NOT_A_NUMBER Jan 1 2024 '/bad-size'\n";
+        let map = parse_lsdl_output(text);
+        assert!(map.is_empty());
+    }
+}

@@ -3,9 +3,7 @@ name: ForgeISO CI
 on:
   push:
     branches:
-    timeout-minutes: 60
       - main
-    timeout-minutes: 60
     tags:
       - v*.*.*
       - v*
@@ -15,8 +13,6 @@ on:
     - cron: '0 4 * * 1'
 permissions:
   contents: write
-  id-token: write
-  attestations: write
   security-events: write
 concurrency:
   group: ForgeISO-ci-${{ github.ref }}
@@ -29,7 +25,7 @@ env:
 jobs:
   repo-guard:
     name: Repository Context Guard
-    runs-on: [self-hosted, unified-all]
+    runs-on: [self-hosted, rust-slim]
     timeout-minutes: 2
     steps:
       - name: Verify repository ownership
@@ -42,7 +38,7 @@ jobs:
           echo "Repository context verified."
   lint:
     name: Lint
-    runs-on: [self-hosted, unified-all]
+    runs-on: [self-hosted, rust-slim]
     needs: repo-guard
     timeout-minutes: 10
     steps:
@@ -58,7 +54,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
   test:
     name: Test
-    runs-on: [self-hosted, unified-all]
+    runs-on: [self-hosted, rust-slim]
     needs: lint
     timeout-minutes: 30
     steps:
@@ -89,9 +85,48 @@ jobs:
         shell: bash
         timeout-minutes: 20
         run: cargo test --workspace
+  coverage:
+    name: Coverage Gate
+    runs-on: [self-hosted, rust-slim]
+    needs: test
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: ~/.cargo/registry
+          restore-keys: ${{ runner.os }}-cargo-registry-
+      - name: Cache target
+        uses: actions/cache@v4
+        with:
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
+          path: target
+          restore-keys: ${{ runner.os }}-cargo-target-
+      - name: Install cargo-tarpaulin (pinned 0.35.4)
+        shell: bash
+        timeout-minutes: 10
+        run: |
+          if ! command -v cargo-tarpaulin >/dev/null; then
+            cargo install cargo-tarpaulin --version 0.35.4 --locked
+          fi
+          cargo tarpaulin --version
+      - name: Run coverage gate (config in tarpaulin.toml)
+        shell: bash
+        timeout-minutes: 25
+        run: cargo tarpaulin --workspace
+      - name: Upload tarpaulin report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarpaulin-report
+          path: target/tarpaulin/
+          retention-days: 14
   security:
     name: Security
-    runs-on: [self-hosted, unified-all]
+    runs-on: [self-hosted, rust-slim]
     needs: lint
     timeout-minutes: 30
     steps:
@@ -119,6 +154,13 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
         run: find . -name '*.sh' -type f | xargs shfmt -d
+      - name: Install Trivy
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          if ! command -v trivy &>/dev/null; then
+            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          fi
       - name: Trivy filesystem scan
         shell: bash
         timeout-minutes: 15
@@ -130,7 +172,7 @@ jobs:
           syft dir:. -o spdx-json=sbom-spdx.json -o cyclonedx-json=sbom-cyclonedx.json
   sbom:
     name: SBOM
-    runs-on: [self-hosted, unified-all]
+    runs-on: [self-hosted, rust-slim]
     needs: test
     if: github.ref == 'refs/heads/main'
     timeout-minutes: 15
@@ -150,7 +192,7 @@ jobs:
           retention-days: 90
   integration:
     name: Integration
-    runs-on: [self-hosted, unified-all]
+    runs-on: [self-hosted, rust-slim]
     needs: test
     timeout-minutes: 60
     steps:
@@ -193,7 +235,7 @@ jobs:
           echo 'Integration batch: lint'
   release:
     name: Release
-    runs-on: [self-hosted, unified-all]
+    runs-on: [self-hosted, rust-slim]
     needs:
       - test
       - security
@@ -206,10 +248,6 @@ jobs:
         shell: bash
         timeout-minutes: 5
         run: cd release-assets && sha256sum * > SHA256SUMS
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: release-assets/*
       - name: Create GitHub Release
         uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe
         if: startsWith(github.ref, 'refs/tags/')

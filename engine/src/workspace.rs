@@ -150,4 +150,86 @@ mod tests {
         let child = safe_join(root, Path::new("ok/file.txt")).expect("safe path");
         assert!(child.starts_with(root));
     }
+
+    #[test]
+    fn workspace_create_makes_all_subdirectories() {
+        let base = TempDir::new().expect("base dir");
+        let ws = Workspace::create(base.path(), "my-build").expect("create");
+        for sub in [
+            &ws.input,
+            &ws.work,
+            &ws.output,
+            &ws.reports,
+            &ws.scans,
+            &ws.logs,
+        ] {
+            assert!(sub.exists(), "subdir must be created: {}", sub.display());
+        }
+        assert!(ws.root.starts_with(base.path()));
+    }
+
+    #[test]
+    fn workspace_create_sanitizes_run_name_in_root_segment() {
+        let base = TempDir::new().expect("base dir");
+        let ws = Workspace::create(base.path(), "my build/with spaces").expect("create");
+        let name = ws
+            .root
+            .file_name()
+            .and_then(|s| s.to_str())
+            .expect("dirname");
+        // sanitize_run_name replaces non-alnum (except - and _) with '-'
+        assert!(
+            !name.contains(' '),
+            "spaces must be sanitized in path component: {name}"
+        );
+        assert!(
+            !name.contains('/'),
+            "slashes must not appear in directory component: {name}"
+        );
+    }
+
+    #[test]
+    fn workspace_safe_join_delegates_to_module_function() {
+        let base = TempDir::new().expect("base dir");
+        let ws = Workspace::create(base.path(), "ws").expect("create");
+        // Relative child must resolve under root
+        let p = ws.safe_join(Path::new("input/sample.iso")).expect("safe");
+        assert!(p.starts_with(&ws.root));
+    }
+
+    #[test]
+    fn safe_join_rejects_absolute_path_outside_root() {
+        let temp = TempDir::new().expect("dir");
+        let root = temp.path();
+        // /etc/hostname exists on every Linux box and is outside the temp root.
+        let result = safe_join(root, Path::new("/etc/hostname"));
+        assert!(matches!(result, Err(EngineError::PathSafety(_))));
+    }
+
+    #[test]
+    fn safe_join_rejects_absolute_path_when_target_unresolvable() {
+        let temp = TempDir::new().expect("dir");
+        let root = temp.path();
+        // Path that does not exist -> canonicalize fails -> PathSafety error.
+        let result = safe_join(root, Path::new("/nonexistent/zxcvb-12345"));
+        assert!(matches!(result, Err(EngineError::PathSafety(_))));
+    }
+
+    #[test]
+    fn safe_join_handles_curdir_components() {
+        let temp = TempDir::new().expect("dir");
+        let root = temp.path();
+        // ./file.txt should resolve to <root>/file.txt
+        let p = safe_join(root, Path::new("./file.txt")).expect("safe");
+        let canonical_root = root.canonicalize().expect("canonical");
+        assert!(p.starts_with(&canonical_root));
+        assert!(p.ends_with("file.txt"));
+    }
+
+    #[test]
+    fn sanitize_run_name_strips_leading_and_trailing_dashes() {
+        assert_eq!(sanitize_run_name("---hello---"), "hello");
+        assert_eq!(sanitize_run_name("a/b/c"), "a-b-c");
+        assert_eq!(sanitize_run_name("simple_run-1"), "simple_run-1");
+    }
 }

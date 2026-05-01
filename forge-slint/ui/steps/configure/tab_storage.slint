@@ -1,0 +1,139 @@
+import { Sizes } from "../../theme.slint";
+import { FTextInput, FTextarea, FSectionLabel, FFieldHelp, FSwitch, FCard } from "../../components/design_system.slint";
+
+// ── TAB 4: Storage & Advanced ────────────────────────────────────────────────
+
+export component TabStorage inherits VerticalLayout {
+    // Storage
+    in-out property <string> swap-size-mb;
+    in-out property <bool>   encrypt: false;
+    in-out property <string> encrypt-passphrase;
+    in-out property <string> mounts;
+    in-out property <string> swap-filename;
+    in-out property <string> swap-swappiness;
+
+    // GRUB
+    in-out property <string> grub-timeout;
+    in-out property <string> grub-cmdline;
+    in-out property <string> grub-default;
+
+    // Custom commands
+    in-out property <string> run-commands;
+    in-out property <string> late-commands;
+
+    // Desktop / sysctl
+    in-out property <string> wallpaper-path;
+    in-out property <string> sysctl-pairs;
+    in-out property <bool>   no-user-interaction: false;
+
+    // Runtime
+    in property <bool> running: false;
+
+    spacing: 16px;
+
+    // Storage card
+    FCard {
+        title: "STORAGE";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "SWAP SIZE  (MB)"; }
+                    FTextInput { value <=> swap-size-mb; hint: "2048  (blank = no swap)"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "SWAP FILE PATH"; }
+                    FTextInput { value <=> swap-filename; hint: "/swap.img"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "SWAPPINESS  (0\u{2013}200)"; }
+                    FTextInput { value <=> swap-swappiness; hint: "60"; enabled: !running; }
+                }
+            }
+            FSwitch { label: "Enable LUKS disk encryption"; checked <=> encrypt; enabled: !running; }
+            if encrypt: VerticalLayout {
+                spacing: 4px;
+                FSectionLabel { text: "LUKS PASSPHRASE"; }
+                FTextInput { value <=> encrypt-passphrase; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; }
+            }
+            VerticalLayout {
+                spacing: 4px;
+                FSectionLabel { text: "CUSTOM MOUNTS  (fstab entries, one per line)"; }
+                FTextarea { value <=> mounts; hint: "/dev/sdb1  /data  ext4  defaults  0 2"; enabled: !running; }
+            }
+        }
+    }
+
+    // Bootloader card
+    FCard {
+        title: "BOOTLOADER";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "GRUB TIMEOUT  (seconds)"; }
+                    FTextInput { value <=> grub-timeout; hint: "5"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "EXTRA KERNEL ARGS"; }
+                    FTextInput { value <=> grub-cmdline; hint: "quiet splash"; enabled: !running; }
+                }
+            }
+            VerticalLayout {
+                spacing: 4px;
+                FSectionLabel { text: "GRUB DEFAULT ENTRY"; }
+                FTextInput { value <=> grub-default; hint: "0  (first entry)"; enabled: !running; }
+            }
+        }
+    }
+
+    // Custom Commands card
+    FCard {
+        title: "CUSTOM COMMANDS";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            VerticalLayout {
+                spacing: 4px;
+                FSectionLabel { text: "RUN COMMANDS  (before install)"; }
+                FTextarea { value <=> run-commands; hint: "echo 'setup starting'"; enabled: !running; }
+                FFieldHelp { text: "Pre-install tasks. Leave blank unless you need custom behavior."; }
+            }
+            VerticalLayout {
+                spacing: 4px;
+                FSectionLabel { text: "LATE COMMANDS  (after install, in chroot)"; }
+                FTextarea { value <=> late-commands; hint: "curtin in-target -- apt-get install -y vim"; enabled: !running; }
+            }
+        }
+    }
+
+    // Desktop + sysctl card
+    FCard {
+        title: "DESKTOP & SYSCTL";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            VerticalLayout {
+                spacing: 4px;
+                FSectionLabel { text: "WALLPAPER PATH  (on target system)"; }
+                FTextInput { value <=> wallpaper-path; hint: "/usr/share/backgrounds/custom.png"; enabled: !running; }
+                FFieldHelp { text: "Path to wallpaper inside the installed system. Leave blank for distro default."; }
+            }
+            VerticalLayout {
+                spacing: 4px;
+                FSectionLabel { text: "SYSCTL PAIRS  (key=value, one per line)"; }
+                FTextarea { value <=> sysctl-pairs; hint: "vm.swappiness=10\nnet.ipv4.ip_forward=1"; enabled: !running; }
+            }
+            FSwitch { label: "Unattended installation (no user interaction)"; checked <=> no-user-interaction; enabled: !running; }
+        }
+    }
+}

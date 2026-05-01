@@ -1,4 +1,5 @@
 pub mod build;
+pub mod circuit_breaker;
 mod diff;
 mod doctor;
 pub mod helpers;

@@ -1,0 +1,130 @@
+import { Palette, Sizes } from "../theme.slint";
+import { FImageIconButton } from "design_system.slint";
+
+// ── PageHeader — slim title bar for the content area ───────────────────────
+// Sits ABOVE the active step content, INSIDE the main panel (not global chrome).
+// Shows current step name + job progress + small actions.
+
+export component PageHeader inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <string> job-phase;
+    in property <float>  job-percent: -1.0;
+    in property <bool>   job-running: false;
+    in property <string> status-text;
+    in property <bool>   status-is-error: false;
+    in property <bool>   doctor-open: false;
+    callback cancel();
+    callback doctor-toggled();
+
+    height: Sizes.header-height;
+    background: Palette.surface;
+
+    // Bottom border (no shadow — flat, ops-tool aesthetic)
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Palette.border-subtle;
+    }
+
+    HorizontalLayout {
+        padding-left: Sizes.space-6;
+        padding-right: Sizes.space-4;
+        padding-top: Sizes.space-2;
+        padding-bottom: Sizes.space-2;
+        spacing: Sizes.space-4;
+        alignment: space-between;
+
+        // Left: title + subtitle
+        VerticalLayout {
+            alignment: center;
+            spacing: 1px;
+            Text {
+                text: title;
+                font-size: Sizes.font-lg;
+                font-weight: 600;
+                color: Palette.text;
+                letter-spacing: -0.1px;
+            }
+            Text {
+                text: subtitle;
+                font-size: Sizes.font-xs;
+                color: Palette.text-secondary;
+            }
+        }
+
+        // Center: progress bar (fixed width, only when running)
+        VerticalLayout {
+            alignment: center;
+            min-width: 0px;
+            horizontal-stretch: 1;
+
+            // Determinate
+            if job-running && job-percent >= 0.0: Rectangle {
+                width: 240px;
+                height: 4px;
+                border-radius: 2px;
+                background: Palette.border-subtle;
+                Rectangle {
+                    width: parent.width * job-percent;
+                    height: parent.height;
+                    border-radius: parent.border-radius;
+                    background: Palette.accent;
+                    animate width { duration: 200ms; easing: ease-out; }
+                }
+            }
+
+            // Indeterminate sweep
+            if job-running && job-percent < 0.0: Rectangle {
+                width: 240px;
+                height: 4px;
+                border-radius: 2px;
+                background: Palette.border-subtle;
+                clip: true;
+                property <float> sweep: 0.0;
+                init => { sweep = 1.0; }
+                animate sweep { duration: 1400ms; easing: ease-in-out; iteration-count: -1; }
+                Rectangle {
+                    x: (parent.width + 80px) * sweep - 80px;
+                    width: 80px;
+                    height: parent.height;
+                    border-radius: parent.border-radius;
+                    background: @linear-gradient(90deg, transparent, Palette.accent, transparent);
+                }
+            }
+
+            if job-running && job-phase != "": Text {
+                text: job-phase;
+                font-size: Sizes.font-2xs;
+                color: Palette.text-secondary;
+                horizontal-alignment: center;
+            }
+
+            if !job-running && status-text != "": Text {
+                text: status-text;
+                font-size: Sizes.font-xs;
+                font-weight: 500;
+                color: status-is-error ? Palette.red : Palette.green;
+                horizontal-alignment: center;
+            }
+        }
+
+        // Right: doctor + cancel
+        HorizontalLayout {
+            spacing: Sizes.space-2;
+            alignment: end;
+
+            FImageIconButton {
+                icon-source: @image-url("../icons/settings.svg");
+                active: doctor-open;
+                clicked => { root.doctor-toggled(); }
+            }
+
+            if job-running: FImageIconButton {
+                icon-source: @image-url("../icons/x.svg");
+                variant: "destructive";
+                clicked => { root.cancel(); }
+            }
+        }
+    }
+}

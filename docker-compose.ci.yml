@@ -63,7 +63,6 @@ services:
       - .:/workspace
       - c3-cargo-target:/ci-target
       - c3-cargo-home:/ci-cargo
-      - c3-node-modules:/workspace/gui/node_modules
     environment:
       - CI=true
       - CARGO_TARGET_DIR=/ci-target
@@ -144,7 +143,6 @@ volumes:
   c2-cargo-home:
   c3-cargo-target:
   c3-cargo-home:
-  c3-node-modules:
   c5-cargo-target:
   c5-cargo-home:
   c6-cargo-target:

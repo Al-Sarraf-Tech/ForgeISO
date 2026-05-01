@@ -1,6 +1,7 @@
 import { Palette, Sizes } from "../theme.slint";
-import { FButton, FIconButton, FBadge, FDivider, FSectionLabel } from "../components/design_system.slint";
+import { FButton, FImageIconButton, FBadge, FDivider, FSectionLabel } from "../components/design_system.slint";
 import { ScrollView } from "std-widgets.slint";
+import { AppState } from "../globals/app_state.slint";
 
 export struct PresetCard {
     id: string,
@@ -9,6 +10,9 @@ export struct PresetCard {
     desc: string,
 }
 
+// Brand-colored monogram circle per distro family. Uses card.id prefix to
+// pick the brand color so the swatch is consistent across themes (brand
+// identity is the same in dark + light). Falls back to neutral on unknown.
 component DistroCard inherits Rectangle {
     in property <PresetCard> card;
     in property <bool>       selected: false;
@@ -16,13 +20,13 @@ component DistroCard inherits Rectangle {
     callback clicked();
 
     width: 180px;
-    height: 100px;
+    height: 110px;
     border-radius: Sizes.radius-md;
-    background: selected ? rgba(69, 194, 107, 0.08)
+    background: selected ? Palette.green-soft
               : hovered && !running ? Palette.active
               : Palette.elevated;
     border-width: selected ? 1.5px : 1px;
-    border-color: selected ? Palette.green
+    border-color: selected ? Palette.green-soft-border
                : hovered && !running ? Palette.border-focus
                : Palette.border-subtle;
     opacity: running ? 0.6 : 1.0;
@@ -32,14 +36,55 @@ component DistroCard inherits Rectangle {
 
     property <bool> hovered: touch.has-hover;
 
+    // Brand color per distro family. These are the distros' actual brand
+    // colors (Ubuntu orange, Fedora blue, Arch blue, Mint green, Rocky
+    // green, AlmaLinux teal, CentOS purple, Debian red). Brand identity
+    // doesn't shift between dark/light themes.
+    property <color> brand: card.id == "ubuntu-server-lts" || card.id == "ubuntu-server-jammy" ? #E95420
+                          : card.id == "fedora-server" ? #294172
+                          : card.id == "arch-linux" ? #1793D1
+                          : card.id == "linux-mint-cinnamon" ? #86BE43
+                          : card.id == "rocky-linux" ? #10B981
+                          : card.id == "almalinux" ? #0FB37D
+                          : card.id == "centos-stream" ? #932279
+                          : Palette.muted;
+
+    // First letter of distro name (after stripping "Linux " prefix). Single
+    // glyph, white on brand. The actual brand wordmark is the card.name text
+    // below — this is a recognizable shorthand, not a logo claim.
+    property <string> mono: card.id == "ubuntu-server-lts" || card.id == "ubuntu-server-jammy" ? "U"
+                          : card.id == "fedora-server" ? "F"
+                          : card.id == "arch-linux" ? "A"
+                          : card.id == "linux-mint-cinnamon" ? "M"
+                          : card.id == "rocky-linux" ? "R"
+                          : card.id == "almalinux" ? "A"
+                          : card.id == "centos-stream" ? "C"
+                          : "L";
+
     VerticalLayout {
         alignment: center;
-        spacing: Sizes.space-1;
+        spacing: Sizes.space-2;
         padding-left: Sizes.space-4;
         padding-right: Sizes.space-4;
         padding-top: Sizes.space-3;
         padding-bottom: Sizes.space-3;
 
+        // Brand monogram circle
+        Rectangle {
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
+            background: brand;
+            horizontal-stretch: 0;
+            Text {
+                text: mono;
+                font-size: 16px;
+                font-weight: 800;
+                color: #ffffff;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+        }
         Text {
             text: card.name;
             font-size: Sizes.font-md;
@@ -178,6 +223,9 @@ export component StepSource inherits Rectangle {
                             single-line: true;
                             enabled: !running;
                             edited => { source-changed(path-input.text); }
+                            accepted => {
+                                if (can-continue && !running) { continue-clicked(); }
+                            }
                         }
                     }
 
@@ -192,8 +240,8 @@ export component StepSource inherits Rectangle {
                     }
 
                     // Clear button
-                    if source-path != "": FIconButton {
-                        icon: "\u{2715}";
+                    if source-path != "": FImageIconButton {
+                        icon-source: @image-url("../icons/x.svg");
                         variant: "destructive";
                         enabled: !running;
                         width: 42px;
@@ -202,11 +250,51 @@ export component StepSource inherits Rectangle {
                     }
                 }
 
+                // Detection loading indicator
+                if AppState.detect-running && detected-distro == "": HorizontalLayout {
+                    alignment: start;
+                    spacing: Sizes.space-2;
+                    Text {
+                        text: "Detecting distro\u{2026}";
+                        font-size: Sizes.font-xs;
+                        color: Palette.muted;
+                        vertical-alignment: center;
+                    }
+                    // Indeterminate dot animation
+                    Rectangle {
+                        width: 40px;
+                        height: 4px;
+                        border-radius: 2px;
+                        background: Palette.border-subtle;
+                        clip: true;
+                        y: (parent.height - self.height) / 2;
+                        property <float> sweep: 0.0;
+                        init => { sweep = 1.0; }
+                        animate sweep { duration: 1200ms; easing: ease-in-out; iteration-count: -1; }
+                        Rectangle {
+                            x: (parent.width + 16px) * sweep - 16px;
+                            width: 16px;
+                            height: parent.height;
+                            border-radius: 2px;
+                            background: Palette.accent;
+                        }
+                    }
+                }
+
                 // Detected distro badge
                 if detected-distro != "": HorizontalLayout {
                     alignment: start;
+                    spacing: Sizes.space-2;
+                    Image {
+                        source: @image-url("../icons/check.svg");
+                        width: 14px;
+                        height: 14px;
+                        y: (parent.height - self.height) / 2;
+                        colorize: Palette.green;
+                        image-fit: contain;
+                    }
                     FBadge {
-                        text: "\u{2713} Detected: " + detected-distro;
+                        text: "Detected: " + detected-distro;
                         variant: "success";
                         height: 26px;
                         border-radius: 13px;

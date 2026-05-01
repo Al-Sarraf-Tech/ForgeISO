@@ -12,7 +12,7 @@ version = "0.2.1"
 edition = "2021"
 rust-version = "1.87"
 license = "Apache-2.0"
-repository = "https://github.com/jalsarraf0/ForgeISO"
+repository = "https://github.com/Al-Sarraf-Tech/ForgeISO"
 authors = ["Jamal Al-Sarraf"]
 
 [workspace.dependencies]
@@ -32,8 +32,16 @@ shell-words = "1.1.0"
 tempfile = "3.23.0"
 thiserror = "2.0.17"
 tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread", "sync", "process", "fs", "time"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt", "json"] }
+tracing-appender = "0.2.3"
+tracing-opentelemetry = "0.31"
+opentelemetry = "0.30"
+opentelemetry_sdk = "0.30"
+opentelemetry-otlp = { version = "0.30", default-features = false, features = ["http-proto", "reqwest-blocking-client", "trace"] }
+opentelemetry-stdout = { version = "0.30" }
+dirs = "5.0.1"
 uuid = { version = "1.18.1", features = ["serde", "v4"] }
 walkdir = "2.5.0"
 which = "8.0.0"
