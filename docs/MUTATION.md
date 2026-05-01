@@ -162,3 +162,40 @@ scripts/run-mutants.sh --in-diff origin/refactor/major-gui-overhaul
 # raise the bar (after a clean run shows the new floor is achievable)
 FORGEISO_MUTANTS_THRESHOLD=85 scripts/run-mutants.sh
 ```
+
+## Baseline (2026-05-01)
+
+Initial scout runs over the configured scope (197 generated mutants total)
+identified and killed nine survivors before the gate was enabled:
+
+| Module                                 | Surviving mutant cluster                                            | Killer test |
+|----------------------------------------|---------------------------------------------------------------------|-------------|
+| `autoinstall/ubuntu/generate.rs:43-45` | `\|\|` -> `&&` on the four-way identity-block presence guard         | `generate_emits_identity_block_when_only_<field>_is_set` (4 tests) |
+| `autoinstall/ubuntu/generate.rs:216`   | `&&` -> `\|\|` on `is_ubuntu_like && apt_repos.any(ppa)`             | `generate_adds_software_properties_common_for_ubuntu_with_ppa` + 2 negative cases |
+| `autoinstall/ubuntu/generate.rs:11`    | function-body short-circuit on `generate_autoinstall_yaml`          | `generate_returns_yaml_with_storage_layout_section` |
+| `autoinstall/ubuntu/merge.rs:62-64`    | `\|\|` -> `&&` on the identity-block presence guard (merge variant)  | `merge_emits_identity_block_when_only_<field>_is_set` (4 tests) |
+| `autoinstall/ubuntu/merge.rs:103`      | `\|\|` -> `&&` on the `install_server.is_some()` SSH guard           | `merge_emits_ssh_block_when_only_install_server_is_set` (+ symmetric `allow_password_auth` test) |
+| `autoinstall/ubuntu/merge.rs:11`       | function-body short-circuit on `merge_autoinstall_yaml`             | `merge_returns_yaml_with_storage_layout_section` |
+| `config/inject/validate/output.rs:20`  | `>` -> `>=` boundary on the 32-char `output_label` length cap       | `inject_accepts_output_label_at_max_length_32` + over-boundary + 3 edge tests |
+
+Each killer test was verified by re-running cargo-mutants with `-F <regex>`
+narrowed to the original survivor; all returned `N/N caught`. The full
+197-mutant run was not executed end-to-end in the bring-up session — it is
+a 30-60 minute job that should be invoked from CI or a manual run, not
+from interactive development.
+
+### Where to focus next
+
+If a future full run reveals new survivors, the highest-ROI clusters by
+historical pattern are:
+
+1. **Loop-body deletions** in `validate_packages` / `validate_apt_repos` /
+   `validate_dnf` (large `for` loops over user-supplied package strings).
+   Likely killer test: count rejected-element rejections individually
+   rather than asserting on the full vector.
+2. **`unwrap_or` default flips** in `generate.rs` (locale = "en_US.UTF-8",
+   keyboard = "us", timezone = "UTC"). Likely killer test: assert the
+   exact default literal appears in the rendered YAML for a minimal config.
+3. **Validator return-value swaps** (`Err(...)` -> `Ok(())`) on the per-concern
+   helpers in `validate/`. Each surviving mutant points at a missing
+   negative-case test for one specific field.
