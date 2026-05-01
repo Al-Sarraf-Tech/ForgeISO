@@ -1679,3 +1679,60 @@ fn merge_returns_yaml_with_storage_layout_section() {
         "merge must emit a storage layout in every output: {yaml}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Mutation-killing test for the SSH-block presence guard at merge.rs:103:
+//     !cfg.ssh.authorized_keys.is_empty()
+//         || cfg.ssh.allow_password_auth.is_some()
+//         || cfg.ssh.install_server.is_some()
+//
+// Existing tests cover authorized_keys-only and the all-fields case, leaving
+// the `|| install_server.is_some()` final branch unexercised in isolation.
+// A `|| -> &&` swap on that branch survives unless we feed a config where
+// install_server is the ONLY ssh field set.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn merge_emits_ssh_block_when_only_install_server_is_set() {
+    let existing = "autoinstall:\n  version: 1\n";
+    let cfg = InjectConfig {
+        ssh: SshConfig {
+            install_server: Some(false),
+            ..Default::default()
+        },
+        ..minimal_cfg()
+    };
+    let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+    assert!(
+        yaml.contains("ssh:"),
+        "merge must produce ssh block when only install_server is set: {yaml}"
+    );
+    assert!(
+        yaml.contains("install-server: false"),
+        "the configured install_server flag must appear in the merged YAML: {yaml}"
+    );
+}
+
+#[test]
+fn merge_emits_ssh_block_when_only_allow_password_auth_is_set() {
+    // The same boundary, attacked from the other side: allow_password_auth
+    // alone must produce an ssh block. Pins the right-hand operand of the
+    // line-102 || that the previous test pinned the left-hand of.
+    let existing = "autoinstall:\n  version: 1\n";
+    let cfg = InjectConfig {
+        ssh: SshConfig {
+            allow_password_auth: Some(true),
+            ..Default::default()
+        },
+        ..minimal_cfg()
+    };
+    let yaml = merge_autoinstall_yaml(existing, &cfg).expect("merge must succeed");
+    assert!(
+        yaml.contains("ssh:"),
+        "merge must produce ssh block when only allow_password_auth is set: {yaml}"
+    );
+    assert!(
+        yaml.contains("allow-pw: true"),
+        "the configured allow_password_auth flag must appear in the merged YAML: {yaml}"
+    );
+}
