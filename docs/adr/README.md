@@ -15,6 +15,8 @@ ADR-NNNN | Deprecated.
 | [0003](0003-three-front-ends.md)      | TUI + GUI + CLI three front-end strategy                     | Accepted |
 | [0004](0004-error-handling-philosophy.md) | thiserror EngineError taxonomy + anyhow at boundaries     | Accepted |
 | [0005](0005-iso-injection-strategy.md) | Distro-specific autoinstall injection (not generic overlay) | Accepted |
+| [0006](0006-post-decomposition-module-taxonomy.md) | Module-directory layout for files >800 LOC                   | Accepted |
+| [0007](0007-testing-strategy-seven-layer.md) | Seven-layer testing (unit + integration + e2e + property + mutation + contract + perf) | Accepted |
 
 When adding an ADR, copy the format from any existing entry and number
 it sequentially. Don't renumber; reference older ADRs by number when
