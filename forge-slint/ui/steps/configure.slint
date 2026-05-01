@@ -1,7 +1,11 @@
 import { Palette, Sizes } from "../theme.slint";
 import { ScrollView } from "std-widgets.slint";
 import { TabRail } from "../components/tab_rail.slint";
-import { FTextInput, FTextarea, FSectionLabel, FFieldHelp, FSwitch, FDivider, FCard } from "../components/design_system.slint";
+import { TabIdentity } from "configure/tab_identity.slint";
+import { TabAccess }   from "configure/tab_access.slint";
+import { TabSystem }   from "configure/tab_system.slint";
+import { TabServices } from "configure/tab_services.slint";
+import { TabStorage }  from "configure/tab_storage.slint";
 
 // ── Main configure step ──────────────────────────────────────────────────────
 
@@ -344,568 +348,95 @@ export component StepConfigure inherits Rectangle {
                         alignment: start;
 
                         // ── TAB 0: Identity & Output ────────────────────
-                        if active-tab == 0: VerticalLayout {
-                            spacing: 16px;
-
-                            // Identity card
-                            FCard {
-                                title: "IDENTITY";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "HOSTNAME *"; }
-                                            FTextInput { value <=> hostname; hint: "myserver"; enabled: !running; error: hostname == "" && username != ""; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "USERNAME *"; }
-                                            FTextInput { value <=> username; hint: "admin"; enabled: !running; error: username == "" && hostname != ""; changed(t) => { username-changed(t); } }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "FULL NAME"; }
-                                            FTextInput { value <=> realname; hint: "Admin User"; enabled: !running; }
-                                        }
-                                    }
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "PASSWORD"; }
-                                            FTextInput { value <=> password; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "CONFIRM PASSWORD"; }
-                                            FTextInput { value <=> password-confirm; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; error: pw-live-mismatch; }
-                                        }
-                                    }
-                                    if !passwords-match || pw-live-mismatch: Rectangle {
-                                        height: 28px;
-                                        border-radius: Sizes.radius-sm;
-                                        background: Palette.red-soft;
-                                        border-width: 1px;
-                                        border-color: Palette.red-soft-border;
-                                        HorizontalLayout {
-                                            padding-left: 10px;
-                                            padding-right: 10px;
-                                            spacing: 6px;
-                                            alignment: start;
-                                            Image {
-                                                source: @image-url("../icons/alert-triangle.svg");
-                                                width: 13px;
-                                                height: 13px;
-                                                y: (parent.height - self.height) / 2;
-                                                colorize: Palette.red;
-                                                image-fit: contain;
-                                            }
-                                            Text {
-                                                text: "Passwords do not match";
-                                                font-size: Sizes.font-xs;
-                                                color: Palette.red;
-                                                vertical-alignment: center;
-                                            }
-                                        }
-                                    }
-                                    FFieldHelp {
-                                        text: "Required: hostname + username. Password is set at first boot if provided; otherwise the installer prompts.";
-                                    }
-                                }
-                            }
-
-                            // Output card
-                            FCard {
-                                title: "OUTPUT";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-2;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "OUTPUT DIRECTORY"; }
-                                            Rectangle {
-                                                height: 38px;
-                                                border-radius: Sizes.radius-sm;
-                                                background: Palette.surface;
-                                                border-width: 1px;
-                                                border-color: Palette.border;
-                                                HorizontalLayout {
-                                                    padding-left: 10px;
-                                                    Text {
-                                                        text: output-dir;
-                                                        font-size: Sizes.font-sm;
-                                                        color: Palette.text;
-                                                        vertical-alignment: center;
-                                                        overflow: elide;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        VerticalLayout {
-                                            alignment: end;
-                                            Rectangle {
-                                                width: 96px;
-                                                height: 38px;
-                                                border-radius: Sizes.radius-sm;
-                                                background: out-brw-ta.has-hover && !running ? Palette.active : Palette.elevated;
-                                                border-width: 1px;
-                                                border-color: Palette.border;
-                                                opacity: running ? 0.5 : 1.0;
-                                                animate background { duration: 100ms; }
-                                                HorizontalLayout {
-                                                    padding-left: 10px;
-                                                    padding-right: 10px;
-                                                    spacing: 6px;
-                                                    alignment: center;
-                                                    Image {
-                                                        source: @image-url("../icons/folder.svg");
-                                                        width: 14px;
-                                                        height: 14px;
-                                                        y: (parent.height - self.height) / 2;
-                                                        colorize: Palette.text-secondary;
-                                                        image-fit: contain;
-                                                    }
-                                                    Text {
-                                                        text: "Browse";
-                                                        font-size: Sizes.font-sm;
-                                                        color: Palette.text;
-                                                        vertical-alignment: center;
-                                                    }
-                                                }
-                                                out-brw-ta := TouchArea {
-                                                    enabled: !running;
-                                                    mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
-                                                    clicked => { browse-output-dir(); }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "OUTPUT FILENAME *"; }
-                                            FTextInput { value <=> out-name; hint: "forgeiso-local.iso"; enabled: !running; error: out-name == "" && output-dir != ""; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "VOLUME LABEL"; }
-                                            FTextInput { value <=> output-label; hint: "MYISO  (max 32)"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "EXPECTED SHA-256"; }
-                                            FTextInput { value <=> expected-sha256; hint: "a1b2c3\u{2026}  (optional)"; enabled: !running; }
-                                        }
-                                    }
-                                    FFieldHelp {
-                                        text: "Output filename and directory are required. SHA-256 verification runs after build if provided.";
-                                    }
-                                }
-                            }
+                        if active-tab == 0: TabIdentity {
+                            hostname <=> root.hostname;
+                            username <=> root.username;
+                            password <=> root.password;
+                            password-confirm <=> root.password-confirm;
+                            realname <=> root.realname;
+                            passwords-match: root.passwords-match;
+                            pw-live-mismatch: root.pw-live-mismatch;
+                            output-dir <=> root.output-dir;
+                            out-name <=> root.out-name;
+                            output-label <=> root.output-label;
+                            expected-sha256 <=> root.expected-sha256;
+                            running: root.running;
+                            username-changed(t) => { root.username-changed(t); }
+                            browse-output-dir => { root.browse-output-dir(); }
                         }
 
                         // ── TAB 1: Access & Network ─────────────────────
-                        if active-tab == 1: VerticalLayout {
-                            spacing: 16px;
-
-                            // SSH card
-                            FCard {
-                                title: "SSH ACCESS";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    FSectionLabel { text: "AUTHORIZED KEYS  (one per line)"; }
-                                    FTextarea { value <=> ssh-keys; hint: "ssh-ed25519 AAAA\u{2026} user@host"; enabled: !running; }
-                                    FFieldHelp {
-                                        text: "Paste one public key per line. Leave blank if you plan to log in another way.";
-                                    }
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-6;
-                                        FSwitch { label: "Install SSH server"; checked <=> ssh-install-server; enabled: !running; }
-                                        FSwitch { label: "Allow password auth"; checked <=> ssh-password-auth; enabled: !running; }
-                                    }
-                                }
-                            }
-
-                            // User Access card
-                            FCard {
-                                title: "USER ACCESS";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "GROUPS  (one per line)"; }
-                                            FTextarea { value <=> user-groups; hint: "docker\nsudo"; enabled: !running; changed(_t) => { field-edited("user_groups"); } }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "LOGIN SHELL"; }
-                                            FTextInput { value <=> user-shell; hint: "/bin/bash"; enabled: !running; changed(_t) => { field-edited("user_shell"); } }
-                                        }
-                                    }
-                                    FFieldHelp {
-                                        text: "ForgeISO fills in your private group plus "
-                                            + (distro == "fedora" || distro == "arch" ? "wheel" : "sudo")
-                                            + " for admin access once you choose a username. Edit only if you need something custom.";
-                                    }
-                                    FSwitch { label: "Passwordless sudo (NOPASSWD:ALL)"; checked <=> sudo-nopasswd; enabled: !running; }
-                                    VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "SUDO COMMANDS  (one per line, blank = ALL)"; }
-                                        FTextarea { value <=> sudo-commands; hint: "/usr/bin/systemctl restart nginx\n/usr/bin/docker *"; enabled: !running; }
-                                    }
-                                }
-                            }
-
-                            // Network card
-                            FCard {
-                                title: "NETWORK";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "DNS SERVERS"; }
-                                            FTextInput { value <=> dns-servers; hint: "1.1.1.1, 8.8.8.8"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "NTP SERVERS"; }
-                                            FTextInput { value <=> ntp-servers; hint: "pool.ntp.org"; enabled: !running; }
-                                        }
-                                    }
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "STATIC IP / CIDR"; }
-                                            FTextInput { value <=> static-ip; hint: "192.168.1.100/24  (blank = DHCP)"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "GATEWAY"; }
-                                            FTextInput { value <=> gateway; hint: "192.168.1.1"; enabled: !running; }
-                                        }
-                                    }
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "HTTP PROXY"; }
-                                            FTextInput { value <=> http-proxy; hint: "http://proxy:3128"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "HTTPS PROXY"; }
-                                            FTextInput { value <=> https-proxy; hint: "http://proxy:3128"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "NO PROXY"; }
-                                            FTextInput { value <=> no-proxy; hint: "localhost,127.0.0.1"; enabled: !running; }
-                                        }
-                                    }
-                                }
-                            }
+                        if active-tab == 1: TabAccess {
+                            ssh-keys <=> root.ssh-keys;
+                            ssh-password-auth <=> root.ssh-password-auth;
+                            ssh-install-server <=> root.ssh-install-server;
+                            distro: root.distro;
+                            user-groups <=> root.user-groups;
+                            user-shell <=> root.user-shell;
+                            sudo-nopasswd <=> root.sudo-nopasswd;
+                            sudo-commands <=> root.sudo-commands;
+                            dns-servers <=> root.dns-servers;
+                            ntp-servers <=> root.ntp-servers;
+                            static-ip <=> root.static-ip;
+                            gateway <=> root.gateway;
+                            http-proxy <=> root.http-proxy;
+                            https-proxy <=> root.https-proxy;
+                            no-proxy <=> root.no-proxy;
+                            running: root.running;
+                            field-edited(name) => { root.field-edited(name); }
                         }
 
                         // ── TAB 2: System & Packages ────────────────────
-                        if active-tab == 2: VerticalLayout {
-                            spacing: 16px;
-
-                            // Locale + storage card
-                            FCard {
-                                title: "SYSTEM";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "TIMEZONE"; }
-                                            FTextInput { value <=> timezone; hint: "America/New_York"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "LOCALE"; }
-                                            FTextInput { value <=> locale; hint: "en_US.UTF-8"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "KEYBOARD"; }
-                                            FTextInput { value <=> keyboard-layout; hint: "us"; enabled: !running; }
-                                        }
-                                    }
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "STORAGE LAYOUT"; }
-                                            FTextInput { value <=> storage-layout; hint: "lvm  /  direct"; enabled: !running; }
-                                        }
-                                        if distro == "ubuntu" || distro == "mint" || distro == "": VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "APT MIRROR"; }
-                                            FTextInput { value <=> apt-mirror; hint: "https://mirror.example.com/ubuntu"; enabled: !running; }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Packages card
-                            FCard {
-                                title: "PACKAGES";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    FSectionLabel { text: "PACKAGES  (space-separated)"; }
-                                    FTextarea { value <=> packages; hint: "curl git vim htop"; enabled: !running; changed(_t) => { field-edited("packages"); } }
-                                    FFieldHelp { text: "A short list of must-have packages. You can add more later in the installed system."; }
-
-                                    // Distro-conditional repository fields
-                                    if distro == "ubuntu" || distro == "mint" || distro == "": VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "EXTRA APT REPOS  (one per line)"; }
-                                        FTextarea { value <=> apt-repos; hint: "ppa:ondrej/php\ndeb https://\u{2026}"; enabled: !running; }
-                                    }
-                                    if distro == "fedora": VerticalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "DNF MIRROR"; }
-                                            FTextInput { value <=> dnf-mirror; hint: "https://mirror.example.com/fedora"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "EXTRA DNF REPOS  (one per line)"; }
-                                            FTextarea { value <=> dnf-repos; hint: "https://rpm.example.com/repo"; enabled: !running; }
-                                        }
-                                    }
-                                    if distro == "arch": VerticalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "PACMAN MIRROR"; }
-                                            FTextInput { value <=> pacman-mirror; hint: "https://mirror.example.com/archlinux/$repo/os/$arch"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "EXTRA PACMAN REPOS  (one per line)"; }
-                                            FTextarea { value <=> pacman-repos; hint: "[myrepo]\nServer = https://\u{2026}"; enabled: !running; }
-                                        }
-                                    }
-                                }
-                            }
+                        if active-tab == 2: TabSystem {
+                            distro: root.distro;
+                            timezone <=> root.timezone;
+                            locale <=> root.locale;
+                            keyboard-layout <=> root.keyboard-layout;
+                            storage-layout <=> root.storage-layout;
+                            apt-mirror <=> root.apt-mirror;
+                            packages <=> root.packages;
+                            apt-repos <=> root.apt-repos;
+                            dnf-repos <=> root.dnf-repos;
+                            dnf-mirror <=> root.dnf-mirror;
+                            pacman-repos <=> root.pacman-repos;
+                            pacman-mirror <=> root.pacman-mirror;
+                            running: root.running;
+                            field-edited(name) => { root.field-edited(name); }
                         }
 
                         // ── TAB 3: Services & Security ──────────────────
-                        if active-tab == 3: VerticalLayout {
-                            spacing: 16px;
-
-                            // Services card
-                            FCard {
-                                title: "SERVICES";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "ENABLE  (one per line)"; }
-                                            FTextarea { value <=> enable-services; hint: "docker\nnginx"; enabled: !running; changed(_t) => { field-edited("enable_services"); } }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "DISABLE  (one per line)"; }
-                                            FTextarea { value <=> disable-services; hint: "snapd"; enabled: !running; changed(_t) => { field-edited("disable_services"); } }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Containers card
-                            FCard {
-                                title: "CONTAINERS";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-6;
-                                        FSwitch {
-                                            label: "Install Docker";
-                                            checked <=> docker;
-                                            enabled: !running;
-                                            toggled => { docker-changed(); }
-                                        }
-                                        FSwitch { label: "Install Podman"; checked <=> podman; enabled: !running; }
-                                    }
-                                    if docker: VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "ADD USERS TO DOCKER GROUP  (one per line)"; }
-                                        FTextInput { value <=> docker-users; hint: "admin"; enabled: !running; changed(_t) => { field-edited("docker_users"); } }
-                                        FFieldHelp {
-                                            text: "When Docker is enabled, ForgeISO pre-fills this with the primary username unless you override it.";
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Firewall card
-                            FCard {
-                                title: "FIREWALL";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    FSwitch { label: "Enable firewall"; checked <=> firewall-enabled; enabled: !running; }
-                                    if firewall-enabled: VerticalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "DEFAULT POLICY"; }
-                                            FTextInput { value <=> firewall-policy; hint: "deny  (or allow / reject)"; enabled: !running; changed(_t) => { field-edited("firewall_policy"); } }
-                                        }
-                                        HorizontalLayout {
-                                            spacing: Sizes.space-4;
-                                            VerticalLayout {
-                                                spacing: 4px;
-                                                FSectionLabel { text: "ALLOWED PORTS  (space-separated)"; }
-                                                FTextInput { value <=> allow-ports; hint: "22 80 443"; enabled: !running; changed(_t) => { field-edited("allow_ports"); } }
-                                            }
-                                            VerticalLayout {
-                                                spacing: 4px;
-                                                FSectionLabel { text: "DENIED PORTS"; }
-                                                FTextInput { value <=> deny-ports; hint: "23 21"; enabled: !running; }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                        if active-tab == 3: TabServices {
+                            enable-services <=> root.enable-services;
+                            disable-services <=> root.disable-services;
+                            docker <=> root.docker;
+                            podman <=> root.podman;
+                            docker-users <=> root.docker-users;
+                            firewall-enabled <=> root.firewall-enabled;
+                            firewall-policy <=> root.firewall-policy;
+                            allow-ports <=> root.allow-ports;
+                            deny-ports <=> root.deny-ports;
+                            running: root.running;
+                            field-edited(name) => { root.field-edited(name); }
+                            docker-changed => { root.docker-changed(); }
                         }
 
                         // ── TAB 4: Storage & Advanced ───────────────────
-                        if active-tab == 4: VerticalLayout {
-                            spacing: 16px;
-
-                            // Storage card
-                            FCard {
-                                title: "STORAGE";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "SWAP SIZE  (MB)"; }
-                                            FTextInput { value <=> swap-size-mb; hint: "2048  (blank = no swap)"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "SWAP FILE PATH"; }
-                                            FTextInput { value <=> swap-filename; hint: "/swap.img"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "SWAPPINESS  (0\u{2013}200)"; }
-                                            FTextInput { value <=> swap-swappiness; hint: "60"; enabled: !running; }
-                                        }
-                                    }
-                                    FSwitch { label: "Enable LUKS disk encryption"; checked <=> encrypt; enabled: !running; }
-                                    if encrypt: VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "LUKS PASSPHRASE"; }
-                                        FTextInput { value <=> encrypt-passphrase; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; }
-                                    }
-                                    VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "CUSTOM MOUNTS  (fstab entries, one per line)"; }
-                                        FTextarea { value <=> mounts; hint: "/dev/sdb1  /data  ext4  defaults  0 2"; enabled: !running; }
-                                    }
-                                }
-                            }
-
-                            // Bootloader card
-                            FCard {
-                                title: "BOOTLOADER";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    HorizontalLayout {
-                                        spacing: Sizes.space-4;
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "GRUB TIMEOUT  (seconds)"; }
-                                            FTextInput { value <=> grub-timeout; hint: "5"; enabled: !running; }
-                                        }
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            FSectionLabel { text: "EXTRA KERNEL ARGS"; }
-                                            FTextInput { value <=> grub-cmdline; hint: "quiet splash"; enabled: !running; }
-                                        }
-                                    }
-                                    VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "GRUB DEFAULT ENTRY"; }
-                                        FTextInput { value <=> grub-default; hint: "0  (first entry)"; enabled: !running; }
-                                    }
-                                }
-                            }
-
-                            // Custom Commands card
-                            FCard {
-                                title: "CUSTOM COMMANDS";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "RUN COMMANDS  (before install)"; }
-                                        FTextarea { value <=> run-commands; hint: "echo 'setup starting'"; enabled: !running; }
-                                        FFieldHelp { text: "Pre-install tasks. Leave blank unless you need custom behavior."; }
-                                    }
-                                    VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "LATE COMMANDS  (after install, in chroot)"; }
-                                        FTextarea { value <=> late-commands; hint: "curtin in-target -- apt-get install -y vim"; enabled: !running; }
-                                    }
-                                }
-                            }
-
-                            // Desktop + sysctl card
-                            FCard {
-                                title: "DESKTOP & SYSCTL";
-                                VerticalLayout {
-                                    padding: Sizes.space-5;
-                                    spacing: Sizes.space-4;
-                                    VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "WALLPAPER PATH  (on target system)"; }
-                                        FTextInput { value <=> wallpaper-path; hint: "/usr/share/backgrounds/custom.png"; enabled: !running; }
-                                        FFieldHelp { text: "Path to wallpaper inside the installed system. Leave blank for distro default."; }
-                                    }
-                                    VerticalLayout {
-                                        spacing: 4px;
-                                        FSectionLabel { text: "SYSCTL PAIRS  (key=value, one per line)"; }
-                                        FTextarea { value <=> sysctl-pairs; hint: "vm.swappiness=10\nnet.ipv4.ip_forward=1"; enabled: !running; }
-                                    }
-                                    FSwitch { label: "Unattended installation (no user interaction)"; checked <=> no-user-interaction; enabled: !running; }
-                                }
-                            }
+                        if active-tab == 4: TabStorage {
+                            swap-size-mb <=> root.swap-size-mb;
+                            encrypt <=> root.encrypt;
+                            encrypt-passphrase <=> root.encrypt-passphrase;
+                            mounts <=> root.mounts;
+                            swap-filename <=> root.swap-filename;
+                            swap-swappiness <=> root.swap-swappiness;
+                            grub-timeout <=> root.grub-timeout;
+                            grub-cmdline <=> root.grub-cmdline;
+                            grub-default <=> root.grub-default;
+                            run-commands <=> root.run-commands;
+                            late-commands <=> root.late-commands;
+                            wallpaper-path <=> root.wallpaper-path;
+                            sysctl-pairs <=> root.sysctl-pairs;
+                            no-user-interaction <=> root.no-user-interaction;
+                            running: root.running;
                         }
                     }
                 }

@@ -1,0 +1,117 @@
+import { Sizes } from "../../theme.slint";
+import { FTextInput, FTextarea, FSectionLabel, FFieldHelp, FCard } from "../../components/design_system.slint";
+
+// ── TAB 2: System & Packages ─────────────────────────────────────────────────
+
+export component TabSystem inherits VerticalLayout {
+    in property  <string> distro;
+
+    // System
+    in-out property <string> timezone;
+    in-out property <string> locale;
+    in-out property <string> keyboard-layout;
+    in-out property <string> storage-layout;
+    in-out property <string> apt-mirror;
+
+    // Packages
+    in-out property <string> packages;
+    in-out property <string> apt-repos;
+    in-out property <string> dnf-repos;
+
+    // Distro-specific repos
+    in-out property <string> dnf-mirror;
+    in-out property <string> pacman-repos;
+    in-out property <string> pacman-mirror;
+
+    // Runtime
+    in property <bool> running: false;
+
+    callback field-edited(string);
+
+    spacing: 16px;
+
+    // Locale + storage card
+    FCard {
+        title: "SYSTEM";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "TIMEZONE"; }
+                    FTextInput { value <=> timezone; hint: "America/New_York"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "LOCALE"; }
+                    FTextInput { value <=> locale; hint: "en_US.UTF-8"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "KEYBOARD"; }
+                    FTextInput { value <=> keyboard-layout; hint: "us"; enabled: !running; }
+                }
+            }
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "STORAGE LAYOUT"; }
+                    FTextInput { value <=> storage-layout; hint: "lvm  /  direct"; enabled: !running; }
+                }
+                if distro == "ubuntu" || distro == "mint" || distro == "": VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "APT MIRROR"; }
+                    FTextInput { value <=> apt-mirror; hint: "https://mirror.example.com/ubuntu"; enabled: !running; }
+                }
+            }
+        }
+    }
+
+    // Packages card
+    FCard {
+        title: "PACKAGES";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            FSectionLabel { text: "PACKAGES  (space-separated)"; }
+            FTextarea { value <=> packages; hint: "curl git vim htop"; enabled: !running; changed(_t) => { field-edited("packages"); } }
+            FFieldHelp { text: "A short list of must-have packages. You can add more later in the installed system."; }
+
+            // Distro-conditional repository fields
+            if distro == "ubuntu" || distro == "mint" || distro == "": VerticalLayout {
+                spacing: 4px;
+                FSectionLabel { text: "EXTRA APT REPOS  (one per line)"; }
+                FTextarea { value <=> apt-repos; hint: "ppa:ondrej/php\ndeb https://\u{2026}"; enabled: !running; }
+            }
+            if distro == "fedora": VerticalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "DNF MIRROR"; }
+                    FTextInput { value <=> dnf-mirror; hint: "https://mirror.example.com/fedora"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "EXTRA DNF REPOS  (one per line)"; }
+                    FTextarea { value <=> dnf-repos; hint: "https://rpm.example.com/repo"; enabled: !running; }
+                }
+            }
+            if distro == "arch": VerticalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "PACMAN MIRROR"; }
+                    FTextInput { value <=> pacman-mirror; hint: "https://mirror.example.com/archlinux/$repo/os/$arch"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "EXTRA PACMAN REPOS  (one per line)"; }
+                    FTextarea { value <=> pacman-repos; hint: "[myrepo]\nServer = https://\u{2026}"; enabled: !running; }
+                }
+            }
+        }
+    }
+}

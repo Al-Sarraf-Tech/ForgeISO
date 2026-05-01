@@ -1,0 +1,193 @@
+import { Palette, Sizes } from "../../theme.slint";
+import { FTextInput, FSectionLabel, FFieldHelp, FCard } from "../../components/design_system.slint";
+
+// ── TAB 0: Identity & Output ─────────────────────────────────────────────────
+
+export component TabIdentity inherits VerticalLayout {
+    // Identity
+    in-out property <string> hostname;
+    in-out property <string> username;
+    in-out property <string> password;
+    in-out property <string> password-confirm;
+    in-out property <string> realname;
+    in property <bool>       passwords-match: true;
+    in property <bool>       pw-live-mismatch;
+
+    // Output
+    in-out property <string> output-dir;
+    in-out property <string> out-name;
+    in-out property <string> output-label;
+    in-out property <string> expected-sha256;
+
+    // Runtime
+    in property <bool> running: false;
+
+    callback username-changed(string);
+    callback browse-output-dir();
+
+    spacing: 16px;
+
+    // Identity card
+    FCard {
+        title: "IDENTITY";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "HOSTNAME *"; }
+                    FTextInput { value <=> hostname; hint: "myserver"; enabled: !running; error: hostname == "" && username != ""; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "USERNAME *"; }
+                    FTextInput { value <=> username; hint: "admin"; enabled: !running; error: username == "" && hostname != ""; changed(t) => { username-changed(t); } }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "FULL NAME"; }
+                    FTextInput { value <=> realname; hint: "Admin User"; enabled: !running; }
+                }
+            }
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "PASSWORD"; }
+                    FTextInput { value <=> password; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "CONFIRM PASSWORD"; }
+                    FTextInput { value <=> password-confirm; password: true; hint: "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}"; enabled: !running; error: pw-live-mismatch; }
+                }
+            }
+            if !passwords-match || pw-live-mismatch: Rectangle {
+                height: 28px;
+                border-radius: Sizes.radius-sm;
+                background: Palette.red-soft;
+                border-width: 1px;
+                border-color: Palette.red-soft-border;
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    spacing: 6px;
+                    alignment: start;
+                    Image {
+                        source: @image-url("../../icons/alert-triangle.svg");
+                        width: 13px;
+                        height: 13px;
+                        y: (parent.height - self.height) / 2;
+                        colorize: Palette.red;
+                        image-fit: contain;
+                    }
+                    Text {
+                        text: "Passwords do not match";
+                        font-size: Sizes.font-xs;
+                        color: Palette.red;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+            FFieldHelp {
+                text: "Required: hostname + username. Password is set at first boot if provided; otherwise the installer prompts.";
+            }
+        }
+    }
+
+    // Output card
+    FCard {
+        title: "OUTPUT";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+
+            HorizontalLayout {
+                spacing: Sizes.space-2;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "OUTPUT DIRECTORY"; }
+                    Rectangle {
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: Palette.surface;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            Text {
+                                text: output-dir;
+                                font-size: Sizes.font-sm;
+                                color: Palette.text;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                    }
+                }
+                VerticalLayout {
+                    alignment: end;
+                    Rectangle {
+                        width: 96px;
+                        height: 38px;
+                        border-radius: Sizes.radius-sm;
+                        background: out-brw-ta.has-hover && !running ? Palette.active : Palette.elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+                        opacity: running ? 0.5 : 1.0;
+                        animate background { duration: 100ms; }
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            spacing: 6px;
+                            alignment: center;
+                            Image {
+                                source: @image-url("../../icons/folder.svg");
+                                width: 14px;
+                                height: 14px;
+                                y: (parent.height - self.height) / 2;
+                                colorize: Palette.text-secondary;
+                                image-fit: contain;
+                            }
+                            Text {
+                                text: "Browse";
+                                font-size: Sizes.font-sm;
+                                color: Palette.text;
+                                vertical-alignment: center;
+                            }
+                        }
+                        out-brw-ta := TouchArea {
+                            enabled: !running;
+                            mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+                            clicked => { browse-output-dir(); }
+                        }
+                    }
+                }
+            }
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "OUTPUT FILENAME *"; }
+                    FTextInput { value <=> out-name; hint: "forgeiso-local.iso"; enabled: !running; error: out-name == "" && output-dir != ""; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "VOLUME LABEL"; }
+                    FTextInput { value <=> output-label; hint: "MYISO  (max 32)"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "EXPECTED SHA-256"; }
+                    FTextInput { value <=> expected-sha256; hint: "a1b2c3\u{2026}  (optional)"; enabled: !running; }
+                }
+            }
+            FFieldHelp {
+                text: "Output filename and directory are required. SHA-256 verification runs after build if provided.";
+            }
+        }
+    }
+}

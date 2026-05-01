@@ -1,0 +1,139 @@
+import { Sizes } from "../../theme.slint";
+import { FTextInput, FTextarea, FSectionLabel, FFieldHelp, FSwitch, FCard } from "../../components/design_system.slint";
+
+// ── TAB 1: Access & Network ──────────────────────────────────────────────────
+
+export component TabAccess inherits VerticalLayout {
+    // SSH
+    in-out property <string> ssh-keys;
+    in-out property <bool>   ssh-password-auth: false;
+    in-out property <bool>   ssh-install-server: true;
+
+    // User & Access
+    in property  <string> distro;
+    in-out property <string> user-groups;
+    in-out property <string> user-shell;
+    in-out property <bool>   sudo-nopasswd: false;
+    in-out property <string> sudo-commands;
+
+    // Network
+    in-out property <string> dns-servers;
+    in-out property <string> ntp-servers;
+    in-out property <string> static-ip;
+    in-out property <string> gateway;
+    in-out property <string> http-proxy;
+    in-out property <string> https-proxy;
+    in-out property <string> no-proxy;
+
+    // Runtime
+    in property <bool> running: false;
+
+    callback field-edited(string);
+
+    spacing: 16px;
+
+    // SSH card
+    FCard {
+        title: "SSH ACCESS";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            FSectionLabel { text: "AUTHORIZED KEYS  (one per line)"; }
+            FTextarea { value <=> ssh-keys; hint: "ssh-ed25519 AAAA\u{2026} user@host"; enabled: !running; }
+            FFieldHelp {
+                text: "Paste one public key per line. Leave blank if you plan to log in another way.";
+            }
+            HorizontalLayout {
+                spacing: Sizes.space-6;
+                FSwitch { label: "Install SSH server"; checked <=> ssh-install-server; enabled: !running; }
+                FSwitch { label: "Allow password auth"; checked <=> ssh-password-auth; enabled: !running; }
+            }
+        }
+    }
+
+    // User Access card
+    FCard {
+        title: "USER ACCESS";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "GROUPS  (one per line)"; }
+                    FTextarea { value <=> user-groups; hint: "docker\nsudo"; enabled: !running; changed(_t) => { field-edited("user_groups"); } }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "LOGIN SHELL"; }
+                    FTextInput { value <=> user-shell; hint: "/bin/bash"; enabled: !running; changed(_t) => { field-edited("user_shell"); } }
+                }
+            }
+            FFieldHelp {
+                text: "ForgeISO fills in your private group plus "
+                    + (distro == "fedora" || distro == "arch" ? "wheel" : "sudo")
+                    + " for admin access once you choose a username. Edit only if you need something custom.";
+            }
+            FSwitch { label: "Passwordless sudo (NOPASSWD:ALL)"; checked <=> sudo-nopasswd; enabled: !running; }
+            VerticalLayout {
+                spacing: 4px;
+                FSectionLabel { text: "SUDO COMMANDS  (one per line, blank = ALL)"; }
+                FTextarea { value <=> sudo-commands; hint: "/usr/bin/systemctl restart nginx\n/usr/bin/docker *"; enabled: !running; }
+            }
+        }
+    }
+
+    // Network card
+    FCard {
+        title: "NETWORK";
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "DNS SERVERS"; }
+                    FTextInput { value <=> dns-servers; hint: "1.1.1.1, 8.8.8.8"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "NTP SERVERS"; }
+                    FTextInput { value <=> ntp-servers; hint: "pool.ntp.org"; enabled: !running; }
+                }
+            }
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "STATIC IP / CIDR"; }
+                    FTextInput { value <=> static-ip; hint: "192.168.1.100/24  (blank = DHCP)"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "GATEWAY"; }
+                    FTextInput { value <=> gateway; hint: "192.168.1.1"; enabled: !running; }
+                }
+            }
+            HorizontalLayout {
+                spacing: Sizes.space-4;
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "HTTP PROXY"; }
+                    FTextInput { value <=> http-proxy; hint: "http://proxy:3128"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "HTTPS PROXY"; }
+                    FTextInput { value <=> https-proxy; hint: "http://proxy:3128"; enabled: !running; }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    FSectionLabel { text: "NO PROXY"; }
+                    FTextInput { value <=> no-proxy; hint: "localhost,127.0.0.1"; enabled: !running; }
+                }
+            }
+        }
+    }
+}
