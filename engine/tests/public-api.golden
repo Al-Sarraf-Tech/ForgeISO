@@ -577,45 +577,51 @@ pub struct forgeiso_engine::config::InjectConfigBuilder
 impl forgeiso_engine::InjectConfigBuilder
 pub fn forgeiso_engine::InjectConfigBuilder::apt_mirror(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::apt_repos(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::autoinstall_yaml(self, val: impl core::convert::Into<std::path::PathBuf>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::build(self) -> forgeiso_engine::error::EngineResult<forgeiso_engine::InjectConfig>
 pub fn forgeiso_engine::InjectConfigBuilder::containers(self, val: forgeiso_engine::ContainerConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::disable_services(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::distro(self, val: forgeiso_engine::config::Distro) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::dnf_mirror(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::dnf_repos(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::enable_services(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::encrypt(self, val: bool) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::encrypt_passphrase(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::expected_sha256(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::extra_late_commands(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::extra_packages(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::firewall(self, val: forgeiso_engine::FirewallConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::gateway(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::grub(self, val: forgeiso_engine::GrubConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::hostname(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::keyboard_layout(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::locale(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::mounts(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::network(self, val: forgeiso_engine::NetworkConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::new(source: forgeiso_engine::config::IsoSource, out_name: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::no_user_interaction(self, val: bool) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::output_label(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::pacman_mirror(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::pacman_repos(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::autoinstall_yaml(self, val: impl core::convert::Into<std::path::PathBuf>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::expected_sha256(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::hostname(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::output_label(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::password(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::proxy(self, val: forgeiso_engine::ProxyConfig) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::realname(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::username(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::build(self) -> forgeiso_engine::error::EngineResult<forgeiso_engine::InjectConfig>
+pub fn forgeiso_engine::InjectConfigBuilder::new(source: forgeiso_engine::config::IsoSource, out_name: impl core::convert::Into<alloc::string::String>) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::disable_services(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::enable_services(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::extra_late_commands(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::grub(self, val: forgeiso_engine::GrubConfig) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::run_commands(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::ssh(self, val: forgeiso_engine::SshConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::static_ip(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::sysctl(self, val: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::user(self, val: forgeiso_engine::UserConfig) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::distro(self, val: forgeiso_engine::config::Distro) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::keyboard_layout(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::locale(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::no_user_interaction(self, val: bool) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::timezone(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::wallpaper(self, val: impl core::convert::Into<std::path::PathBuf>) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::encrypt(self, val: bool) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::encrypt_passphrase(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::mounts(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::storage_layout(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::swap(self, val: forgeiso_engine::SwapConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::sysctl(self, val: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::timezone(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::user(self, val: forgeiso_engine::UserConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::username(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::wallpaper(self, val: impl core::convert::Into<std::path::PathBuf>) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::firewall(self, val: forgeiso_engine::FirewallConfig) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::gateway(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::network(self, val: forgeiso_engine::NetworkConfig) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::proxy(self, val: forgeiso_engine::ProxyConfig) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::ssh(self, val: forgeiso_engine::SshConfig) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::static_ip(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 impl core::marker::Freeze for forgeiso_engine::InjectConfigBuilder
 impl core::marker::Send for forgeiso_engine::InjectConfigBuilder
 impl core::marker::Sync for forgeiso_engine::InjectConfigBuilder
@@ -1024,6 +1030,9 @@ impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::UserConfig where V: p
 pub fn forgeiso_engine::UserConfig::vzip(self) -> V
 pub mod forgeiso_engine::error
 pub enum forgeiso_engine::error::EngineError
+pub forgeiso_engine::error::EngineError::Cancelled
+pub forgeiso_engine::error::EngineError::CircuitOpen
+pub forgeiso_engine::error::EngineError::CircuitOpen::tool: alloc::string::String
 pub forgeiso_engine::error::EngineError::InvalidConfig(alloc::string::String)
 pub forgeiso_engine::error::EngineError::Io(std::io::error::Error)
 pub forgeiso_engine::error::EngineError::MissingTool(alloc::string::String)
@@ -1572,8 +1581,199 @@ pub mod forgeiso_engine::kickstart
 pub fn forgeiso_engine::kickstart::generate_kickstart_cfg(cfg: &forgeiso_engine::InjectConfig) -> forgeiso_engine::error::EngineResult<alloc::string::String>
 pub mod forgeiso_engine::mint_preseed
 pub fn forgeiso_engine::mint_preseed::generate_mint_preseed(cfg: &forgeiso_engine::InjectConfig) -> forgeiso_engine::error::EngineResult<alloc::string::String>
+pub mod forgeiso_engine::observability
+pub struct forgeiso_engine::observability::OtelGuard
+impl forgeiso_engine::observability::OtelGuard
+pub fn forgeiso_engine::observability::OtelGuard::new_disabled() -> Self
+impl core::default::Default for forgeiso_engine::observability::OtelGuard
+pub fn forgeiso_engine::observability::OtelGuard::default() -> Self
+impl core::fmt::Debug for forgeiso_engine::observability::OtelGuard
+pub fn forgeiso_engine::observability::OtelGuard::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for forgeiso_engine::observability::OtelGuard
+impl core::marker::Send for forgeiso_engine::observability::OtelGuard
+impl core::marker::Sync for forgeiso_engine::observability::OtelGuard
+impl core::marker::Unpin for forgeiso_engine::observability::OtelGuard
+impl core::marker::UnsafeUnpin for forgeiso_engine::observability::OtelGuard
+impl core::panic::unwind_safe::RefUnwindSafe for forgeiso_engine::observability::OtelGuard
+impl core::panic::unwind_safe::UnwindSafe for forgeiso_engine::observability::OtelGuard
+impl<T, U> core::convert::Into<U> for forgeiso_engine::observability::OtelGuard where U: core::convert::From<T>
+pub fn forgeiso_engine::observability::OtelGuard::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for forgeiso_engine::observability::OtelGuard where U: core::convert::Into<T>
+pub type forgeiso_engine::observability::OtelGuard::Error = core::convert::Infallible
+pub fn forgeiso_engine::observability::OtelGuard::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for forgeiso_engine::observability::OtelGuard where U: core::convert::TryFrom<T>
+pub type forgeiso_engine::observability::OtelGuard::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn forgeiso_engine::observability::OtelGuard::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for forgeiso_engine::observability::OtelGuard where T: 'static + ?core::marker::Sized
+pub fn forgeiso_engine::observability::OtelGuard::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for forgeiso_engine::observability::OtelGuard where T: ?core::marker::Sized
+pub fn forgeiso_engine::observability::OtelGuard::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for forgeiso_engine::observability::OtelGuard where T: ?core::marker::Sized
+pub fn forgeiso_engine::observability::OtelGuard::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for forgeiso_engine::observability::OtelGuard
+pub fn forgeiso_engine::observability::OtelGuard::from(t: T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for forgeiso_engine::observability::OtelGuard where T: ?core::marker::Sized
+pub fn forgeiso_engine::observability::OtelGuard::and<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn forgeiso_engine::observability::OtelGuard::or<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for forgeiso_engine::observability::OtelGuard
+impl<T> tracing::instrument::WithSubscriber for forgeiso_engine::observability::OtelGuard
+impl<T> typenum::type_operators::Same for forgeiso_engine::observability::OtelGuard
+pub type forgeiso_engine::observability::OtelGuard::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::observability::OtelGuard where V: ppv_lite86::types::MultiLane<T>
+pub fn forgeiso_engine::observability::OtelGuard::vzip(self) -> V
+pub fn forgeiso_engine::observability::init_otel(endpoint: core::option::Option<&str>) -> forgeiso_engine::observability::OtelGuard
 pub mod forgeiso_engine::orchestrator
 pub mod forgeiso_engine::orchestrator::build
+pub mod forgeiso_engine::orchestrator::circuit_breaker
+pub enum forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+pub forgeiso_engine::orchestrator::circuit_breaker::CircuitState::Closed
+pub forgeiso_engine::orchestrator::circuit_breaker::CircuitState::HalfOpen
+pub forgeiso_engine::orchestrator::circuit_breaker::CircuitState::Open
+impl core::clone::Clone for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::clone(&self) -> forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl core::cmp::Eq for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl core::cmp::PartialEq for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::eq(&self, other: &forgeiso_engine::orchestrator::circuit_breaker::CircuitState) -> bool
+impl core::fmt::Debug for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl core::marker::StructuralPartialEq for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl core::marker::Freeze for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl core::marker::Send for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl core::marker::Sync for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl core::marker::Unpin for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl core::marker::UnsafeUnpin for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl core::panic::unwind_safe::RefUnwindSafe for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl core::panic::unwind_safe::UnwindSafe for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl<Q, K> equivalent::Equivalent<K> for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::equivalent(&self, key: &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::equivalent(&self, key: &K) -> bool
+impl<T, U> core::convert::Into<U> for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where U: core::convert::From<T>
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where U: core::convert::Into<T>
+pub type forgeiso_engine::orchestrator::circuit_breaker::CircuitState::Error = core::convert::Infallible
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where U: core::convert::TryFrom<T>
+pub type forgeiso_engine::orchestrator::circuit_breaker::CircuitState::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where T: core::clone::Clone
+pub type forgeiso_engine::orchestrator::circuit_breaker::CircuitState::Owned = T
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::clone_into(&self, target: &mut T)
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::to_owned(&self) -> T
+impl<T> core::any::Any for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where T: 'static + ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where T: ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where T: ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where T: core::clone::Clone
+pub unsafe fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::clone_to_uninit(&self, dest: *mut u8)
+impl<T> core::convert::From<T> for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::from(t: T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where T: ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::and<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::or<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl<T> tracing::instrument::WithSubscriber for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+impl<T> typenum::type_operators::Same for forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+pub type forgeiso_engine::orchestrator::circuit_breaker::CircuitState::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::orchestrator::circuit_breaker::CircuitState where V: ppv_lite86::types::MultiLane<T>
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitState::vzip(self) -> V
+pub struct forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+impl forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::allow_call(&self) -> forgeiso_engine::error::EngineResult<()>
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::new(tool: impl core::convert::Into<alloc::string::String>, config: forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig) -> Self
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::record_failure(&self)
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::record_success(&self)
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::state(&self) -> forgeiso_engine::orchestrator::circuit_breaker::CircuitState
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::tool(&self) -> &str
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::with_defaults(tool: impl core::convert::Into<alloc::string::String>) -> Self
+impl core::fmt::Debug for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl !core::marker::Freeze for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+impl core::marker::Send for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+impl core::marker::Sync for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+impl core::marker::Unpin for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+impl core::marker::UnsafeUnpin for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+impl core::panic::unwind_safe::RefUnwindSafe for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+impl core::panic::unwind_safe::UnwindSafe for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+impl<T, U> core::convert::Into<U> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker where U: core::convert::From<T>
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker where U: core::convert::Into<T>
+pub type forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::Error = core::convert::Infallible
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker where U: core::convert::TryFrom<T>
+pub type forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker where T: 'static + ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker where T: ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker where T: ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::from(t: T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker where T: ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::and<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::or<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+impl<T> tracing::instrument::WithSubscriber for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+impl<T> typenum::type_operators::Same for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker
+pub type forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker where V: ppv_lite86::types::MultiLane<T>
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreaker::vzip(self) -> V
+pub struct forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+pub forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::failure_threshold: usize
+pub forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::reset_timeout: core::time::Duration
+pub forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::window: usize
+impl forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+pub const fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::new(window: usize, failure_threshold: usize, reset_timeout: core::time::Duration) -> Self
+impl core::clone::Clone for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::clone(&self) -> forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+impl core::default::Default for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::default() -> Self
+impl core::fmt::Debug for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+impl core::marker::Freeze for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+impl core::marker::Send for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+impl core::marker::Sync for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+impl core::marker::Unpin for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+impl core::marker::UnsafeUnpin for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+impl core::panic::unwind_safe::RefUnwindSafe for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+impl core::panic::unwind_safe::UnwindSafe for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+impl<T, U> core::convert::Into<U> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig where U: core::convert::From<T>
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig where U: core::convert::Into<T>
+pub type forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::Error = core::convert::Infallible
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig where U: core::convert::TryFrom<T>
+pub type forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig where T: core::clone::Clone
+pub type forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::Owned = T
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::clone_into(&self, target: &mut T)
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::to_owned(&self) -> T
+impl<T> core::any::Any for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig where T: 'static + ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig where T: ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig where T: ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig where T: core::clone::Clone
+pub unsafe fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::clone_to_uninit(&self, dest: *mut u8)
+impl<T> core::convert::From<T> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::from(t: T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig where T: ?core::marker::Sized
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::and<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::or<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+impl<T> tracing::instrument::WithSubscriber for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+impl<T> typenum::type_operators::Same for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig
+pub type forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig where V: ppv_lite86::types::MultiLane<T>
+pub fn forgeiso_engine::orchestrator::circuit_breaker::CircuitBreakerConfig::vzip(self) -> V
 pub mod forgeiso_engine::orchestrator::helpers
 pub fn forgeiso_engine::orchestrator::helpers::cache_subdir(name: &str) -> forgeiso_engine::error::EngineResult<std::path::PathBuf>
 pub fn forgeiso_engine::orchestrator::helpers::default_cache_root() -> forgeiso_engine::error::EngineResult<std::path::PathBuf>
@@ -1797,6 +1997,7 @@ pub fn forgeiso_engine::orchestrator::DoctorReport::vzip(self) -> V
 pub struct forgeiso_engine::orchestrator::ForgeIsoEngine
 impl forgeiso_engine::orchestrator::ForgeIsoEngine
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::build(&self, cfg: &forgeiso_engine::BuildConfig, out_dir: &std::path::Path) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::BuildResult>
+pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::build_cancellable(&self, cfg: &forgeiso_engine::BuildConfig, out_dir: &std::path::Path, cancel: core::option::Option<tokio_util::sync::cancellation_token::CancellationToken>) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::BuildResult>
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::build_from_file(&self, config_path: &std::path::Path, out_dir: &std::path::Path) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::BuildResult>
 impl forgeiso_engine::orchestrator::ForgeIsoEngine
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::diff_isos(&self, base: &std::path::Path, target: &std::path::Path) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::IsoDiff>
@@ -1804,6 +2005,7 @@ impl forgeiso_engine::orchestrator::ForgeIsoEngine
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::doctor(&self) -> forgeiso_engine::orchestrator::DoctorReport
 impl forgeiso_engine::orchestrator::ForgeIsoEngine
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::inject_autoinstall(&self, cfg: &forgeiso_engine::InjectConfig, out: &std::path::Path) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::BuildResult>
+pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::inject_autoinstall_cancellable(&self, cfg: &forgeiso_engine::InjectConfig, out: &std::path::Path, cancel: core::option::Option<tokio_util::sync::cancellation_token::CancellationToken>) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::BuildResult>
 impl forgeiso_engine::orchestrator::ForgeIsoEngine
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::inspect_iso(&self, iso: &std::path::Path) -> forgeiso_engine::error::EngineResult<serde_json::value::Value>
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::report(&self, build_dir: &std::path::Path, format: &str) -> forgeiso_engine::error::EngineResult<std::path::PathBuf>
@@ -3265,6 +3467,9 @@ pub type forgeiso_engine::config::Distro::Output = T
 impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::config::Distro where V: ppv_lite86::types::MultiLane<T>
 pub fn forgeiso_engine::config::Distro::vzip(self) -> V
 pub enum forgeiso_engine::EngineError
+pub forgeiso_engine::EngineError::Cancelled
+pub forgeiso_engine::EngineError::CircuitOpen
+pub forgeiso_engine::EngineError::CircuitOpen::tool: alloc::string::String
 pub forgeiso_engine::EngineError::InvalidConfig(alloc::string::String)
 pub forgeiso_engine::EngineError::Io(std::io::error::Error)
 pub forgeiso_engine::EngineError::MissingTool(alloc::string::String)
@@ -4512,6 +4717,7 @@ pub fn forgeiso_engine::FirewallConfig::vzip(self) -> V
 pub struct forgeiso_engine::ForgeIsoEngine
 impl forgeiso_engine::orchestrator::ForgeIsoEngine
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::build(&self, cfg: &forgeiso_engine::BuildConfig, out_dir: &std::path::Path) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::BuildResult>
+pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::build_cancellable(&self, cfg: &forgeiso_engine::BuildConfig, out_dir: &std::path::Path, cancel: core::option::Option<tokio_util::sync::cancellation_token::CancellationToken>) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::BuildResult>
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::build_from_file(&self, config_path: &std::path::Path, out_dir: &std::path::Path) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::BuildResult>
 impl forgeiso_engine::orchestrator::ForgeIsoEngine
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::diff_isos(&self, base: &std::path::Path, target: &std::path::Path) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::IsoDiff>
@@ -4519,6 +4725,7 @@ impl forgeiso_engine::orchestrator::ForgeIsoEngine
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::doctor(&self) -> forgeiso_engine::orchestrator::DoctorReport
 impl forgeiso_engine::orchestrator::ForgeIsoEngine
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::inject_autoinstall(&self, cfg: &forgeiso_engine::InjectConfig, out: &std::path::Path) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::BuildResult>
+pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::inject_autoinstall_cancellable(&self, cfg: &forgeiso_engine::InjectConfig, out: &std::path::Path, cancel: core::option::Option<tokio_util::sync::cancellation_token::CancellationToken>) -> forgeiso_engine::error::EngineResult<forgeiso_engine::orchestrator::BuildResult>
 impl forgeiso_engine::orchestrator::ForgeIsoEngine
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::inspect_iso(&self, iso: &std::path::Path) -> forgeiso_engine::error::EngineResult<serde_json::value::Value>
 pub async fn forgeiso_engine::orchestrator::ForgeIsoEngine::report(&self, build_dir: &std::path::Path, format: &str) -> forgeiso_engine::error::EngineResult<std::path::PathBuf>
@@ -4789,45 +4996,51 @@ pub struct forgeiso_engine::InjectConfigBuilder
 impl forgeiso_engine::InjectConfigBuilder
 pub fn forgeiso_engine::InjectConfigBuilder::apt_mirror(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::apt_repos(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::autoinstall_yaml(self, val: impl core::convert::Into<std::path::PathBuf>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::build(self) -> forgeiso_engine::error::EngineResult<forgeiso_engine::InjectConfig>
 pub fn forgeiso_engine::InjectConfigBuilder::containers(self, val: forgeiso_engine::ContainerConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::disable_services(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::distro(self, val: forgeiso_engine::config::Distro) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::dnf_mirror(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::dnf_repos(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::enable_services(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::encrypt(self, val: bool) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::encrypt_passphrase(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::expected_sha256(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::extra_late_commands(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::extra_packages(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::firewall(self, val: forgeiso_engine::FirewallConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::gateway(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::grub(self, val: forgeiso_engine::GrubConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::hostname(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::keyboard_layout(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::locale(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::mounts(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::network(self, val: forgeiso_engine::NetworkConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::new(source: forgeiso_engine::config::IsoSource, out_name: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::no_user_interaction(self, val: bool) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::output_label(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::pacman_mirror(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::pacman_repos(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::autoinstall_yaml(self, val: impl core::convert::Into<std::path::PathBuf>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::expected_sha256(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::hostname(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::output_label(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::password(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::proxy(self, val: forgeiso_engine::ProxyConfig) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::realname(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::username(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::build(self) -> forgeiso_engine::error::EngineResult<forgeiso_engine::InjectConfig>
+pub fn forgeiso_engine::InjectConfigBuilder::new(source: forgeiso_engine::config::IsoSource, out_name: impl core::convert::Into<alloc::string::String>) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::disable_services(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::enable_services(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::extra_late_commands(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::grub(self, val: forgeiso_engine::GrubConfig) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::run_commands(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::ssh(self, val: forgeiso_engine::SshConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::static_ip(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::sysctl(self, val: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::user(self, val: forgeiso_engine::UserConfig) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::distro(self, val: forgeiso_engine::config::Distro) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::keyboard_layout(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::locale(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::no_user_interaction(self, val: bool) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::timezone(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::wallpaper(self, val: impl core::convert::Into<std::path::PathBuf>) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::encrypt(self, val: bool) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::encrypt_passphrase(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::mounts(self, val: alloc::vec::Vec<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::storage_layout(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 pub fn forgeiso_engine::InjectConfigBuilder::swap(self, val: forgeiso_engine::SwapConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::sysctl(self, val: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::timezone(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::user(self, val: forgeiso_engine::UserConfig) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::username(self, val: impl core::convert::Into<alloc::string::String>) -> Self
-pub fn forgeiso_engine::InjectConfigBuilder::wallpaper(self, val: impl core::convert::Into<std::path::PathBuf>) -> Self
+impl forgeiso_engine::InjectConfigBuilder
+pub fn forgeiso_engine::InjectConfigBuilder::firewall(self, val: forgeiso_engine::FirewallConfig) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::gateway(self, val: impl core::convert::Into<alloc::string::String>) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::network(self, val: forgeiso_engine::NetworkConfig) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::proxy(self, val: forgeiso_engine::ProxyConfig) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::ssh(self, val: forgeiso_engine::SshConfig) -> Self
+pub fn forgeiso_engine::InjectConfigBuilder::static_ip(self, val: impl core::convert::Into<alloc::string::String>) -> Self
 impl core::marker::Freeze for forgeiso_engine::InjectConfigBuilder
 impl core::marker::Send for forgeiso_engine::InjectConfigBuilder
 impl core::marker::Sync for forgeiso_engine::InjectConfigBuilder
