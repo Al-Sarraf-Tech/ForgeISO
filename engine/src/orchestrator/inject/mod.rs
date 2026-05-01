@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use tokio_util::sync::CancellationToken;
+
 use crate::config::Distro;
 use crate::error::{EngineError, EngineResult};
 use crate::events::{EngineEvent, EventPhase};
@@ -8,7 +10,8 @@ use crate::workspace::Workspace;
 
 use super::build::repack_iso_args;
 use super::helpers::{
-    cache_subdir, chmod_recursive_writable, remove_dir_all_force, run_command_lossy_async,
+    cache_subdir, chmod_recursive_writable, remove_dir_all_force,
+    run_command_lossy_async_cancellable,
 };
 use super::verify::check_expected_sha256;
 use super::{BuildResult, ForgeIsoEngine};
@@ -22,6 +25,43 @@ impl ForgeIsoEngine {
         cfg: &crate::config::InjectConfig,
         out: &Path,
     ) -> EngineResult<BuildResult> {
+        self.inject_autoinstall_cancellable(cfg, out, None).await
+    }
+
+    /// Cancellation-aware variant of [`Self::inject_autoinstall`].
+    ///
+    /// `cancel` is forwarded to all subprocess invocations; signalling the
+    /// token causes [`EngineError::Cancelled`] to surface within ~1s. When
+    /// `cancel` is `None` behaviour is identical to
+    /// [`Self::inject_autoinstall`].
+    pub async fn inject_autoinstall_cancellable(
+        &self,
+        cfg: &crate::config::InjectConfig,
+        out: &Path,
+        cancel: Option<CancellationToken>,
+    ) -> EngineResult<BuildResult> {
+        // Top-level span for the whole injection operation. Sub-spans
+        // (`setup`, `extract`, `place`, `repack`) nest under this for
+        // distributed-trace–style call graphs in OTLP backends. The span
+        // is attached to the future via `Instrument` so it propagates
+        // across `.await` points without making the future `!Send` —
+        // an `EnteredSpan` from `.entered()` is `!Send`, which would
+        // break `tokio::spawn` of this future from the TUI worker.
+        use tracing::Instrument;
+        let span = tracing::info_span!("inject_phase", phase = "inject_autoinstall");
+        self.inject_autoinstall_inner(cfg, out, cancel)
+            .instrument(span)
+            .await
+    }
+
+    async fn inject_autoinstall_inner(
+        &self,
+        cfg: &crate::config::InjectConfig,
+        out: &Path,
+        cancel: Option<CancellationToken>,
+    ) -> EngineResult<BuildResult> {
+        use tracing::Instrument;
+
         cfg.validate()?;
 
         self.emit(EngineEvent::info(
@@ -29,34 +69,38 @@ impl ForgeIsoEngine {
             "starting autoinstall injection",
         ));
 
-        // Create workspace for injection
-        let workspace = Workspace::create(&cache_subdir("inject")?, "inject")?;
-        let work_dir = workspace.root;
-
-        // Resolve the source ISO
-        let resolved = self.resolve_source(&cfg.source, &work_dir).await?;
-        if let Some(expected) = &cfg.expected_sha256 {
-            self.emit(EngineEvent::info(
-                EventPhase::Verify,
-                "verifying expected SHA-256 of source ISO",
-            ));
-            check_expected_sha256(&resolved.source_path, expected)?;
+        // Sub-phase: setup — workspace creation, source resolution, distro
+        // config generation. Wrapped in its own instrumented async block so
+        // the span propagates across `.await` without holding `!Send`
+        // `EnteredSpan` across yield points.
+        let setup_span = tracing::info_span!("inject_phase", phase = "setup");
+        let (work_dir, resolved, metadata) = async {
+            let workspace = Workspace::create(&cache_subdir("inject")?, "inject")?;
+            let work_dir = workspace.root;
+            let resolved = self.resolve_source(&cfg.source, &work_dir).await?;
+            if let Some(expected) = &cfg.expected_sha256 {
+                self.emit(EngineEvent::info(
+                    EventPhase::Verify,
+                    "verifying expected SHA-256 of source ISO",
+                ));
+                check_expected_sha256(&resolved.source_path, expected)?;
+            }
+            let metadata = inspect_iso(
+                &resolved.source_path,
+                resolved.source_kind,
+                resolved.source_value.clone(),
+            )?;
+            emit_compatibility_warnings(self, cfg, &metadata);
+            match cfg.distro {
+                None | Some(Distro::Ubuntu) => configure::ubuntu(self, cfg, &work_dir)?,
+                Some(Distro::Mint) => configure::mint(self, cfg, &work_dir)?,
+                Some(Distro::Fedora) => configure::fedora(self, cfg, &work_dir)?,
+                Some(Distro::Arch) => configure::arch(self, cfg, &work_dir)?,
+            }
+            Ok::<_, EngineError>((work_dir, resolved, metadata))
         }
-        let metadata = inspect_iso(
-            &resolved.source_path,
-            resolved.source_kind,
-            resolved.source_value,
-        )?;
-
-        emit_compatibility_warnings(self, cfg, &metadata);
-
-        // Phase A — generate distro-specific config files into the workspace.
-        match cfg.distro {
-            None | Some(Distro::Ubuntu) => configure::ubuntu(self, cfg, &work_dir)?,
-            Some(Distro::Mint) => configure::mint(self, cfg, &work_dir)?,
-            Some(Distro::Fedora) => configure::fedora(self, cfg, &work_dir)?,
-            Some(Distro::Arch) => configure::arch(self, cfg, &work_dir)?,
-        }
+        .instrument(setup_span)
+        .await?;
 
         // Copy wallpaper file if provided (consumed later by Ubuntu placement).
         if let Some(src) = &cfg.wallpaper {
@@ -68,90 +112,111 @@ impl ForgeIsoEngine {
             std::fs::copy(src, dest.join(fname))?;
         }
 
-        // Extract ISO
-        let extract_dir = work_dir.join("extract");
-        std::fs::create_dir_all(&extract_dir)?;
-        let output = run_command_lossy_async(
-            "xorriso",
-            &[
-                "-osirrox".to_string(),
-                "on".to_string(),
-                "-indev".to_string(),
-                resolved.source_path.to_string_lossy().to_string(),
-                "-extract".to_string(),
-                "/".to_string(),
-                extract_dir.to_string_lossy().to_string(),
-            ],
-            None,
-        )
-        .await?;
-        if output.status != 0 {
-            return Err(EngineError::Runtime(format!(
-                "xorriso extract failed: {}",
-                output.stderr
-            )));
-        }
-
-        self.emit(EngineEvent::info(
-            EventPhase::Inject,
-            "extracted ISO filesystem",
-        ));
-
-        // xorriso extracts files with read-only permissions; make writable
-        // so we can modify the tree and inject files without permission errors.
-        chmod_recursive_writable(&extract_dir);
-
-        // Phase B — copy distro-specific files into the extracted ISO and
-        // patch boot entries.
-        match cfg.distro {
-            None | Some(Distro::Ubuntu) => place::ubuntu(self, cfg, &work_dir, &extract_dir)?,
-            Some(Distro::Mint) => place::mint(self, &work_dir, &extract_dir)?,
-            Some(Distro::Fedora) => place::fedora(self, &work_dir, &extract_dir)?,
-            Some(Distro::Arch) => place::arch(self, &work_dir, &extract_dir)?,
-        }
-
-        self.emit(EngineEvent::info(
-            EventPhase::Inject,
-            "patched boot configurations",
-        ));
-
-        // Repack ISO
-        std::fs::create_dir_all(out)?;
-        // Ensure the output always has an .iso extension regardless of what the
-        // caller passed — avoids producing unrecognised files from the GUI default.
-        let out_filename = {
-            let name = if cfg.out_name.trim().is_empty() {
-                "forgeiso-local"
-            } else {
-                cfg.out_name.trim()
-            };
-            if name.to_ascii_lowercase().ends_with(".iso") {
-                name.to_string()
-            } else {
-                format!("{}.iso", name)
+        // Sub-phase: extract — xorriso extraction of source ISO.
+        let extract_span = tracing::info_span!("inject_phase", phase = "extract");
+        let extract_dir = async {
+            let extract_dir = work_dir.join("extract");
+            std::fs::create_dir_all(&extract_dir)?;
+            let output = run_command_lossy_async_cancellable(
+                "xorriso",
+                &[
+                    "-osirrox".to_string(),
+                    "on".to_string(),
+                    "-indev".to_string(),
+                    resolved.source_path.to_string_lossy().to_string(),
+                    "-extract".to_string(),
+                    "/".to_string(),
+                    extract_dir.to_string_lossy().to_string(),
+                ],
+                None,
+                cancel.clone(),
+            )
+            .await?;
+            if output.status != 0 {
+                return Err(EngineError::Runtime(format!(
+                    "xorriso extract failed: {}",
+                    output.stderr
+                )));
             }
-        };
-        let output_path = out.join(&out_filename);
 
-        let args = repack_iso_args(
-            &resolved.source_path,
-            &extract_dir,
-            &output_path,
-            cfg.output_label.as_deref(),
-        )?;
+            self.emit(EngineEvent::info(
+                EventPhase::Inject,
+                "extracted ISO filesystem",
+            ));
 
-        let output = run_command_lossy_async("xorriso", &args, None).await?;
-        if output.status != 0 {
-            return Err(EngineError::Runtime(format!(
-                "xorriso repack failed: {}",
-                output.stderr
-            )));
+            // xorriso extracts files with read-only permissions; make writable
+            // so we can modify the tree and inject files without permission errors.
+            chmod_recursive_writable(&extract_dir);
+            Ok::<_, EngineError>(extract_dir)
+        }
+        .instrument(extract_span)
+        .await?;
+
+        // Sub-phase: place — copy distro-specific files into the extracted
+        // ISO and patch boot entries. Sync-only — no awaits — so an entered
+        // span is safe and never crosses a yield point.
+        {
+            let place_span = tracing::info_span!("inject_phase", phase = "place");
+            let _enter = place_span.enter();
+            match cfg.distro {
+                None | Some(Distro::Ubuntu) => place::ubuntu(self, cfg, &work_dir, &extract_dir)?,
+                Some(Distro::Mint) => place::mint(self, &work_dir, &extract_dir)?,
+                Some(Distro::Fedora) => place::fedora(self, &work_dir, &extract_dir)?,
+                Some(Distro::Arch) => place::arch(self, &work_dir, &extract_dir)?,
+            }
+
+            self.emit(EngineEvent::info(
+                EventPhase::Inject,
+                "patched boot configurations",
+            ));
         }
 
-        self.emit(EngineEvent::info(
-            EventPhase::Inject,
-            format!("created output ISO: {}", output_path.display()),
-        ));
+        // Sub-phase: repack — xorriso repack of modified extract dir into the
+        // final output ISO. Wrapped in an instrumented async block because it
+        // awaits on the xorriso subprocess.
+        let repack_span = tracing::info_span!("inject_phase", phase = "repack");
+        let output_path = async {
+            std::fs::create_dir_all(out)?;
+            // Ensure the output always has an .iso extension regardless of what the
+            // caller passed — avoids producing unrecognised files from the GUI default.
+            let out_filename = {
+                let name = if cfg.out_name.trim().is_empty() {
+                    "forgeiso-local"
+                } else {
+                    cfg.out_name.trim()
+                };
+                if name.to_ascii_lowercase().ends_with(".iso") {
+                    name.to_string()
+                } else {
+                    format!("{}.iso", name)
+                }
+            };
+            let output_path = out.join(&out_filename);
+
+            let args = repack_iso_args(
+                &resolved.source_path,
+                &extract_dir,
+                &output_path,
+                cfg.output_label.as_deref(),
+            )?;
+
+            let output =
+                run_command_lossy_async_cancellable("xorriso", &args, None, cancel.clone()).await?;
+            if output.status != 0 {
+                return Err(EngineError::Runtime(format!(
+                    "xorriso repack failed: {}",
+                    output.stderr
+                )));
+            }
+
+            self.emit(EngineEvent::info(
+                EventPhase::Inject,
+                format!("created output ISO: {}", output_path.display()),
+            ));
+            Ok::<_, EngineError>(output_path)
+        }
+        .instrument(repack_span)
+        .await?;
 
         // Build the result before cleaning up so that all paths are captured.
         let result = BuildResult {

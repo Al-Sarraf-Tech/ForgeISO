@@ -1,4 +1,7 @@
 use std::path::Path;
+use std::sync::{Arc, OnceLock};
+
+use tokio_util::sync::CancellationToken;
 
 use crate::config::BuildConfig;
 use crate::error::{EngineError, EngineResult};
@@ -7,13 +10,26 @@ use crate::iso::{inspect_iso, IsoMetadata};
 use crate::report::BuildReport;
 use crate::workspace::Workspace;
 
+use super::circuit_breaker::CircuitBreaker;
 use super::helpers::{
     chmod_recursive_writable, copy_dir_contents, is_squashfs_path, remove_dir_all_force,
-    require_tools, run_command_capture_async, run_command_lossy, run_command_lossy_async,
-    sanitize_filename,
+    require_tools, run_command_capture_async_cancellable, run_command_lossy,
+    run_command_lossy_async_cancellable, sanitize_filename,
 };
 use super::verify::check_expected_sha256;
 use super::{BuildResult, ForgeIsoEngine};
+
+/// Per-process circuit breaker guarding `mksquashfs` invocations.
+///
+/// `mksquashfs` is the first shell-out wired through the breaker because
+/// it is the most failure-prone (large rootfs writes, disk-full risk,
+/// occasional kernel-driver flakiness on overlay filesystems). Wider
+/// rollout to xorriso/unsquashfs/qemu is incremental — see
+/// `engine/src/orchestrator/circuit_breaker.rs` for the ADR.
+fn mksquashfs_breaker() -> &'static Arc<CircuitBreaker> {
+    static BREAKER: OnceLock<Arc<CircuitBreaker>> = OnceLock::new();
+    BREAKER.get_or_init(|| Arc::new(CircuitBreaker::with_defaults("mksquashfs")))
+}
 
 impl ForgeIsoEngine {
     pub async fn build_from_file(
@@ -26,6 +42,27 @@ impl ForgeIsoEngine {
     }
 
     pub async fn build(&self, cfg: &BuildConfig, out_dir: &Path) -> EngineResult<BuildResult> {
+        self.build_cancellable(cfg, out_dir, None).await
+    }
+
+    /// Cancellation-aware variant of [`Self::build`].
+    ///
+    /// `cancel` is passed through to all subprocess invocations so that a
+    /// caller signalling the token results in [`EngineError::Cancelled`]
+    /// being surfaced within ~1s (the time it takes to deliver SIGKILL and
+    /// reap the child).  When `cancel` is `None` behaviour is identical to
+    /// [`Self::build`].
+    pub async fn build_cancellable(
+        &self,
+        cfg: &BuildConfig,
+        out_dir: &Path,
+        cancel: Option<CancellationToken>,
+    ) -> EngineResult<BuildResult> {
+        // Top-level span for the whole build operation. Holds for the entire
+        // function so child events (resolve_source, repack_iso, etc.) are
+        // captured under it in OTLP backends.
+        let _build_span = tracing::info_span!("build_phase", name = %cfg.name).entered();
+
         cfg.validate()?;
         super::helpers::ensure_linux_host()?;
 
@@ -62,7 +99,7 @@ impl ForgeIsoEngine {
         // lossy runner so we still get stdout/stderr for diagnostics, and only
         // fail on an explicit non-zero status — matching the pattern used in
         // inject_autoinstall for the same operation.
-        let extract_out = run_command_lossy_async(
+        let extract_out = run_command_lossy_async_cancellable(
             "xorriso",
             &[
                 "-osirrox".to_string(),
@@ -74,6 +111,7 @@ impl ForgeIsoEngine {
                 extract_dir.display().to_string(),
             ],
             None,
+            cancel.clone(),
         )
         .await?;
         if extract_out.status != 0 {
@@ -94,7 +132,7 @@ impl ForgeIsoEngine {
                 require_tools(&["unsquashfs", "mksquashfs"])?;
                 let unpack_dir = workspace.work.join("rootfs");
                 std::fs::create_dir_all(&unpack_dir)?;
-                run_command_lossy_async(
+                run_command_lossy_async_cancellable(
                     "unsquashfs",
                     &[
                         "-f".to_string(),
@@ -104,6 +142,7 @@ impl ForgeIsoEngine {
                         rootfs_image.display().to_string(),
                     ],
                     None,
+                    cancel.clone(),
                 )
                 .await?;
                 if let Some(overlay) = cfg.overlay_dir.as_deref() {
@@ -111,7 +150,9 @@ impl ForgeIsoEngine {
                 }
                 write_rootfs_manifest(&unpack_dir, cfg, &iso)?;
                 std::fs::remove_file(&rootfs_image)?;
-                run_command_capture_async(
+                let breaker = mksquashfs_breaker();
+                breaker.allow_call()?;
+                let mksquashfs_result = run_command_capture_async_cancellable(
                     "mksquashfs",
                     &[
                         unpack_dir.display().to_string(),
@@ -122,8 +163,14 @@ impl ForgeIsoEngine {
                         "-no-xattrs".to_string(),
                     ],
                     None,
+                    cancel.clone(),
                 )
-                .await?;
+                .await;
+                match &mksquashfs_result {
+                    Ok(_) => breaker.record_success(),
+                    Err(_) => breaker.record_failure(),
+                }
+                mksquashfs_result?;
                 rootfs_dir = Some(unpack_dir);
             } else if rootfs_image.exists() {
                 warnings.push(format!(
@@ -149,7 +196,8 @@ impl ForgeIsoEngine {
             &output_iso,
             cfg.output_label.as_deref(),
         )?;
-        run_command_capture_async("xorriso", &repack_args, None).await?;
+        run_command_capture_async_cancellable("xorriso", &repack_args, None, cancel.clone())
+            .await?;
 
         let mut report = BuildReport::new(cfg, &iso);
         report.metadata.warnings.extend(warnings);

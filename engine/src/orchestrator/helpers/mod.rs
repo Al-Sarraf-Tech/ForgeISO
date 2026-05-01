@@ -26,7 +26,10 @@ pub(in crate::orchestrator) use paths::{
     chmod_recursive_writable, copy_dir_contents, download_filename, is_squashfs_path,
     remove_dir_all_force, sanitize_filename,
 };
-pub(in crate::orchestrator) use process::{run_command_capture_async, run_command_lossy_async};
+pub(in crate::orchestrator) use process::{
+    run_command_capture_async_cancellable, run_command_lossy_async,
+    run_command_lossy_async_cancellable,
+};
 
 #[cfg(test)]
 mod tests {
@@ -515,7 +518,7 @@ menuentry 'Mint' {\n\
         if which::which("printf").is_err() {
             return;
         }
-        let out = run_command_capture_async("printf", &["x".to_string()], None)
+        let out = run_command_capture_async_cancellable("printf", &["x".to_string()], None, None)
             .await
             .expect("printf must succeed");
         assert_eq!(out.stdout, "x");

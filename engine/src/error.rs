@@ -18,6 +18,10 @@ pub enum EngineError {
     Network(String),
     #[error("not found: {0}")]
     NotFound(String),
+    #[error("operation cancelled")]
+    Cancelled,
+    #[error("circuit breaker open for tool: {tool}")]
+    CircuitOpen { tool: String },
     #[error("io error: {0}")]
     Io(#[from] io::Error),
     #[error("serialization error: {0}")]
@@ -84,5 +88,19 @@ mod tests {
         let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
         let err = EngineError::Io(io_err);
         assert!(err.to_string().contains("io error:"));
+    }
+
+    #[test]
+    fn cancelled_error_displays_message() {
+        let err = EngineError::Cancelled;
+        assert_eq!(err.to_string(), "operation cancelled");
+    }
+
+    #[test]
+    fn circuit_open_error_displays_tool_name() {
+        let err = EngineError::CircuitOpen {
+            tool: "mksquashfs".to_string(),
+        };
+        assert_eq!(err.to_string(), "circuit breaker open for tool: mksquashfs");
     }
 }

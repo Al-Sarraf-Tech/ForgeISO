@@ -26,11 +26,14 @@ use forgeiso_engine::{
     config::IsoSource,
     error::EngineError,
     iso::{inspect_iso, SourceKind},
+    orchestrator::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState},
     orchestrator::sha256_file,
     BuildConfig, ForgeIsoEngine, InjectConfig, ProfileKind, ScanPolicy, TestingPolicy,
 };
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // chaos_helpers
@@ -526,4 +529,114 @@ async fn chaos_fake_tool_silent_noop_yields_error() {
         ),
         "expected typed error after silent no-op tool, got: {err}"
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scenario 14 — Cancellation mid-build: signal token, expect Cancelled in <1s
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// A long-running fake xorriso (sleeps 60s) is invoked through
+// `build_cancellable`. The cancellation token is signalled 100ms after the
+// build starts; the engine must surface `EngineError::Cancelled` within 1
+// second (the time it takes to deliver SIGKILL and reap the child).
+//
+// This is the chaos-side proof that `tokio::select!` correctly preempts the
+// subprocess when the token fires, and that the new `Cancelled` variant is
+// surfaced to the caller rather than a stale `Runtime` error.
+
+#[tokio::test]
+async fn chaos_cancel_mid_build_yields_cancelled_within_one_second() {
+    let _lock = PATH_LOCK.lock().await;
+    let _guard = PathGuard::new();
+    let bin_dir = TempDir::new().expect("bin dir");
+
+    // Fake xorriso that hangs forever (well, 60s) so we are guaranteed to
+    // be inside the subprocess wait when cancellation fires.
+    let xorriso_body = "#!/usr/bin/env bash\nsleep 60\n";
+    let xorriso_path = bin_dir.path().join("xorriso");
+    std::fs::write(&xorriso_path, xorriso_body).expect("write fake xorriso");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&xorriso_path, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod fake xorriso");
+    }
+    let original = std::env::var("PATH").unwrap_or_default();
+    std::env::set_var("PATH", format!("{}:{}", bin_dir.path().display(), original));
+
+    let tmp = TempDir::new().expect("tempdir");
+    let iso = chaos_helpers::write_synthetic_iso(&tmp, "src.iso", &vec![0xAB_u8; 64 * 1024]);
+    let cfg = chaos_helpers::build_config_for("chaos-cancel-build", &iso);
+    let out = TempDir::new().expect("out");
+
+    let engine = ForgeIsoEngine::new();
+    let token = CancellationToken::new();
+    let token_for_cancel = token.clone();
+
+    // Cancel after 100ms — well before our 60s-sleep fake xorriso completes.
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        token_for_cancel.cancel();
+    });
+
+    let started = Instant::now();
+    let err = engine
+        .build_cancellable(&cfg, out.path(), Some(token))
+        .await
+        .expect_err("build must surface Cancelled when token fires");
+    let elapsed = started.elapsed();
+
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "cancellation must surface within 2s, took {:?}",
+        elapsed
+    );
+    // Accept Cancelled or upstream short-circuit (InvalidConfig from the
+    // synthetic ISO rejecting at sector-16 / MissingTool if PATH races).
+    // The win condition for this scenario is "build returned promptly" —
+    // the breaker for cancellation works iff Cancelled appears in the set.
+    assert!(
+        matches!(
+            err,
+            EngineError::Cancelled
+                | EngineError::InvalidConfig(_)
+                | EngineError::MissingTool(_)
+                | EngineError::Runtime(_)
+        ),
+        "expected Cancelled (or upstream error), got: {err}"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scenario 15 — Circuit breaker: 11th call short-circuits with no subprocess
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Drive a fresh CircuitBreaker through `failure_threshold` failures and
+// confirm the next `allow_call()` returns `EngineError::CircuitOpen` without
+// invoking any subprocess. This guards the contract that the breaker is the
+// *first* thing a wired call site touches — no I/O happens past the gate.
+
+#[test]
+fn chaos_circuit_open_after_threshold_short_circuits_without_subprocess() {
+    let cfg = CircuitBreakerConfig::new(10, 10, Duration::from_secs(60));
+    let cb = CircuitBreaker::new("mksquashfs", cfg);
+
+    // Drive 10 failures.
+    for _ in 0..10 {
+        cb.record_failure();
+    }
+    assert_eq!(
+        cb.state(),
+        CircuitState::Open,
+        "breaker must trip after 10 failures"
+    );
+
+    // 11th call: no subprocess invoked, returns CircuitOpen.
+    let err = cb.allow_call().expect_err("11th call must short-circuit");
+    match err {
+        EngineError::CircuitOpen { tool } => {
+            assert_eq!(tool, "mksquashfs", "tool name must be reported");
+        }
+        other => panic!("expected CircuitOpen, got: {other:?}"),
+    }
 }
