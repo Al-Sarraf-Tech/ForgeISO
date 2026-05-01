@@ -8,18 +8,18 @@
 # - engine/tests/*: tarpaulin double-counts integration test files that
 #   it also instruments; exclude to focus on library code under test.
 #
-# Current measured: 47.04% (1461/3106 library lines). Gate set to 40 to
+# Current measured: 69.84% (2304/3299 library lines). Gate set to 64 to
 # allow ~5 points of flicker headroom plus a small buffer for cross-host
 # variance (xorriso-dependent paths run differently on workers without
-# xorriso installed). Ratchet target: 65%. Raise fail-under as coverage
+# xorriso installed). Ratchet target: 75%. Raise fail-under as coverage
 # improves; never lower it without an ADR.
 #
-# Pain points blocking ratchet:
-#   - engine/src/scanner.rs: 0/126   (needs no-tool fallback paths tested)
-#   - engine/src/orchestrator/scan_test.rs, inject.rs, mod.rs, build.rs:
-#     all 0% — exercise via mocked external tools
-#   - engine/src/iso.rs: 37/148      (xorriso branches uncovered)
-#   - engine/src/orchestrator/helpers.rs: 74/185 (process spawn paths)
+# Pain points blocking ratchet (residual after 2026-05-01 lift):
+#   - engine/src/orchestrator/build.rs: 32/157 (xorriso extract+repack paths
+#     require a real ISO + xorriso binary; covered via e2e_regression.rs)
+#   - engine/src/iso.rs: 41/148 (enrich_with_xorriso branches need real ISO)
+#   - engine/src/orchestrator/inject/mod.rs: 10/88 (full inject_autoinstall
+#     pipeline requires a real source ISO + xorriso)
 
 [default]
 exclude-files = [
@@ -30,7 +30,7 @@ exclude-files = [
   "engine/tests/*",
   "engine/benches/*",
 ]
-fail-under = 40
+fail-under = 64
 skip-clean = true
 out = ["Stdout", "Html"]
 output-dir = "target/tarpaulin"
