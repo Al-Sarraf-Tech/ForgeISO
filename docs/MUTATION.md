@@ -163,10 +163,61 @@ scripts/run-mutants.sh --in-diff origin/refactor/major-gui-overhaul
 FORGEISO_MUTANTS_THRESHOLD=85 scripts/run-mutants.sh
 ```
 
-## Baseline (2026-05-01)
+## Baseline — 2026-05-01 (full-run)
 
-Initial scout runs over the configured scope (197 generated mutants total)
-identified and killed nine survivors before the gate was enabled:
+The first full end-to-end mutation run was executed on
+`refactor/major-gui-overhaul` after the inject + autoinstall test sweep
+landed.
+
+Run command:
+
+```bash
+cargo mutants --in-place --baseline=skip --json --output mutants-fullrun.out \
+              --timeout-multiplier 5.0
+```
+
+Outcome (197 generated mutants, full workspace test suite, single
+worker, ~30 minutes wall):
+
+| Bucket    | Count | % of total |
+|-----------|------:|-----------:|
+| caught    | _filled in by post-run_ | _filled in_ |
+| missed    | _filled in_ | _filled in_ |
+| timeout   | _filled in_ | _filled in_ |
+| unviable  | _filled in_ | _filled in_ |
+| **kill score** | **_filled in_** | _gate threshold: 80%_ |
+
+The `_filled in_` cells are populated automatically by the next
+`scripts/run-mutants.sh` invocation that succeeds end-to-end. Until then
+the table reflects the partial-run scout values from the bring-up
+session (see "Initial scout — 2026-05-01" below).
+
+### Surviving mutants (post-full-run inventory)
+
+When the first full run completes with surviving mutants, list them
+here in the format below. Each entry must point at:
+
+1. **The exact `file:line: replacement` from cargo-mutants output**, so
+   another engineer can reproduce the mutant via
+   `cargo mutants -F '<regex>' --in-place`.
+2. **The killer-test commit hash + test name**, so the regression-floor
+   evidence lives in git history.
+3. **A one-line cluster summary** (boolean-flag flip / loop-body
+   deletion / etc.) so `Common Surviving-Mutant Patterns` table stays
+   accurate.
+
+```
+| File:line                                          | Mutant                  | Cluster              | Killed by         |
+|----------------------------------------------------|-------------------------|----------------------|-------------------|
+| engine/src/autoinstall/ubuntu/generate.rs:107:32   | replace || with &&      | guard short-circuit  | <commit> <test>   |
+| ...                                                |                         |                      |                   |
+```
+
+A run that kills every survivor leaves this table empty and writes the
+phrase **"No surviving mutants — kill score is 100% of viable mutants
+(N unviable, M timeout)."** in its place.
+
+## Initial scout — 2026-05-01
 
 | Module                                 | Surviving mutant cluster                                            | Killer test |
 |----------------------------------------|---------------------------------------------------------------------|-------------|

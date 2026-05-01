@@ -70,3 +70,18 @@ test_workspace = true
 # default behaviour (cargo-mutants only emits this mutant for funcs whose
 # error type implements `From<&str>` or similar) by leaving the list empty.
 error_values = []
+
+# Native exit-code semantics from cargo-mutants 27.0.0:
+#   0 = no missed mutants AND no errors
+#   1 = at least one missed mutant (test gap detected)
+#   2 = invocation error (build failure, file not found, etc.)
+#   3 = command-line / config error
+#   4 = at least one timeout (test loop hung)
+#
+# These are not configurable via .cargo/mutants.toml — they are the binary's
+# fixed convention. The threshold gating (kill_score >= 80%) is layered on
+# top by scripts/run-mutants.sh, which converts any non-zero cargo-mutants
+# exit into either:
+#   - a hard CI failure (score below 80% OR cargo-mutants exit > 1), or
+#   - a documented warning (timeouts only).
+# See docs/MUTATION.md "Threshold" + "Operator Cheat-Sheet" sections.
