@@ -87,7 +87,7 @@ impl ForgeIsoEngine {
             }
             let metadata = inspect_iso(
                 &resolved.source_path,
-                resolved.source_kind,
+                resolved.source_kind.clone(),
                 resolved.source_value.clone(),
             )?;
             emit_compatibility_warnings(self, cfg, &metadata);

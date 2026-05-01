@@ -12,6 +12,20 @@ use crate::config::IsoSource;
 
 impl ForgeIsoEngine {
     pub async fn verify(&self, source: &str, sums_url: Option<&str>) -> EngineResult<VerifyResult> {
+        // Top-level span for verify. Attached via `Instrument` so the future
+        // remains `Send` and can be `tokio::spawn`'d from the TUI worker.
+        // Nested calls (resolve_source, sha256_file, SHA256SUMS fetch)
+        // appear under this span in OTLP backends.
+        use tracing::Instrument;
+        let span = tracing::info_span!("verify_phase", source = %source);
+        self.verify_inner(source, sums_url).instrument(span).await
+    }
+
+    async fn verify_inner(
+        &self,
+        source: &str,
+        sums_url: Option<&str>,
+    ) -> EngineResult<VerifyResult> {
         self.emit(EngineEvent::info(
             EventPhase::Verify,
             "verifying ISO checksum",

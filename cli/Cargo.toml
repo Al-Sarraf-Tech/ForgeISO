@@ -21,3 +21,9 @@ tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 indicatif = "0.17"
 forgeiso-engine = { path = "../engine" }
+
+[features]
+default = []
+# Forward the engine's `otel` feature so `cargo build --features otel`
+# enables OpenTelemetry tracing across the binary.
+otel = ["forgeiso-engine/otel"]

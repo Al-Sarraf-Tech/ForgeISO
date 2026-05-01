@@ -26,6 +26,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // JSON tracing — fail-open. Guard held for program lifetime.
     let _tracing_guard = obs::init_tracing();
 
+    // OpenTelemetry tracing — feature-gated. Guard held for program lifetime
+    // so the exporter flushes on Drop. With the `otel` feature off, this is a
+    // zero-cost no-op guard.
+    #[cfg(feature = "otel")]
+    let _otel = forgeiso_engine::observability::init_otel(
+        std::env::var("FORGEISO_OTEL_ENDPOINT").ok().as_deref(),
+    );
+
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = disable_raw_mode();

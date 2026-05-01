@@ -18,6 +18,11 @@ impl ForgeIsoEngine {
         policy_file: Option<&Path>,
         out_dir: &Path,
     ) -> EngineResult<ScanResult> {
+        // Top-level span for the scan operation. Wraps policy load + scan
+        // execution + report serialization for OTLP grouping.
+        let _scan_span =
+            tracing::info_span!("scan_phase", artifact = %artifact.display()).entered();
+
         let policy = if let Some(path) = policy_file {
             let raw = std::fs::read_to_string(path)?;
             serde_yaml::from_str(&raw)?

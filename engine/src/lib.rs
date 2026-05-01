@@ -5,6 +5,7 @@ pub mod events;
 pub mod iso;
 pub mod kickstart;
 pub mod mint_preseed;
+pub mod observability;
 pub mod orchestrator;
 pub mod product;
 pub mod report;

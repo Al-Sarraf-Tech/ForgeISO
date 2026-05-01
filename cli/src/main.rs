@@ -18,6 +18,14 @@ async fn main() -> anyhow::Result<()> {
     // JSON tracing — fail-open. Guard held for program lifetime.
     let _tracing_guard = obs::init_tracing();
 
+    // OpenTelemetry tracing — feature-gated. Guard held for program lifetime
+    // so the exporter flushes on Drop. With the `otel` feature off, this is a
+    // zero-cost no-op guard.
+    #[cfg(feature = "otel")]
+    let _otel = forgeiso_engine::observability::init_otel(
+        std::env::var("FORGEISO_OTEL_ENDPOINT").ok().as_deref(),
+    );
+
     let parsed = <cli::Cli as clap::Parser>::parse();
     let engine = ForgeIsoEngine::new();
 

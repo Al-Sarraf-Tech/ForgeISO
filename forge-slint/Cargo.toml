@@ -29,5 +29,11 @@ tracing-appender   = { workspace = true }
 anyhow     = { workspace = true }
 dirs       = { workspace = true }
 
+[features]
+default = []
+# Forward the engine's `otel` feature so `cargo build --features otel`
+# enables OpenTelemetry tracing across the binary.
+otel = ["forgeiso-engine/otel"]
+
 [build-dependencies]
 slint-build = "1.15"
