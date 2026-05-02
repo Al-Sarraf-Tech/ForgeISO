@@ -327,7 +327,12 @@ export component StepConfigure inherits Rectangle {
         }
 
         // ── TabRail + Content panel ──────────────────────────────────────
+        // vertical-stretch claims the available middle space so the tab rail
+        // + form fill from below the source banner to above the Continue
+        // button instead of collapsing to natural height + leaving dead air.
         HorizontalLayout {
+            vertical-stretch: 1;
+
             // Left: tab rail (fixed 200px)
             TabRail {
                 active-index: active-tab;
