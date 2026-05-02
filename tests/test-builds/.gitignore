@@ -1,0 +1,5 @@
+# Per-preset workdirs created by scripts/test-releases.sh.
+# Excluded from version control because each run can produce up to 33 ISOs
+# plus extracted ISO trees (multiple GB total).
+*
+!.gitignore
