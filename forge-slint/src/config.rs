@@ -7,9 +7,11 @@ use forgeiso_engine::{
 };
 use slint::{ComponentHandle, ModelRc, VecModel};
 
-use crate::profiles::{ProfileKind, PROFILE_META};
+use crate::profiles::{preview_rows, ProfileKind, PROFILE_META};
 use crate::state::{lines, opt, tokens, InjectState};
-use crate::{clear_build_results, AppState, AppWindow, FormState, PresetCard, ProfileChip};
+use crate::{
+    clear_build_results, AppState, AppWindow, FormState, PresetCard, ProfileChip, ProfileDefaultRow,
+};
 
 // ── Preset cards shown on Step 1 ─────────────────────────────────────────────
 
@@ -115,6 +117,26 @@ pub fn make_profile_chips() -> ModelRc<ProfileChip> {
 /// has a coherent selection.
 pub fn profile_kind_for(id: &str) -> ProfileKind {
     ProfileKind::from_id(id).unwrap_or_else(ProfileKind::default_kind)
+}
+
+/// Build the preview-row model for the "Preview defaults" disclosure on
+/// Step 1. Empty list collapses the disclosure even if currently open.
+pub fn make_profile_preview_rows(kind: ProfileKind) -> ModelRc<ProfileDefaultRow> {
+    let rows: Vec<ProfileDefaultRow> = preview_rows(kind)
+        .into_iter()
+        .map(|(label, value)| ProfileDefaultRow {
+            label: label.into(),
+            value: value.into(),
+        })
+        .collect();
+    ModelRc::new(VecModel::from(rows))
+}
+
+/// Refresh both the preset cards (recommended badge depends on profile) and
+/// the preview-rows model so the disclosure reflects the new active profile.
+pub fn refresh_profile_dependent_models(w: &AppWindow, kind: ProfileKind) {
+    refresh_preset_cards(w, kind);
+    w.set_profile_preview_rows(make_profile_preview_rows(kind));
 }
 
 // ── Preset selection handler ──────────────────────────────────────────────────

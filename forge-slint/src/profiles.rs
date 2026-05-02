@@ -255,6 +255,50 @@ pub fn apply_profile_overrides(
     changes
 }
 
+/// Build human-readable preview rows for a profile, used by the Step 1
+/// disclosure panel "Preview defaults".
+///
+/// Only profile-driven overrides (Some fields from `populate`) are emitted;
+/// the distro-default underlay is excluded so the user sees specifically
+/// what THIS profile contributes. An empty string value renders as
+/// "(cleared)" so the user can tell the profile is intentionally clearing
+/// a field rather than leaving it unset.
+pub fn preview_rows(kind: ProfileKind) -> Vec<(&'static str, String)> {
+    let p = populate(kind);
+    let mut rows: Vec<(&'static str, String)> = Vec::new();
+
+    let push_str =
+        |rows: &mut Vec<(&'static str, String)>, label: &'static str, v: &Option<String>| {
+            if let Some(s) = v {
+                let display = if s.is_empty() {
+                    "(cleared)".to_string()
+                } else {
+                    // Newlines come from multi-line lists (services / sysctl);
+                    // collapse for the inline preview to keep rows compact.
+                    s.replace('\n', ", ")
+                };
+                rows.push((label, display));
+            }
+        };
+    let push_bool =
+        |rows: &mut Vec<(&'static str, String)>, label: &'static str, v: Option<bool>| {
+            if let Some(b) = v {
+                rows.push((label, if b { "yes" } else { "no" }.to_string()));
+            }
+        };
+
+    push_str(&mut rows, "Packages", &p.packages);
+    push_str(&mut rows, "Enable services", &p.enable_services);
+    push_str(&mut rows, "Disable services", &p.disable_services);
+    push_str(&mut rows, "Firewall policy", &p.firewall_policy);
+    push_str(&mut rows, "Allow ports", &p.allow_ports);
+    push_str(&mut rows, "Sysctl tweaks", &p.sysctl_pairs);
+    push_bool(&mut rows, "Allow SSH password auth", p.ssh_password_auth);
+    push_bool(&mut rows, "Passwordless sudo", p.sudo_nopasswd);
+
+    rows
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,6 +319,45 @@ mod tests {
     fn default_is_server_default() {
         assert_eq!(ProfileKind::default_kind(), ProfileKind::ServerDefault);
         assert_eq!(ProfileKind::default_kind().as_id(), "server-default");
+    }
+
+    #[test]
+    fn preview_rows_only_emits_some_fields_for_server_default() {
+        let rows = preview_rows(ProfileKind::ServerDefault);
+        let labels: Vec<&str> = rows.iter().map(|(l, _)| *l).collect();
+        // ServerDefault populate sets firewall_policy, allow_ports, ssh_password_auth
+        assert!(labels.contains(&"Firewall policy"));
+        assert!(labels.contains(&"Allow ports"));
+        assert!(labels.contains(&"Allow SSH password auth"));
+        // Other fields are None and must be excluded
+        assert!(!labels.contains(&"Packages"));
+        assert!(!labels.contains(&"Sysctl tweaks"));
+    }
+
+    #[test]
+    fn preview_rows_renders_cleared_for_empty_string_value() {
+        // Kiosk sets allow_ports to empty string deliberately.
+        let rows = preview_rows(ProfileKind::Kiosk);
+        let allow = rows.iter().find(|(l, _)| *l == "Allow ports");
+        assert_eq!(allow.map(|(_, v)| v.as_str()), Some("(cleared)"));
+    }
+
+    #[test]
+    fn preview_rows_collapses_multiline_lists_to_commas() {
+        // ServerHardened disable_services is "avahi-daemon\ncups".
+        let rows = preview_rows(ProfileKind::ServerHardened);
+        let services = rows.iter().find(|(l, _)| *l == "Disable services");
+        assert_eq!(
+            services.map(|(_, v)| v.as_str()),
+            Some("avahi-daemon, cups")
+        );
+    }
+
+    #[test]
+    fn preview_rows_renders_bool_overrides_yes_no() {
+        let rows = preview_rows(ProfileKind::DesktopDeveloper);
+        let sudo = rows.iter().find(|(l, _)| *l == "Passwordless sudo");
+        assert_eq!(sudo.map(|(_, v)| v.as_str()), Some("yes"));
     }
 
     #[test]

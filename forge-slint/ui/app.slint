@@ -4,7 +4,7 @@ import { Sidebar }     from "components/sidebar.slint";
 import { PageHeader }  from "components/page_header.slint";
 import { StatusBar, StatusBarSettings } from "components/status_bar.slint";
 import { LogPanel, LogEntry } from "components/log_panel.slint";
-import { StepSource, PresetCard, ProfileChip } from "steps/source.slint";
+import { StepSource, PresetCard, ProfileChip, ProfileDefaultRow } from "steps/source.slint";
 import { StepConfigure }  from "steps/configure.slint";
 import { StepBuild }      from "steps/build.slint";
 import { StepCheck }      from "steps/check.slint";
@@ -26,6 +26,7 @@ export component AppWindow inherits Window {
     in property <[PresetCard]>   presets-row1;
     in property <[PresetCard]>   presets-row2;
     in property <[ProfileChip]>  profile-chips;
+    in property <[ProfileDefaultRow]> profile-preview-rows;
 
     // ── Callbacks ───────────────────────────────────────────────────────
     callback cancel-job();
@@ -137,6 +138,7 @@ export component AppWindow inherits Window {
                             presets-row1: root.presets-row1;
                             presets-row2: root.presets-row2;
                             profile-chips: root.profile-chips;
+                            profile-preview-rows: root.profile-preview-rows;
                             selected-profile: FormState.selected-profile;
                             source-path: FormState.source-path;
                             selected-preset: FormState.selected-preset;

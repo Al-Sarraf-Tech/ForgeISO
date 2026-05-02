@@ -7,7 +7,7 @@ use slint::ComponentHandle;
 
 use crate::app::with_app;
 use crate::clear_build_results;
-use crate::config::{handle_preset_clicked, profile_kind_for, refresh_preset_cards};
+use crate::config::{handle_preset_clicked, profile_kind_for, refresh_profile_dependent_models};
 use crate::worker;
 use crate::{AppState, AppWindow, FormState};
 
@@ -37,8 +37,9 @@ pub(crate) fn wire(win: &AppWindow) {
                 w.global::<FormState>()
                     .set_selected_profile(canonical.as_id().into());
                 // Refresh the recommended badges across the whole distro
-                // grid so the star highlights move with the active profile.
-                refresh_preset_cards(&w, canonical);
+                // grid AND the "Preview defaults" disclosure model so both
+                // reflect the new active profile in one pass.
+                refresh_profile_dependent_models(&w, canonical);
                 // If a preset is already chosen, apply profile-driven
                 // overrides on top of the existing distro defaults.
                 with_app(|a| a.apply_profile_overrides(&w));

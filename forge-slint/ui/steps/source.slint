@@ -25,6 +25,13 @@ export struct ProfileChip {
     description: string,
 }
 
+// One row in the "Preview defaults" disclosure panel. Rust pre-formats the
+// value so the UI can render `[ProfileDefaultRow]` with no further parsing.
+export struct ProfileDefaultRow {
+    label: string,
+    value: string,
+}
+
 // ── ProfileChipBtn ──────────────────────────────────────────────────────────
 // One pill-shaped chip in the configuration-profile selector row. Selected
 // state uses the accent-soft palette tokens (WCAG-AA in both themes via the
@@ -215,6 +222,13 @@ export component StepSource inherits Rectangle {
     // labels and descriptions live next to the engine ProfileKind catalog.
     in property <[ProfileChip]> profile-chips;
     in property <string>        selected-profile;
+    // Preview rows for the "what does this profile change" disclosure.
+    // Rebuilt by Rust on profile-clicked + at startup to reflect the active
+    // profile. Empty list collapses the disclosure even if open.
+    in property <[ProfileDefaultRow]> profile-preview-rows;
+    // Local UI state — disclosure open/closed. Not persisted since it's
+    // ephemeral exploration affordance, not a user preference.
+    property <bool> preview-open: false;
     in property <string>        source-path;
     in property <string>        selected-preset;
     in property <string>        detected-distro;
@@ -277,6 +291,75 @@ export component StepSource inherits Rectangle {
                           : profile-chips.length > 4 && selected-profile == profile-chips[4].id ? profile-chips[4].description
                           : "")
                         : "";
+                }
+
+                // Disclosure: "▶ Preview defaults (N)" / "▼ Preview defaults (N)"
+                // expands to show every Some-field from the profile's populate()
+                // output. Provides the "what's about to change" affordance the
+                // v0.3.2 punch-list called for, without needing a full modal.
+                if profile-preview-rows.length > 0: VerticalLayout {
+                    spacing: Sizes.space-2;
+
+                    Rectangle {
+                        height: 24px;
+                        width: 100%;
+                        background: transparent;
+                        // Caret + label, AA-contrast accent text. TouchArea on
+                        // the whole rect so the click target is generous.
+                        HorizontalLayout {
+                            alignment: start;
+                            spacing: Sizes.space-2;
+                            Text {
+                                text: preview-open ? "\u{25BC}" : "\u{25B6}";
+                                font-size: Sizes.font-2xs;
+                                color: Palette.accent;
+                                vertical-alignment: center;
+                                width: 14px;
+                            }
+                            Text {
+                                text: "Preview defaults (" + profile-preview-rows.length + ")";
+                                font-size: Sizes.font-xs;
+                                font-weight: 600;
+                                color: Palette.accent;
+                                letter-spacing: 0.4px;
+                                vertical-alignment: center;
+                            }
+                        }
+                        ta := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { preview-open = !preview-open; }
+                        }
+                    }
+
+                    if preview-open: Rectangle {
+                        background: Palette.elevated;
+                        border-radius: Sizes.radius-sm;
+                        border-width: 1px;
+                        border-color: Palette.border-subtle;
+                        VerticalLayout {
+                            padding: Sizes.space-3;
+                            spacing: Sizes.space-2;
+                            for row[i] in profile-preview-rows: HorizontalLayout {
+                                spacing: Sizes.space-3;
+                                alignment: start;
+                                Text {
+                                    text: row.label + ":";
+                                    font-size: Sizes.font-xs;
+                                    color: Palette.text-secondary;
+                                    width: 180px;
+                                    vertical-alignment: top;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    text: row.value;
+                                    font-size: Sizes.font-xs;
+                                    color: Palette.text;
+                                    horizontal-stretch: 1;
+                                    wrap: word-wrap;
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
