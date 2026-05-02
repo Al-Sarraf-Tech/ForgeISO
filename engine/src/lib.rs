@@ -8,6 +8,7 @@ pub mod mint_preseed;
 pub mod observability;
 pub mod orchestrator;
 pub mod product;
+pub mod profiles;
 pub mod report;
 pub mod scanner;
 pub mod sources;
@@ -32,6 +33,7 @@ pub use orchestrator::{
     TestResult, VerifyResult,
 };
 pub use product::{GuidedWorkflowProgress, GuidedWorkflowStep};
+pub use profiles::{Profile, ProfileCatalog};
 pub use sources::{
     all_presets, find_preset, find_preset_by_str, resolve_url, AcquisitionStrategy, IsoPreset,
     PresetId,
