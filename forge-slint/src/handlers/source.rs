@@ -1,13 +1,13 @@
 //! Step 1 (Source) callback wiring.
 //!
-//! Covers: preset-clicked, browse-source, source-changed, source-continue,
-//! clear-source.
+//! Covers: preset-clicked, profile-clicked, browse-source, source-changed,
+//! source-continue, clear-source.
 
 use slint::ComponentHandle;
 
 use crate::app::with_app;
 use crate::clear_build_results;
-use crate::config::handle_preset_clicked;
+use crate::config::{handle_preset_clicked, profile_kind_for};
 use crate::worker;
 use crate::{AppState, AppWindow, FormState};
 
@@ -18,6 +18,27 @@ pub(crate) fn wire(win: &AppWindow) {
         win.on_preset_clicked(move |id| {
             if let Some(w) = weak.upgrade() {
                 with_app(|a| handle_preset_clicked(&w, id.as_str(), a));
+            }
+        });
+    }
+
+    // profile-clicked  — persist the new profile selection on FormState. The
+    // engine ProfileCatalog::populate output is applied to unedited form
+    // fields by `handle_profile_clicked` once a preset is also selected, so
+    // both inputs together drive Step 2 defaults.
+    {
+        let weak = win.as_weak();
+        win.on_profile_clicked(move |id| {
+            if let Some(w) = weak.upgrade() {
+                let id_str: String = id.into();
+                // Always persist the selection — even before a preset is
+                // chosen — so the chip stays selected across app restarts.
+                let canonical = profile_kind_for(&id_str);
+                w.global::<FormState>()
+                    .set_selected_profile(canonical.as_id().into());
+                // If a preset is already chosen, apply profile-driven
+                // overrides on top of the existing distro defaults.
+                with_app(|a| a.apply_profile_overrides(&w));
             }
         });
     }

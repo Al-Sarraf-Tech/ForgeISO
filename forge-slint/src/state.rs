@@ -9,6 +9,10 @@ use std::path::PathBuf;
 pub struct InjectState {
     pub source: String,
     pub source_preset: String,
+    /// Configuration profile id ("server-default" by default). Stable
+    /// across versions; unknown values fall back to ServerDefault.
+    #[serde(default = "default_profile_id")]
+    pub selected_profile: String,
     pub output_dir: String,
     pub out_name: String,
     pub output_label: String,
@@ -78,6 +82,7 @@ impl Default for InjectState {
         Self {
             source: String::new(),
             source_preset: String::new(),
+            selected_profile: default_profile_id(),
             output_dir: cache,
             out_name: "forgeiso-local.iso".into(),
             output_label: String::new(),
@@ -206,6 +211,12 @@ fn dirs_cache() -> String {
         .unwrap_or_else(|_| PathBuf::from("/tmp/forgeiso"))
         .to_string_lossy()
         .into_owned()
+}
+
+/// Stable default profile id surfaced to serde (must round-trip with
+/// `profiles::ProfileKind::default_kind`).
+fn default_profile_id() -> String {
+    "server-default".into()
 }
 
 /// Split a newline-separated field into non-empty trimmed strings.

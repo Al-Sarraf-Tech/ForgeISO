@@ -4,14 +4,14 @@ import { Sidebar }     from "components/sidebar.slint";
 import { PageHeader }  from "components/page_header.slint";
 import { StatusBar, StatusBarSettings } from "components/status_bar.slint";
 import { LogPanel, LogEntry } from "components/log_panel.slint";
-import { StepSource, PresetCard } from "steps/source.slint";
+import { StepSource, PresetCard, ProfileChip } from "steps/source.slint";
 import { StepConfigure }  from "steps/configure.slint";
 import { StepBuild }      from "steps/build.slint";
 import { StepCheck }      from "steps/check.slint";
 import { FormState } from "globals/form_state.slint";
 import { AppState }  from "globals/app_state.slint";
 
-export { LogEntry, PresetCard, FormState, AppState, Theme }
+export { LogEntry, PresetCard, ProfileChip, FormState, AppState, Theme }
 
 export component AppWindow inherits Window {
     title: "ForgeISO";
@@ -25,6 +25,7 @@ export component AppWindow inherits Window {
     in property <[LogEntry]>     log-entries;
     in property <[PresetCard]>   presets-row1;
     in property <[PresetCard]>   presets-row2;
+    in property <[ProfileChip]>  profile-chips;
 
     // ── Callbacks ───────────────────────────────────────────────────────
     callback cancel-job();
@@ -135,12 +136,15 @@ export component AppWindow inherits Window {
                         StepSource {
                             presets-row1: root.presets-row1;
                             presets-row2: root.presets-row2;
+                            profile-chips: root.profile-chips;
+                            selected-profile: FormState.selected-profile;
                             source-path: FormState.source-path;
                             selected-preset: FormState.selected-preset;
                             detected-distro: FormState.detected-distro;
                             running: AppState.job-running;
                             can-continue: FormState.source-path != "";
                             preset-clicked(id) => { root.preset-clicked(id); }
+                            profile-clicked(id) => { root.profile-clicked(id); }
                             browse-clicked => { root.browse-source(); }
                             source-changed(t) => { root.source-changed(t); }
                             continue-clicked => { root.source-continue(); }

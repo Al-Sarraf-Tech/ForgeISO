@@ -11,6 +11,7 @@ use std::collections::HashSet;
 
 use crate::config::build_inject_config;
 use crate::defaults;
+use crate::profiles::{self, ProfileKind};
 use crate::state::{InjectState, VerifyState};
 use crate::{AppState, AppWindow, FormState, LogEntry};
 
@@ -207,6 +208,7 @@ impl ForgeApp {
         Some(InjectState {
             source: fs.get_source_path().into(),
             source_preset: fs.get_selected_preset().into(),
+            selected_profile: fs.get_selected_profile().into(),
             output_dir: fs.get_output_dir().into(),
             out_name: fs.get_out_name().into(),
             output_label: fs.get_output_label().into(),
@@ -393,6 +395,52 @@ impl ForgeApp {
     pub fn reset_and_apply_defaults(&mut self, w: &AppWindow) {
         self.edited_fields.clear();
         self.apply_distro_defaults(w);
+        self.apply_profile_overrides(w);
+    }
+
+    /// Layer profile-derived overrides on top of the current distro defaults.
+    ///
+    /// Skips fields the user has already edited (via `edited_fields`). Only
+    /// touches fields the profile actually wants to change — leaves anything
+    /// else (e.g. hostname, network) untouched. Safe to call before a preset
+    /// is picked: when no distro is set the per-distro defaults are empty so
+    /// only the profile's profile-specific fields (sysctl, ssh-password-auth,
+    /// sudo-nopasswd) take effect.
+    pub fn apply_profile_overrides(&mut self, w: &AppWindow) {
+        let fs = w.global::<FormState>();
+        let distro: String = fs.get_distro().into();
+        let preset: String = fs.get_selected_preset().into();
+        let profile_id: String = fs.get_selected_profile().into();
+        let profile = ProfileKind::from_id(&profile_id).unwrap_or_else(ProfileKind::default_kind);
+
+        // Distro defaults form the base layer; profile overrides win on top.
+        let base = defaults::defaults_for(&distro, &preset);
+        let changes = profiles::apply_profile_overrides(&base, profile, &self.edited_fields);
+
+        for (field, value) in &changes {
+            match *field {
+                "packages" => fs.set_packages(value.clone().into()),
+                "enable_services" => fs.set_enable_services(value.clone().into()),
+                "disable_services" => fs.set_disable_services(value.clone().into()),
+                "firewall_policy" => fs.set_firewall_policy(value.clone().into()),
+                "allow_ports" => fs.set_allow_ports(value.clone().into()),
+                "sysctl_pairs" => fs.set_sysctl_pairs(value.clone().into()),
+                _ => {}
+            }
+        }
+
+        // Profile-specific boolean overrides (only flip when profile asks).
+        let overrides = profiles::populate(profile);
+        if !self.edited_fields.contains("ssh_password_auth") {
+            if let Some(v) = overrides.ssh_password_auth {
+                fs.set_ssh_password_auth(v);
+            }
+        }
+        if !self.edited_fields.contains("sudo_nopasswd") {
+            if let Some(v) = overrides.sudo_nopasswd {
+                fs.set_sudo_nopasswd(v);
+            }
+        }
     }
 
     /// Mark a field as user-edited so defaults won't overwrite it.

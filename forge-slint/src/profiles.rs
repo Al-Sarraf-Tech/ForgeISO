@@ -14,11 +14,6 @@
 //! "kebab-case")`-style strings) so the persisted UI state will not need a
 //! migration when the engine module ships.
 
-// Some symbols are introduced ahead of UI wiring (next commit). Suppress
-// dead-code warnings narrowly here so the dedicated profile-stub commit
-// passes -D warnings on its own.
-#![allow(dead_code)]
-
 use std::collections::HashSet;
 
 use crate::defaults::DistroDefaults;
@@ -71,6 +66,9 @@ impl ProfileKind {
     /// Returns true if this profile is the recommended pairing for the
     /// given preset id. When the engine catalog ships, this will delegate
     /// to `forgeiso_engine::profiles::ProfileKind::recommended_for`.
+    // Badge wiring lands in the next commit; the recommended_for mapping is
+    // already covered by unit tests so it is exercised at build time.
+    #[allow(dead_code)]
     pub fn recommended_for(self, preset_id: &str) -> bool {
         match self {
             ProfileKind::ServerDefault => matches!(

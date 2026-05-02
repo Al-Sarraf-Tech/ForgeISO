@@ -1,5 +1,5 @@
 import { Palette, Sizes } from "../theme.slint";
-import { FButton, FImageIconButton, FBadge, FDivider, FSectionLabel } from "../components/design_system.slint";
+import { FButton, FImageIconButton, FBadge, FDivider, FSectionLabel, FFieldHelp } from "../components/design_system.slint";
 import { ScrollView } from "std-widgets.slint";
 import { AppState } from "../globals/app_state.slint";
 
@@ -8,6 +8,63 @@ export struct PresetCard {
     emoji: string,
     name: string,
     desc: string,
+}
+
+// One entry in the configuration-profile chip row. `id` matches the engine
+// ProfileKind serialization ("server-default" | "server-hardened" |
+// "desktop-developer" | "kiosk" | "minimal-cloud"). `description` shows
+// below the chip row when this chip is the active selection.
+export struct ProfileChip {
+    id: string,
+    label: string,
+    description: string,
+}
+
+// ── ProfileChipBtn ──────────────────────────────────────────────────────────
+// One pill-shaped chip in the configuration-profile selector row. Selected
+// state uses the accent-soft palette tokens (WCAG-AA in both themes via the
+// same palette path that other accent pills use).
+component ProfileChipBtn inherits Rectangle {
+    in property <ProfileChip> chip;
+    in property <bool>        selected: false;
+    in property <bool>        running: false;
+    callback clicked();
+
+    height: 30px;
+    border-radius: 15px;
+    background: selected ? Palette.accent-soft
+              : ta.has-hover && !running ? Palette.active
+              : Palette.elevated;
+    border-width: 1px;
+    border-color: selected ? Palette.accent-soft-border
+               : ta.has-hover && !running ? Palette.border-focus
+               : Palette.border;
+    opacity: running ? 0.55 : 1.0;
+    animate background { duration: 120ms; }
+    animate border-color { duration: 120ms; }
+    animate opacity { duration: 120ms; }
+
+    HorizontalLayout {
+        padding-left: Sizes.space-3;
+        padding-right: Sizes.space-3;
+        alignment: center;
+        Text {
+            text: chip.label;
+            font-size: Sizes.font-2xs;
+            font-weight: 700;
+            // accent text on accent-soft chip; muted-but-AA otherwise
+            color: selected ? Palette.accent : Palette.text-secondary;
+            letter-spacing: 0.6px;
+            vertical-alignment: center;
+            animate color { duration: 120ms; }
+        }
+    }
+
+    ta := TouchArea {
+        enabled: !running;
+        mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
 }
 
 // Brand-colored monogram circle per distro family. Uses card.id prefix to
@@ -110,14 +167,20 @@ component DistroCard inherits Rectangle {
 }
 
 export component StepSource inherits Rectangle {
-    in property <[PresetCard]> presets-row1;
-    in property <[PresetCard]> presets-row2;
-    in property <string>       source-path;
-    in property <string>       selected-preset;
-    in property <string>       detected-distro;
-    in property <bool>         running: false;
-    in property <bool>         can-continue: false;
+    in property <[PresetCard]>  presets-row1;
+    in property <[PresetCard]>  presets-row2;
+    // Configuration-profile chip row + currently-selected id. List supplied
+    // by Rust (forge-slint::config::make_profile_chips) so the canonical
+    // labels and descriptions live next to the engine ProfileKind catalog.
+    in property <[ProfileChip]> profile-chips;
+    in property <string>        selected-profile;
+    in property <string>        source-path;
+    in property <string>        selected-preset;
+    in property <string>        detected-distro;
+    in property <bool>          running: false;
+    in property <bool>          can-continue: false;
     callback preset-clicked(string);
+    callback profile-clicked(string);
     callback browse-clicked();
     callback source-changed(string);
     callback continue-clicked();
@@ -145,6 +208,43 @@ export component StepSource inherits Rectangle {
                     text: "Inject unattended install config into any Linux ISO \u{2014} Ubuntu, Fedora, Arch, Mint and more.";
                     font-size: Sizes.font-md;
                     color: Palette.muted;
+                }
+            }
+
+            // -- Configuration profile selector ------------------------------
+            // Five segmented chips, default ServerDefault. Description below
+            // updates when the selection changes. The selected profile drives
+            // the recommended-badge on the distro grid (next section) and is
+            // applied on top of distro defaults when the user enters Step 2.
+            VerticalLayout {
+                spacing: Sizes.space-2;
+                FSectionLabel {
+                    text: "CONFIGURATION PROFILE";
+                    letter-spacing: 1.5px;
+                }
+
+                HorizontalLayout {
+                    spacing: Sizes.space-2;
+                    alignment: start;
+                    for chip in profile-chips: ProfileChipBtn {
+                        chip: chip;
+                        selected: selected-profile == chip.id;
+                        running: running;
+                        clicked => { profile-clicked(chip.id); }
+                    }
+                }
+
+                // Active-profile description. Resolves the matching chip's
+                // description; empty string when no chip matches (defensive).
+                FFieldHelp {
+                    text: profile-chips.length > 0
+                        ? (selected-profile == profile-chips[0].id ? profile-chips[0].description
+                          : profile-chips.length > 1 && selected-profile == profile-chips[1].id ? profile-chips[1].description
+                          : profile-chips.length > 2 && selected-profile == profile-chips[2].id ? profile-chips[2].description
+                          : profile-chips.length > 3 && selected-profile == profile-chips[3].id ? profile-chips[3].description
+                          : profile-chips.length > 4 && selected-profile == profile-chips[4].id ? profile-chips[4].description
+                          : "")
+                        : "";
                 }
             }
 

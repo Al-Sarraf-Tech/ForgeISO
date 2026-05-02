@@ -18,7 +18,7 @@ use std::sync::Arc;
 use slint::ComponentHandle;
 
 use app::{ForgeApp, APP};
-use config::{make_preset_cards, preset_display_name};
+use config::{make_preset_cards, make_profile_chips, preset_display_name};
 use forgeiso_engine::ForgeIsoEngine;
 use handlers::wire_all_handlers;
 use persist::{load_state, save_state};
@@ -90,6 +90,7 @@ fn main() -> anyhow::Result<()> {
     let (presets_row1, presets_row2) = make_preset_cards();
     win.set_presets_row1(presets_row1);
     win.set_presets_row2(presets_row2);
+    win.set_profile_chips(make_profile_chips());
 
     // Create app logic and register in thread-local.
     let app_rc = Rc::new(RefCell::new(ForgeApp::new(
@@ -151,6 +152,13 @@ pub(crate) fn restore_inject(w: &AppWindow, s: &InjectState) {
             .unwrap_or_default()
             .into(),
     );
+    // Restore configuration profile selection. Unknown ids round-trip via
+    // ProfileKind::from_id → default_kind() to stay coherent with the UI.
+    {
+        let canonical = profiles::ProfileKind::from_id(&s.selected_profile)
+            .unwrap_or_else(profiles::ProfileKind::default_kind);
+        fs.set_selected_profile(canonical.as_id().into());
+    }
     fs.set_output_dir(s.output_dir.clone().into());
     fs.set_out_name(s.out_name.clone().into());
     fs.set_output_label(s.output_label.clone().into());

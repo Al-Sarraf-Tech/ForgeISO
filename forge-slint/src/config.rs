@@ -7,8 +7,9 @@ use forgeiso_engine::{
 };
 use slint::{ComponentHandle, ModelRc, VecModel};
 
+use crate::profiles::{ProfileKind, PROFILE_META};
 use crate::state::{lines, opt, tokens, InjectState};
-use crate::{clear_build_results, AppState, AppWindow, FormState, PresetCard};
+use crate::{clear_build_results, AppState, AppWindow, FormState, PresetCard, ProfileChip};
 
 // ── Preset cards shown on Step 1 ─────────────────────────────────────────────
 
@@ -76,6 +77,29 @@ pub fn preset_display_name(id: &str) -> Option<&'static str> {
     find_preset_by_str(id).map(|preset| preset.name)
 }
 
+// ── Configuration profile chips shown above the distro grid ──────────────────
+
+/// Build the chip-row model for the configuration-profile selector. Iteration
+/// order matches `ProfileKind::ALL` so chip indices are stable.
+pub fn make_profile_chips() -> ModelRc<ProfileChip> {
+    let chips: Vec<ProfileChip> = PROFILE_META
+        .iter()
+        .map(|meta| ProfileChip {
+            id: meta.kind.as_id().into(),
+            label: meta.label.into(),
+            description: meta.description.into(),
+        })
+        .collect();
+    ModelRc::new(VecModel::from(chips))
+}
+
+/// Resolve a chip id back into the canonical `ProfileKind`. Defaults to
+/// `ProfileKind::default_kind()` when the id is unrecognised so the UI always
+/// has a coherent selection.
+pub fn profile_kind_for(id: &str) -> ProfileKind {
+    ProfileKind::from_id(id).unwrap_or_else(ProfileKind::default_kind)
+}
+
 // ── Preset selection handler ──────────────────────────────────────────────────
 
 pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut crate::app::ForgeApp) {
@@ -97,8 +121,10 @@ pub fn handle_preset_clicked(w: &AppWindow, id: &str, app: &mut crate::app::Forg
             }
         }
 
-        // Apply distro-aware defaults for this preset.
+        // Apply distro-aware defaults for this preset, then layer the
+        // currently-selected configuration profile's overrides on top.
         app.apply_distro_defaults(w);
+        app.apply_profile_overrides(w);
     }
 }
 
