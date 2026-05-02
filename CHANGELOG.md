@@ -3,6 +3,20 @@
 All notable changes to ForgeISO. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-05-02
+
+### Added
+- **GUI: persisted "show recommended only" filter** on Step 1 distro grid. Toggle next to the POPULAR DISTRIBUTIONS header hides cards the active configuration profile does not recommend; per-card `visible:` binding compacts the layout. State persisted via `UiState.show_recommended_only` in `slint-state.json`. Default off so first-run users still see every preset.
+- **GUI: inline "Preview defaults" disclosure** on Step 1 profile picker. Expandable card below the active profile description renders every Some-field from `populate(kind)` in a labeled list. Multi-line lists collapse to commas; empty-string overrides render as `(cleared)`; bool fields render yes/no. Local UI state, not persisted.
+- **GUI: compare-profiles modal** with side-by-side diff. "Compare" button at the end of the chip row opens a centered overlay listing all eight `ProfileDefaults` fields for two profiles. Differing rows tint amber via `Palette.amber-soft` (WCAG AA in both modes); A and B are switchable via chip rows inside the modal. Defaults to ServerDefault vs ServerHardened.
+- **Test fixtures: synthetic squashfs payload** in Ubuntu and Mint synthetic ISOs. `tests/fixtures/synthetic-iso.sh` now fabricates a tiny 4-file rootfs and runs `mksquashfs -comp xz` to emit `casper/filesystem.squashfs` (~4 KB), so `test-releases.sh` exercises the engine's unsquashfs/mksquashfs branch instead of the warn-only "rootfs not modified" fallback. ISO stays at ~559 KB total. Helper degrades gracefully if `mksquashfs` is missing.
+
+### Fixed
+- **GUI: Configure step layout** — `vertical-stretch: 1` on the tab rail + content `HorizontalLayout` so the row claims the available middle space instead of collapsing to natural height and leaving dead air between the source banner and Continue button.
+
+### Tests
+- 7 new unit tests in `forge-slint/src/profiles.rs` covering `preview_rows()` and `compare_rows()` (every Some-field formatting case, multi-line collapse, bool/Option rendering, full 5×5 profile-pair coverage). forge-slint test count: 45 → 52. `scripts/test-releases.sh --parallel 4` still 33/33 PASS.
+
 ## [Unreleased]
 
 ### Added
