@@ -2,7 +2,7 @@ import { Palette, Sizes, Theme } from "theme.slint";
 import { ScrollView } from "std-widgets.slint";
 import { Sidebar }     from "components/sidebar.slint";
 import { PageHeader }  from "components/page_header.slint";
-import { StatusBar }   from "components/status_bar.slint";
+import { StatusBar, StatusBarSettings } from "components/status_bar.slint";
 import { LogPanel, LogEntry } from "components/log_panel.slint";
 import { StepSource, PresetCard } from "steps/source.slint";
 import { StepConfigure }  from "steps/configure.slint";
@@ -30,6 +30,7 @@ export component AppWindow inherits Window {
     callback cancel-job();
     callback doctor-toggle();
     callback theme-toggle();
+    callback persist-ui-settings();
     // Step bar / sidebar
     callback step-bar-clicked(int);
     // Source
@@ -342,6 +343,18 @@ export component AppWindow inherits Window {
             log-error-count: AppState.log-error-count;
             doctor-ok: true;
             theme-toggle => { root.theme-toggle(); }
+        }
+    }
+
+    // ── Status-bar settings popup (anchored above the gear icon) ───────────
+    if Theme.settings-open: Rectangle {
+        x: parent.width - 360px;
+        y: parent.height - Sizes.footer-height - 320px - 8px;
+        width: 320px;
+        height: 320px;
+        StatusBarSettings {
+            close   => { Theme.settings-open = false; root.persist-ui-settings(); }
+            persist => { root.persist-ui-settings(); }
         }
     }
 

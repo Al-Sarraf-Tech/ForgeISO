@@ -277,14 +277,31 @@ impl ForgeApp {
         })
     }
 
-    /// Persist UI theme preference. Reads current inject + verify state from
-    /// the live UI so we don't clobber unrelated fields.
-    pub fn persist_theme(&self, mode: &str) {
+    /// Snapshot the full UI state (theme + status-bar visibility toggles)
+    /// from the live Theme global. Returns defaults if window is gone.
+    pub fn snap_ui(&self) -> crate::state::UiState {
+        use crate::Theme;
+        let Some(w) = self.win.upgrade() else {
+            return crate::state::UiState::default();
+        };
+        let t = w.global::<Theme>();
+        crate::state::UiState {
+            theme: t.get_mode().to_string(),
+            show_health_dot: t.get_show_health_dot(),
+            show_version: t.get_show_version(),
+            show_build_hash: t.get_show_build_hash(),
+            show_license: t.get_show_license(),
+            show_error_count: t.get_show_error_count(),
+            compact_status_bar: t.get_compact_status_bar(),
+        }
+    }
+
+    /// Persist UI state. Reads current inject + verify + ui from the live UI
+    /// so we don't clobber unrelated fields.
+    pub fn persist_ui(&self) {
         let inject = self.snap_inject().unwrap_or_default();
         let verify = self.snap_verify().unwrap_or_default();
-        let ui = crate::state::UiState {
-            theme: mode.to_string(),
-        };
+        let ui = self.snap_ui();
         crate::persist::save_state(&crate::state::PersistedState { inject, verify, ui });
     }
 

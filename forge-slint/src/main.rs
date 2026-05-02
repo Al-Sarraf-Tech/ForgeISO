@@ -62,7 +62,7 @@ fn main() -> anyhow::Result<()> {
     // Create Slint window.
     let win = AppWindow::new()?;
 
-    // Surface build metadata + restore persisted theme in the StatusBar.
+    // Surface build metadata + restore persisted theme + status-bar toggles.
     {
         let theme = win.global::<Theme>();
         theme.set_app_version(format!("v{}", env!("CARGO_PKG_VERSION")).into());
@@ -74,6 +74,13 @@ fn main() -> anyhow::Result<()> {
             _ => "dark",
         };
         theme.set_mode(mode.into());
+        // Restore status-bar visibility toggles (gear popup persists changes).
+        theme.set_show_health_dot(saved.ui.show_health_dot);
+        theme.set_show_version(saved.ui.show_version);
+        theme.set_show_build_hash(saved.ui.show_build_hash);
+        theme.set_show_license(saved.ui.show_license);
+        theme.set_show_error_count(saved.ui.show_error_count);
+        theme.set_compact_status_bar(saved.ui.compact_status_bar);
     }
 
     // Populate window from persisted state.
@@ -123,9 +130,9 @@ fn main() -> anyhow::Result<()> {
                     .and_then(|rc| rc.borrow().snap_verify())
             })
             .unwrap_or_default(),
-        ui: crate::state::UiState {
-            theme: win.global::<Theme>().get_mode().to_string(),
-        },
+        ui: APP
+            .with(|cell| cell.borrow().as_ref().map(|rc| rc.borrow().snap_ui()))
+            .unwrap_or_default(),
     };
     save_state(&state);
 

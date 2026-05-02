@@ -155,12 +155,35 @@ pub struct VerifyState {
 pub struct UiState {
     /// "dark" | "light"
     pub theme: String,
+    /// Status-bar visibility toggles. All default true; gear popup persists changes.
+    #[serde(default = "default_true")]
+    pub show_health_dot: bool,
+    #[serde(default = "default_true")]
+    pub show_version: bool,
+    #[serde(default = "default_true")]
+    pub show_build_hash: bool,
+    #[serde(default = "default_true")]
+    pub show_license: bool,
+    #[serde(default = "default_true")]
+    pub show_error_count: bool,
+    #[serde(default)]
+    pub compact_status_bar: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for UiState {
     fn default() -> Self {
         Self {
             theme: "dark".into(),
+            show_health_dot: true,
+            show_version: true,
+            show_build_hash: true,
+            show_license: true,
+            show_error_count: true,
+            compact_status_bar: false,
         }
     }
 }

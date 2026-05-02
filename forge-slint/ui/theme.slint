@@ -11,6 +11,18 @@ export global Theme {
     in-out property <string> app-version: "v0.2.1";
     in-out property <string> build-hash: "";
     in-out property <string> license: "MIT";
+
+    // ── Status-bar visibility toggles (user-adjustable via gear popup) ────
+    // Each defaults true. Persisted via UiState in slint-state.json.
+    in-out property <bool> show-health-dot: true;
+    in-out property <bool> show-version:    true;
+    in-out property <bool> show-build-hash: true;
+    in-out property <bool> show-license:    true;
+    in-out property <bool> show-error-count: true;
+    in-out property <bool> compact-status-bar: false;
+
+    // ── Status-bar settings popup state ──────────────────────────────────
+    in-out property <bool> settings-open: false;
 }
 
 export global Palette {

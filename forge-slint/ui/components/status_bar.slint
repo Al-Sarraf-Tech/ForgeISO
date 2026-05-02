@@ -1,4 +1,5 @@
 import { Palette, Sizes, Theme, Fonts } from "../theme.slint";
+import { FSwitch } from "design_system.slint";
 
 // ── StatusBar — bottom chrome with build metadata + indicators ─────────────
 // Datadog/Splunk-style footer: dense, tabular, never animated.
@@ -90,27 +91,63 @@ export component StatusBar inherits Rectangle {
         spacing: 0;
         alignment: space-between;
 
-        // Left: identity + version + license
+        // Left: identity + version + license (each gated via Theme.show-* toggle)
         HorizontalLayout {
             spacing: 0;
             alignment: start;
-            HealthDot { ok: !job-running; label: job-running ? "BUSY" : "READY"; width: 80px; }
-            StatusItem { label: "VERSION"; value: Theme.app-version; width: 130px; }
-            if Theme.build-hash != "": StatusItem {
-                label: "BUILD"; value: Theme.build-hash; variant: "mono"; width: 160px;
+            if Theme.show-health-dot: HealthDot {
+                ok: !job-running;
+                label: job-running ? "BUSY" : "READY";
+                width: Theme.compact-status-bar ? 60px : 80px;
             }
-            StatusItem { label: "LICENSE"; value: Theme.license; width: 100px; }
+            if Theme.show-version: StatusItem {
+                label: "VERSION"; value: Theme.app-version;
+                width: Theme.compact-status-bar ? 100px : 130px;
+            }
+            if Theme.show-build-hash && Theme.build-hash != "": StatusItem {
+                label: "BUILD"; value: Theme.build-hash; variant: "mono";
+                width: Theme.compact-status-bar ? 130px : 160px;
+            }
+            if Theme.show-license: StatusItem {
+                label: "LICENSE"; value: Theme.license;
+                width: Theme.compact-status-bar ? 80px : 100px;
+            }
         }
 
-        // Right: theme toggle + activity indicator
+        // Right: error indicator + settings gear + theme toggle
         HorizontalLayout {
             spacing: 0;
             alignment: end;
 
-            if log-error-count > 0: HealthDot {
+            if Theme.show-error-count && log-error-count > 0: HealthDot {
                 ok: false;
                 label: log-error-count + " errors";
                 width: 90px;
+            }
+
+            // Settings gear — opens the customization popup
+            Rectangle {
+                width: 36px;
+                background: gear-ta.has-hover || Theme.settings-open ? Palette.chrome-hover : transparent;
+                animate background { duration: 120ms; }
+                Image {
+                    source: @image-url("../icons/settings.svg");
+                    width: 14px;
+                    height: 14px;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    colorize: gear-ta.has-hover || Theme.settings-open ? Palette.text : Palette.text-secondary;
+                    image-fit: contain;
+                }
+                gear-ta := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { Theme.settings-open = !Theme.settings-open; }
+                }
+                Rectangle {
+                    x: 0; y: 6px; width: 1px;
+                    height: parent.height - 12px;
+                    background: Palette.chrome-border;
+                }
             }
 
             Rectangle {
@@ -156,6 +193,110 @@ export component StatusBar inherits Rectangle {
                     height: parent.height - 12px;
                     background: Palette.chrome-border;
                 }
+            }
+        }
+    }
+}
+
+// ── StatusBarSettings — popup anchored above the StatusBar gear icon ──────
+// Wired from app.slint as: `if Theme.settings-open: StatusBarSettings { ... }`
+// Toggles bind two-way to Theme global, so changes are immediate. Persistence
+// to disk is handled by Rust on each toggle via the persist-ui-settings cb.
+
+export component StatusBarSettings inherits Rectangle {
+    callback close();
+    callback persist();
+
+    width: 320px;
+    height: 320px;
+    border-radius: Sizes.radius-lg;
+    background: Palette.surface;
+    border-width: 1px;
+    border-color: Palette.chrome-border;
+    drop-shadow-blur: 24px;
+    drop-shadow-color: Palette.shadow-lg;
+    drop-shadow-offset-y: -6px;
+    clip: true;
+
+    VerticalLayout {
+        // Header
+        Rectangle {
+            height: 44px;
+            background: Palette.surface;
+            HorizontalLayout {
+                padding-left: Sizes.space-5;
+                padding-right: Sizes.space-3;
+                alignment: space-between;
+                Text {
+                    text: "STATUS BAR";
+                    font-size: Sizes.font-2xs;
+                    font-weight: 700;
+                    color: Palette.subtle;
+                    letter-spacing: 1.4px;
+                    vertical-alignment: center;
+                }
+                Rectangle {
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 12px;
+                    background: cls-ta.has-hover ? Palette.active : transparent;
+                    animate background { duration: 100ms; }
+                    y: (parent.height - self.height) / 2;
+                    Image {
+                        source: @image-url("../icons/x.svg");
+                        width: 12px; height: 12px;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        colorize: cls-ta.has-hover ? Palette.text : Palette.muted;
+                        image-fit: contain;
+                    }
+                    cls-ta := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        clicked => { close(); }
+                    }
+                }
+            }
+            Rectangle {
+                y: parent.height - 1px;
+                height: 1px;
+                background: Palette.border-subtle;
+            }
+        }
+
+        // Toggle list
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+            FSwitch {
+                label: "Health indicator";
+                checked <=> Theme.show-health-dot;
+                toggled => { persist(); }
+            }
+            FSwitch {
+                label: "Version";
+                checked <=> Theme.show-version;
+                toggled => { persist(); }
+            }
+            FSwitch {
+                label: "Build hash";
+                checked <=> Theme.show-build-hash;
+                toggled => { persist(); }
+            }
+            FSwitch {
+                label: "License";
+                checked <=> Theme.show-license;
+                toggled => { persist(); }
+            }
+            FSwitch {
+                label: "Error count";
+                checked <=> Theme.show-error-count;
+                toggled => { persist(); }
+            }
+            Rectangle { height: 1px; background: Palette.border-subtle; opacity: 0.5; }
+            FSwitch {
+                label: "Compact mode";
+                checked <=> Theme.compact-status-bar;
+                toggled => { persist(); }
             }
         }
     }

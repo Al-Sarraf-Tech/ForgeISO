@@ -26,10 +26,17 @@ pub(crate) fn wire(win: &AppWindow) {
                     "light"
                 };
                 theme.set_mode(next.into());
-                with_app(|a| a.persist_theme(next));
+                with_app(|a| a.persist_ui());
             }
         });
     }
+
+    // persist-ui-settings — fired by the StatusBar gear popup whenever any
+    // toggle flips. Snapshots the full Theme global state to disk so changes
+    // survive restart.
+    win.on_persist_ui_settings(|| {
+        with_app(|a| a.persist_ui());
+    });
 
     // doctor-toggle
     {
