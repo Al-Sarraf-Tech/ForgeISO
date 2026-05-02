@@ -8,6 +8,7 @@ Cargo.lock
 # cargo-mutants — per-run output, not source-controlled
 mutants.out/
 mutants.out.old/
+mutants-fullrun.out/
 
 # Node/Tauri
 gui/node_modules/
