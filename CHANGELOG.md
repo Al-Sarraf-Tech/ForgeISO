@@ -30,7 +30,12 @@ Release process: [docs/runbook-release.md](docs/runbook-release.md). Stability c
 ### Tests
 - 7 new unit tests in `forge-slint/src/profiles.rs` covering `preview_rows()` and `compare_rows()` (every Some-field formatting case, multi-line collapse, bool/Option rendering, full 5×5 profile-pair coverage). forge-slint test count: 45 → 52. `scripts/test-releases.sh --parallel 4` still 33/33 PASS.
 
-## [Unreleased]
+## [0.3.1] - 2026-05-01
+
+Note: the original v0.3.0 → v0.3.1 changelog entries were not split at
+tag-cut time; this consolidated section covers the Phase-1 through
+Phase-9 uplift work that shipped in tags `v0.3.0` (`e3d4ffb`) and
+`v0.3.1` (`bb56cdf`).
 
 ### Added
 - **GUI: enterprise ops-console shell** (Direction A: Datadog/Splunk/Grafana)
