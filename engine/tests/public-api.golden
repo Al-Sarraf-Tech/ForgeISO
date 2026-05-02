@@ -2461,6 +2461,163 @@ impl<T> typenum::type_operators::Same for forgeiso_engine::product::GuidedWorkfl
 pub type forgeiso_engine::product::GuidedWorkflowProgress::Output = T
 impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::product::GuidedWorkflowProgress where V: ppv_lite86::types::MultiLane<T>
 pub fn forgeiso_engine::product::GuidedWorkflowProgress::vzip(self) -> V
+pub mod forgeiso_engine::profiles
+pub enum forgeiso_engine::profiles::ProfileKind
+pub forgeiso_engine::profiles::ProfileKind::DesktopDeveloper
+pub forgeiso_engine::profiles::ProfileKind::Kiosk
+pub forgeiso_engine::profiles::ProfileKind::MinimalCloud
+pub forgeiso_engine::profiles::ProfileKind::ServerDefault
+pub forgeiso_engine::profiles::ProfileKind::ServerHardened
+impl forgeiso_engine::profiles::ProfileKind
+pub fn forgeiso_engine::profiles::ProfileKind::all() -> &'static [forgeiso_engine::profiles::ProfileKind]
+pub const fn forgeiso_engine::profiles::ProfileKind::as_str(self) -> &'static str
+pub const fn forgeiso_engine::profiles::ProfileKind::description(self) -> &'static str
+impl core::clone::Clone for forgeiso_engine::profiles::ProfileKind
+pub fn forgeiso_engine::profiles::ProfileKind::clone(&self) -> forgeiso_engine::profiles::ProfileKind
+impl core::cmp::Eq for forgeiso_engine::profiles::ProfileKind
+impl core::cmp::PartialEq for forgeiso_engine::profiles::ProfileKind
+pub fn forgeiso_engine::profiles::ProfileKind::eq(&self, other: &forgeiso_engine::profiles::ProfileKind) -> bool
+impl core::fmt::Debug for forgeiso_engine::profiles::ProfileKind
+pub fn forgeiso_engine::profiles::ProfileKind::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for forgeiso_engine::profiles::ProfileKind
+pub fn forgeiso_engine::profiles::ProfileKind::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for forgeiso_engine::profiles::ProfileKind
+impl core::marker::StructuralPartialEq for forgeiso_engine::profiles::ProfileKind
+impl core::marker::Freeze for forgeiso_engine::profiles::ProfileKind
+impl core::marker::Send for forgeiso_engine::profiles::ProfileKind
+impl core::marker::Sync for forgeiso_engine::profiles::ProfileKind
+impl core::marker::Unpin for forgeiso_engine::profiles::ProfileKind
+impl core::marker::UnsafeUnpin for forgeiso_engine::profiles::ProfileKind
+impl core::panic::unwind_safe::RefUnwindSafe for forgeiso_engine::profiles::ProfileKind
+impl core::panic::unwind_safe::UnwindSafe for forgeiso_engine::profiles::ProfileKind
+impl<Q, K> equivalent::Equivalent<K> for forgeiso_engine::profiles::ProfileKind where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileKind::equivalent(&self, key: &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for forgeiso_engine::profiles::ProfileKind where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileKind::equivalent(&self, key: &K) -> bool
+impl<T, U> core::convert::Into<U> for forgeiso_engine::profiles::ProfileKind where U: core::convert::From<T>
+pub fn forgeiso_engine::profiles::ProfileKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for forgeiso_engine::profiles::ProfileKind where U: core::convert::Into<T>
+pub type forgeiso_engine::profiles::ProfileKind::Error = core::convert::Infallible
+pub fn forgeiso_engine::profiles::ProfileKind::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for forgeiso_engine::profiles::ProfileKind where U: core::convert::TryFrom<T>
+pub type forgeiso_engine::profiles::ProfileKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn forgeiso_engine::profiles::ProfileKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for forgeiso_engine::profiles::ProfileKind where T: core::clone::Clone
+pub type forgeiso_engine::profiles::ProfileKind::Owned = T
+pub fn forgeiso_engine::profiles::ProfileKind::clone_into(&self, target: &mut T)
+pub fn forgeiso_engine::profiles::ProfileKind::to_owned(&self) -> T
+impl<T> core::any::Any for forgeiso_engine::profiles::ProfileKind where T: 'static + ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for forgeiso_engine::profiles::ProfileKind where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for forgeiso_engine::profiles::ProfileKind where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for forgeiso_engine::profiles::ProfileKind where T: core::clone::Clone
+pub unsafe fn forgeiso_engine::profiles::ProfileKind::clone_to_uninit(&self, dest: *mut u8)
+impl<T> core::convert::From<T> for forgeiso_engine::profiles::ProfileKind
+pub fn forgeiso_engine::profiles::ProfileKind::from(t: T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for forgeiso_engine::profiles::ProfileKind where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileKind::and<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn forgeiso_engine::profiles::ProfileKind::or<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for forgeiso_engine::profiles::ProfileKind
+impl<T> tracing::instrument::WithSubscriber for forgeiso_engine::profiles::ProfileKind
+impl<T> typenum::type_operators::Same for forgeiso_engine::profiles::ProfileKind
+pub type forgeiso_engine::profiles::ProfileKind::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::profiles::ProfileKind where V: ppv_lite86::types::MultiLane<T>
+pub fn forgeiso_engine::profiles::ProfileKind::vzip(self) -> V
+pub struct forgeiso_engine::profiles::Profile
+impl forgeiso_engine::profiles::Profile
+pub const fn forgeiso_engine::profiles::Profile::kind(self) -> forgeiso_engine::profiles::ProfileKind
+pub const fn forgeiso_engine::profiles::Profile::new(kind: forgeiso_engine::profiles::ProfileKind) -> Self
+pub fn forgeiso_engine::profiles::Profile::populate(self, distro: &str, base: forgeiso_engine::InjectConfig) -> forgeiso_engine::InjectConfig
+impl core::clone::Clone for forgeiso_engine::profiles::Profile
+pub fn forgeiso_engine::profiles::Profile::clone(&self) -> forgeiso_engine::profiles::Profile
+impl core::cmp::Eq for forgeiso_engine::profiles::Profile
+impl core::cmp::PartialEq for forgeiso_engine::profiles::Profile
+pub fn forgeiso_engine::profiles::Profile::eq(&self, other: &forgeiso_engine::profiles::Profile) -> bool
+impl core::fmt::Debug for forgeiso_engine::profiles::Profile
+pub fn forgeiso_engine::profiles::Profile::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for forgeiso_engine::profiles::Profile
+pub fn forgeiso_engine::profiles::Profile::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for forgeiso_engine::profiles::Profile
+impl core::marker::StructuralPartialEq for forgeiso_engine::profiles::Profile
+impl core::marker::Freeze for forgeiso_engine::profiles::Profile
+impl core::marker::Send for forgeiso_engine::profiles::Profile
+impl core::marker::Sync for forgeiso_engine::profiles::Profile
+impl core::marker::Unpin for forgeiso_engine::profiles::Profile
+impl core::marker::UnsafeUnpin for forgeiso_engine::profiles::Profile
+impl core::panic::unwind_safe::RefUnwindSafe for forgeiso_engine::profiles::Profile
+impl core::panic::unwind_safe::UnwindSafe for forgeiso_engine::profiles::Profile
+impl<Q, K> equivalent::Equivalent<K> for forgeiso_engine::profiles::Profile where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::equivalent(&self, key: &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for forgeiso_engine::profiles::Profile where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::equivalent(&self, key: &K) -> bool
+impl<T, U> core::convert::Into<U> for forgeiso_engine::profiles::Profile where U: core::convert::From<T>
+pub fn forgeiso_engine::profiles::Profile::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for forgeiso_engine::profiles::Profile where U: core::convert::Into<T>
+pub type forgeiso_engine::profiles::Profile::Error = core::convert::Infallible
+pub fn forgeiso_engine::profiles::Profile::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for forgeiso_engine::profiles::Profile where U: core::convert::TryFrom<T>
+pub type forgeiso_engine::profiles::Profile::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn forgeiso_engine::profiles::Profile::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for forgeiso_engine::profiles::Profile where T: core::clone::Clone
+pub type forgeiso_engine::profiles::Profile::Owned = T
+pub fn forgeiso_engine::profiles::Profile::clone_into(&self, target: &mut T)
+pub fn forgeiso_engine::profiles::Profile::to_owned(&self) -> T
+impl<T> core::any::Any for forgeiso_engine::profiles::Profile where T: 'static + ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for forgeiso_engine::profiles::Profile where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for forgeiso_engine::profiles::Profile where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for forgeiso_engine::profiles::Profile where T: core::clone::Clone
+pub unsafe fn forgeiso_engine::profiles::Profile::clone_to_uninit(&self, dest: *mut u8)
+impl<T> core::convert::From<T> for forgeiso_engine::profiles::Profile
+pub fn forgeiso_engine::profiles::Profile::from(t: T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for forgeiso_engine::profiles::Profile where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::and<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn forgeiso_engine::profiles::Profile::or<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for forgeiso_engine::profiles::Profile
+impl<T> tracing::instrument::WithSubscriber for forgeiso_engine::profiles::Profile
+impl<T> typenum::type_operators::Same for forgeiso_engine::profiles::Profile
+pub type forgeiso_engine::profiles::Profile::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::profiles::Profile where V: ppv_lite86::types::MultiLane<T>
+pub fn forgeiso_engine::profiles::Profile::vzip(self) -> V
+pub struct forgeiso_engine::profiles::ProfileCatalog
+impl forgeiso_engine::profiles::ProfileCatalog
+pub fn forgeiso_engine::profiles::ProfileCatalog::recommended_for(distro: &str) -> alloc::vec::Vec<forgeiso_engine::profiles::ProfileKind>
+impl core::marker::Freeze for forgeiso_engine::profiles::ProfileCatalog
+impl core::marker::Send for forgeiso_engine::profiles::ProfileCatalog
+impl core::marker::Sync for forgeiso_engine::profiles::ProfileCatalog
+impl core::marker::Unpin for forgeiso_engine::profiles::ProfileCatalog
+impl core::marker::UnsafeUnpin for forgeiso_engine::profiles::ProfileCatalog
+impl core::panic::unwind_safe::RefUnwindSafe for forgeiso_engine::profiles::ProfileCatalog
+impl core::panic::unwind_safe::UnwindSafe for forgeiso_engine::profiles::ProfileCatalog
+impl<T, U> core::convert::Into<U> for forgeiso_engine::profiles::ProfileCatalog where U: core::convert::From<T>
+pub fn forgeiso_engine::profiles::ProfileCatalog::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for forgeiso_engine::profiles::ProfileCatalog where U: core::convert::Into<T>
+pub type forgeiso_engine::profiles::ProfileCatalog::Error = core::convert::Infallible
+pub fn forgeiso_engine::profiles::ProfileCatalog::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for forgeiso_engine::profiles::ProfileCatalog where U: core::convert::TryFrom<T>
+pub type forgeiso_engine::profiles::ProfileCatalog::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn forgeiso_engine::profiles::ProfileCatalog::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for forgeiso_engine::profiles::ProfileCatalog where T: 'static + ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileCatalog::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for forgeiso_engine::profiles::ProfileCatalog where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileCatalog::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for forgeiso_engine::profiles::ProfileCatalog where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileCatalog::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for forgeiso_engine::profiles::ProfileCatalog
+pub fn forgeiso_engine::profiles::ProfileCatalog::from(t: T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for forgeiso_engine::profiles::ProfileCatalog where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileCatalog::and<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn forgeiso_engine::profiles::ProfileCatalog::or<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for forgeiso_engine::profiles::ProfileCatalog
+impl<T> tracing::instrument::WithSubscriber for forgeiso_engine::profiles::ProfileCatalog
+impl<T> typenum::type_operators::Same for forgeiso_engine::profiles::ProfileCatalog
+pub type forgeiso_engine::profiles::ProfileCatalog::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::profiles::ProfileCatalog where V: ppv_lite86::types::MultiLane<T>
+pub fn forgeiso_engine::profiles::ProfileCatalog::vzip(self) -> V
 pub mod forgeiso_engine::report
 pub struct forgeiso_engine::report::BuildMetadata
 pub forgeiso_engine::report::BuildMetadata::detected_architecture: core::option::Option<alloc::string::String>
@@ -5353,6 +5510,99 @@ impl<T> typenum::type_operators::Same for forgeiso_engine::NetworkConfig
 pub type forgeiso_engine::NetworkConfig::Output = T
 impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::NetworkConfig where V: ppv_lite86::types::MultiLane<T>
 pub fn forgeiso_engine::NetworkConfig::vzip(self) -> V
+pub struct forgeiso_engine::Profile
+impl forgeiso_engine::profiles::Profile
+pub const fn forgeiso_engine::profiles::Profile::kind(self) -> forgeiso_engine::profiles::ProfileKind
+pub const fn forgeiso_engine::profiles::Profile::new(kind: forgeiso_engine::profiles::ProfileKind) -> Self
+pub fn forgeiso_engine::profiles::Profile::populate(self, distro: &str, base: forgeiso_engine::InjectConfig) -> forgeiso_engine::InjectConfig
+impl core::clone::Clone for forgeiso_engine::profiles::Profile
+pub fn forgeiso_engine::profiles::Profile::clone(&self) -> forgeiso_engine::profiles::Profile
+impl core::cmp::Eq for forgeiso_engine::profiles::Profile
+impl core::cmp::PartialEq for forgeiso_engine::profiles::Profile
+pub fn forgeiso_engine::profiles::Profile::eq(&self, other: &forgeiso_engine::profiles::Profile) -> bool
+impl core::fmt::Debug for forgeiso_engine::profiles::Profile
+pub fn forgeiso_engine::profiles::Profile::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for forgeiso_engine::profiles::Profile
+pub fn forgeiso_engine::profiles::Profile::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
+impl core::marker::Copy for forgeiso_engine::profiles::Profile
+impl core::marker::StructuralPartialEq for forgeiso_engine::profiles::Profile
+impl core::marker::Freeze for forgeiso_engine::profiles::Profile
+impl core::marker::Send for forgeiso_engine::profiles::Profile
+impl core::marker::Sync for forgeiso_engine::profiles::Profile
+impl core::marker::Unpin for forgeiso_engine::profiles::Profile
+impl core::marker::UnsafeUnpin for forgeiso_engine::profiles::Profile
+impl core::panic::unwind_safe::RefUnwindSafe for forgeiso_engine::profiles::Profile
+impl core::panic::unwind_safe::UnwindSafe for forgeiso_engine::profiles::Profile
+impl<Q, K> equivalent::Equivalent<K> for forgeiso_engine::profiles::Profile where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::equivalent(&self, key: &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for forgeiso_engine::profiles::Profile where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::equivalent(&self, key: &K) -> bool
+impl<T, U> core::convert::Into<U> for forgeiso_engine::profiles::Profile where U: core::convert::From<T>
+pub fn forgeiso_engine::profiles::Profile::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for forgeiso_engine::profiles::Profile where U: core::convert::Into<T>
+pub type forgeiso_engine::profiles::Profile::Error = core::convert::Infallible
+pub fn forgeiso_engine::profiles::Profile::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for forgeiso_engine::profiles::Profile where U: core::convert::TryFrom<T>
+pub type forgeiso_engine::profiles::Profile::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn forgeiso_engine::profiles::Profile::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for forgeiso_engine::profiles::Profile where T: core::clone::Clone
+pub type forgeiso_engine::profiles::Profile::Owned = T
+pub fn forgeiso_engine::profiles::Profile::clone_into(&self, target: &mut T)
+pub fn forgeiso_engine::profiles::Profile::to_owned(&self) -> T
+impl<T> core::any::Any for forgeiso_engine::profiles::Profile where T: 'static + ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for forgeiso_engine::profiles::Profile where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for forgeiso_engine::profiles::Profile where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for forgeiso_engine::profiles::Profile where T: core::clone::Clone
+pub unsafe fn forgeiso_engine::profiles::Profile::clone_to_uninit(&self, dest: *mut u8)
+impl<T> core::convert::From<T> for forgeiso_engine::profiles::Profile
+pub fn forgeiso_engine::profiles::Profile::from(t: T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for forgeiso_engine::profiles::Profile where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::Profile::and<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn forgeiso_engine::profiles::Profile::or<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for forgeiso_engine::profiles::Profile
+impl<T> tracing::instrument::WithSubscriber for forgeiso_engine::profiles::Profile
+impl<T> typenum::type_operators::Same for forgeiso_engine::profiles::Profile
+pub type forgeiso_engine::profiles::Profile::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::profiles::Profile where V: ppv_lite86::types::MultiLane<T>
+pub fn forgeiso_engine::profiles::Profile::vzip(self) -> V
+pub struct forgeiso_engine::ProfileCatalog
+impl forgeiso_engine::profiles::ProfileCatalog
+pub fn forgeiso_engine::profiles::ProfileCatalog::recommended_for(distro: &str) -> alloc::vec::Vec<forgeiso_engine::profiles::ProfileKind>
+impl core::marker::Freeze for forgeiso_engine::profiles::ProfileCatalog
+impl core::marker::Send for forgeiso_engine::profiles::ProfileCatalog
+impl core::marker::Sync for forgeiso_engine::profiles::ProfileCatalog
+impl core::marker::Unpin for forgeiso_engine::profiles::ProfileCatalog
+impl core::marker::UnsafeUnpin for forgeiso_engine::profiles::ProfileCatalog
+impl core::panic::unwind_safe::RefUnwindSafe for forgeiso_engine::profiles::ProfileCatalog
+impl core::panic::unwind_safe::UnwindSafe for forgeiso_engine::profiles::ProfileCatalog
+impl<T, U> core::convert::Into<U> for forgeiso_engine::profiles::ProfileCatalog where U: core::convert::From<T>
+pub fn forgeiso_engine::profiles::ProfileCatalog::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for forgeiso_engine::profiles::ProfileCatalog where U: core::convert::Into<T>
+pub type forgeiso_engine::profiles::ProfileCatalog::Error = core::convert::Infallible
+pub fn forgeiso_engine::profiles::ProfileCatalog::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for forgeiso_engine::profiles::ProfileCatalog where U: core::convert::TryFrom<T>
+pub type forgeiso_engine::profiles::ProfileCatalog::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn forgeiso_engine::profiles::ProfileCatalog::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for forgeiso_engine::profiles::ProfileCatalog where T: 'static + ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileCatalog::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for forgeiso_engine::profiles::ProfileCatalog where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileCatalog::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for forgeiso_engine::profiles::ProfileCatalog where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileCatalog::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for forgeiso_engine::profiles::ProfileCatalog
+pub fn forgeiso_engine::profiles::ProfileCatalog::from(t: T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for forgeiso_engine::profiles::ProfileCatalog where T: ?core::marker::Sized
+pub fn forgeiso_engine::profiles::ProfileCatalog::and<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn forgeiso_engine::profiles::ProfileCatalog::or<P, B, E>(self, other: P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for forgeiso_engine::profiles::ProfileCatalog
+impl<T> tracing::instrument::WithSubscriber for forgeiso_engine::profiles::ProfileCatalog
+impl<T> typenum::type_operators::Same for forgeiso_engine::profiles::ProfileCatalog
+pub type forgeiso_engine::profiles::ProfileCatalog::Output = T
+impl<V, T> ppv_lite86::types::VZip<V> for forgeiso_engine::profiles::ProfileCatalog where V: ppv_lite86::types::MultiLane<T>
+pub fn forgeiso_engine::profiles::ProfileCatalog::vzip(self) -> V
 pub struct forgeiso_engine::ProxyConfig
 pub forgeiso_engine::ProxyConfig::http_proxy: core::option::Option<alloc::string::String>
 pub forgeiso_engine::ProxyConfig::https_proxy: core::option::Option<alloc::string::String>
