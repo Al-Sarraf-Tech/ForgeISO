@@ -10,19 +10,26 @@ const fn default_true() -> bool {
     true
 }
 
+/// Controls which security and SBOM scanning tools are invoked after the ISO is built.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct ScanPolicy {
+    /// Generate a Software Bill of Materials (SBOM) from the ISO filesystem. Enabled by default.
     #[serde(default = "default_true")]
     pub enable_sbom: bool,
+    /// Run Trivy vulnerability scanning against the ISO contents. Enabled by default.
     #[serde(default = "default_true")]
     pub enable_trivy: bool,
+    /// Run Syft + Grype for additional SBOM generation and vulnerability matching.
     #[serde(default)]
     pub enable_syft_grype: bool,
+    /// Run OpenSCAP compliance checks against the ISO filesystem.
     #[serde(default)]
     pub enable_open_scap: bool,
+    /// Scan for accidentally embedded secrets (keys, tokens, credentials). Enabled by default.
     #[serde(default = "default_true")]
     pub enable_secrets_scan: bool,
+    /// Treat secrets-scan findings as hard errors, failing the build immediately.
     #[serde(default)]
     pub strict_secrets: bool,
 }
@@ -40,12 +47,16 @@ impl Default for ScanPolicy {
     }
 }
 
+/// Controls which boot-mode and smoke tests are executed against the finished ISO.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestingPolicy {
+    /// Boot-test the ISO in BIOS (legacy) mode via QEMU. Enabled by default.
     #[serde(default = "default_true")]
     pub bios: bool,
+    /// Boot-test the ISO in UEFI mode via QEMU + OVMF. Enabled by default.
     #[serde(default = "default_true")]
     pub uefi: bool,
+    /// Run a quick installer smoke-test to confirm the ISO reaches the installer prompt.
     #[serde(default = "default_true")]
     pub smoke: bool,
 }
@@ -60,24 +71,40 @@ impl Default for TestingPolicy {
     }
 }
 
+/// Top-level configuration that drives a complete ForgeISO build.
+///
+/// Specifies the source ISO, optional injection overlay, output label, scanning
+/// and testing policies, and the YAML file from which an [`InjectConfig`](super::InjectConfig)
+/// can be constructed. Load from YAML with [`BuildConfig::from_yaml_str`] or
+/// [`BuildConfig::from_path`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildConfig {
+    /// Human-readable name for this build configuration, used in logs and output filenames.
     pub name: String,
+    /// Source ISO location — a local path or an HTTP(S) URL.
     pub source: IsoSource,
+    /// Optional directory whose contents are overlaid onto the ISO root before repack.
     #[serde(default)]
     pub overlay_dir: Option<PathBuf>,
+    /// Volume label written to the output ISO. Must be ≤32 ASCII characters with no control chars.
     #[serde(default)]
     pub output_label: Option<String>,
+    /// Software profile controlling which package set is injected. Defaults to `Minimal`.
     #[serde(default = "default_profile")]
     pub profile: ProfileKind,
+    /// When `true`, automatically run the full scanner suite after a successful build.
     #[serde(default)]
     pub auto_scan: bool,
+    /// When `true`, automatically boot-test the finished ISO. Requires `testing.smoke = true`.
     #[serde(default)]
     pub auto_test: bool,
+    /// Fine-grained control over which scanning tools are executed.
     #[serde(default)]
     pub scanning: ScanPolicy,
+    /// Fine-grained control over which boot-mode tests are executed.
     #[serde(default)]
     pub testing: TestingPolicy,
+    /// Preserve the temporary work directory after build for post-mortem inspection.
     #[serde(default)]
     pub keep_workdir: bool,
     /// If set, the downloaded ISO's SHA-256 must match before any operation proceeds.

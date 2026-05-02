@@ -38,35 +38,51 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+/// Target Linux distribution family that determines which installer format is generated.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum Distro {
+    /// Ubuntu and Ubuntu-derived systems (uses cloud-init autoinstall YAML).
     Ubuntu,
+    /// Linux Mint (uses Calamares preseed.cfg).
     Mint,
+    /// Fedora and RHEL-family systems (uses Kickstart cfg).
     Fedora,
+    /// Arch Linux (uses archinstall configuration).
     Arch,
 }
 
+/// Selects the software profile applied during ISO build.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ProfileKind {
+    /// Minimal installation: no desktop environment, server-oriented package set.
     Minimal,
+    /// Desktop installation: full GUI environment and associated tooling.
     Desktop,
 }
 
+/// Result of executing an optional scanning or testing tool during the build pipeline.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolStatus {
+    /// Tool ran and completed without errors.
     Passed,
+    /// Tool ran but reported one or more errors or policy violations.
     Failed,
+    /// Tool binary was not found or could not be executed on this host.
     Unavailable,
+    /// Tool was skipped because its corresponding policy flag was disabled.
     Skipped,
 }
 
+/// Location of the source ISO: either a local filesystem path or an HTTP(S) URL.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum IsoSource {
+    /// Path to a locally accessible ISO file.
     Path(PathBuf),
+    /// HTTP or HTTPS URL from which the ISO will be downloaded before use.
     Url(String),
 }
 
@@ -77,6 +93,8 @@ impl Default for IsoSource {
 }
 
 impl IsoSource {
+    /// Parse a raw string into an `IsoSource`, treating `http://` and `https://` prefixes as URLs
+    /// and anything else as a local filesystem path.
     #[must_use]
     pub fn from_raw(input: impl Into<String>) -> Self {
         let raw = input.into();
@@ -87,6 +105,8 @@ impl IsoSource {
         }
     }
 
+    /// Return a human-readable string representation: the URL string for remote sources, or the
+    /// path converted via [`std::path::Path::display`] for local paths.
     #[must_use]
     pub fn display_value(&self) -> String {
         match self {
@@ -95,6 +115,7 @@ impl IsoSource {
         }
     }
 
+    /// Return `true` if the source is an HTTP(S) URL that must be downloaded before use.
     #[must_use]
     pub fn is_remote(&self) -> bool {
         matches!(self, Self::Url(_))

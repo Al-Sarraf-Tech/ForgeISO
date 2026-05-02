@@ -12,6 +12,11 @@ use super::helpers::{ensure_linux_host, ovmf_path, require_tools};
 use super::{ForgeIsoEngine, ScanResult, TestResult};
 
 impl ForgeIsoEngine {
+    /// Run security scans (SBOM, vulnerability, secrets) on `artifact` using the
+    /// policy in `policy_file`, writing a `scan-report.json` to `out_dir`.
+    ///
+    /// When `policy_file` is `None`, the default [`crate::config::ScanPolicy`] is used.
+    /// Returns an error if the policy file cannot be read or any scan fails fatally.
     pub async fn scan(
         &self,
         artifact: &Path,
@@ -44,6 +49,13 @@ impl ForgeIsoEngine {
         })
     }
 
+    /// Boot-smoke-test `iso` with QEMU: run BIOS and/or UEFI smoke tests,
+    /// capturing serial logs under `out_dir`.
+    ///
+    /// Each boot attempt runs for up to 30 seconds; QEMU is killed and the
+    /// test is marked as passed unless a known boot-failure string appears in the
+    /// serial log. Returns an error when QEMU or OVMF firmware is missing, or
+    /// when the ISO file does not exist.
     pub async fn test_iso(
         &self,
         iso: &Path,

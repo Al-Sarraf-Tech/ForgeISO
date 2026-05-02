@@ -20,6 +20,10 @@ mod configure;
 mod place;
 
 impl ForgeIsoEngine {
+    /// Inject a distro-specific autoinstall configuration into the source ISO and
+    /// repack it into a new bootable ISO at `out`.
+    ///
+    /// Equivalent to `inject_autoinstall_cancellable(cfg, out, None)`.
     pub async fn inject_autoinstall(
         &self,
         cfg: &crate::config::InjectConfig,

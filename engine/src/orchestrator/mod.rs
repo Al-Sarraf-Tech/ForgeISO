@@ -24,14 +24,17 @@
 //! and
 //! [`ADR 0012`](https://github.com/Al-Sarraf-Tech/ForgeISO/blob/main/docs/adr/0012-cancellation-and-circuit-breakers.md).
 
+/// ISO construction pipeline: extract source ISO, inject configs, repack with xorriso/mksquashfs.
 pub mod build;
 pub mod circuit_breaker;
 mod diff;
 mod doctor;
+/// Shared utility functions used by orchestrator sub-modules.
 pub mod helpers;
 mod inject;
 mod report;
 mod scan_test;
+/// SHA-256 verification, ISO-9660 compliance checking, and expected-hash gating.
 pub mod verify;
 
 use std::collections::BTreeMap;
@@ -52,65 +55,105 @@ use helpers::download_filename;
 
 // ── Public result types ──────────────────────────────────────────────────────
 
+/// Structured output of [`ForgeIsoEngine::doctor`]: host environment summary
+/// and per-distro tooling readiness.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DoctorReport {
+    /// Operating system name as reported by `std::env::consts::OS` (e.g. `"linux"`).
     pub host_os: String,
+    /// CPU architecture as reported by `std::env::consts::ARCH` (e.g. `"x86_64"`).
     pub host_arch: String,
+    /// True when the host OS is Linux; false means build/test flows are unsupported.
     pub linux_supported: bool,
+    /// Map of well-known tool names to their presence (`true` = found on `PATH`).
     pub tooling: BTreeMap<String, bool>,
+    /// Advisory messages describing missing tools or unsupported host configurations.
     pub warnings: Vec<String>,
+    /// RFC 3339 timestamp when the doctor check was performed.
     pub timestamp: String,
     /// Per-distro inject readiness — keys: ubuntu, fedora, mint, arch, scan, test.
     pub distro_readiness: BTreeMap<String, bool>,
 }
 
+/// Materialised result of a [`ForgeIsoEngine::build`] or
+/// [`ForgeIsoEngine::inject_autoinstall`] invocation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildResult {
+    /// Root of the temporary workspace directory created for this build.
     pub workspace_root: PathBuf,
+    /// Directory where the final ISO and report files are written.
     pub output_dir: PathBuf,
+    /// Path to the JSON build report written to `output_dir`.
     pub report_json: PathBuf,
+    /// Path to the HTML build report written to `output_dir`.
     pub report_html: PathBuf,
+    /// All output artifacts produced by the build (typically the repacked `.iso`).
     pub artifacts: Vec<PathBuf>,
+    /// Metadata of the final output ISO (distro, release, SHA-256, etc.).
     pub iso: IsoMetadata,
     /// Resolved local path of the *input* ISO used for this operation.
     /// Always a local filesystem path (URLs are resolved/downloaded before use).
     pub source_iso: PathBuf,
 }
 
+/// Result of a [`ForgeIsoEngine::scan`] invocation: the scan summary and the
+/// path of the JSON report written to disk.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanResult {
+    /// Aggregated scan findings including SBOM, vulnerability, and secrets reports.
     pub report: crate::scanner::ScanSummary,
+    /// Path to the `scan-report.json` file written in the caller-supplied output directory.
     pub report_json: PathBuf,
 }
 
+/// Result of a [`ForgeIsoEngine::test_iso`] boot smoke-test run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestResult {
+    /// True when the BIOS smoke test was requested and completed successfully.
     pub bios: bool,
+    /// True when the UEFI smoke test was requested and completed successfully.
     pub uefi: bool,
+    /// Paths of the serial-log files captured from each QEMU boot attempt.
     pub logs: Vec<PathBuf>,
+    /// Overall pass/fail — false when any log is empty or contains known boot-failure strings.
     pub passed: bool,
 }
 
+/// Result of a [`ForgeIsoEngine::verify`] checksum verification.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifyResult {
+    /// Basename of the ISO file that was verified.
     pub filename: String,
+    /// Expected SHA-256 hex digest from the upstream `SHA256SUMS` file, or an
+    /// explanatory message when no upstream source was available.
     pub expected: String,
+    /// Actual SHA-256 hex digest computed over the local file.
     pub actual: String,
+    /// True when `expected` and `actual` are identical hex digests.
     pub matched: bool,
 }
 
+/// A single file that differs between the base and target ISOs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffEntry {
+    /// Absolute path of the file within the ISO filesystem (e.g. `/EFI/boot/bootx64.efi`).
     pub path: String,
+    /// Size of the file in the base ISO, in bytes.
     pub base_size: u64,
+    /// Size of the file in the target ISO, in bytes.
     pub target_size: u64,
 }
 
+/// Structural diff between two ISOs produced by [`ForgeIsoEngine::diff_isos`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IsoDiff {
+    /// Paths present in the target ISO but absent from the base ISO.
     pub added: Vec<String>,
+    /// Paths present in the base ISO but absent from the target ISO.
     pub removed: Vec<String>,
+    /// Files present in both ISOs whose sizes differ.
     pub modified: Vec<DiffEntry>,
+    /// Number of files with identical paths and sizes in both ISOs.
     pub unchanged: usize,
 }
 
@@ -138,16 +181,26 @@ pub struct Iso9660Compliance {
     pub error: Option<String>,
 }
 
+/// Captured output from a subprocess invocation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandOutput {
+    /// Name of the program that was executed (e.g. `"xorriso"`).
     pub program: String,
+    /// Exit status code; 0 indicates success.
     pub status: i32,
+    /// Captured standard output decoded as lossy UTF-8.
     pub stdout: String,
+    /// Captured standard error decoded as lossy UTF-8.
     pub stderr: String,
 }
 
 // ── ForgeIsoEngine struct + core methods ─────────────────────────────────────
 
+/// Central orchestrator that ties every engine pipeline together.
+///
+/// Front-ends construct a single `ForgeIsoEngine` and hold it for the
+/// lifetime of the session. The type is `Clone` (cheap — the internal event
+/// bus is `Arc`-backed) so handlers can be distributed across async tasks.
 #[derive(Clone)]
 pub struct ForgeIsoEngine {
     events: broadcast::Sender<EngineEvent>,
@@ -160,11 +213,15 @@ impl Default for ForgeIsoEngine {
 }
 
 impl ForgeIsoEngine {
+    /// Construct a new engine with an internal event broadcast channel
+    /// of capacity 2048.
     pub fn new() -> Self {
         let (events, _) = broadcast::channel(2048);
         Self { events }
     }
 
+    /// Subscribe to the engine event stream; returns a new [`broadcast::Receiver`]
+    /// that receives all events emitted from this point forward.
     pub fn subscribe(&self) -> broadcast::Receiver<EngineEvent> {
         self.events.subscribe()
     }
@@ -173,6 +230,11 @@ impl ForgeIsoEngine {
         let _ = self.events.send(event);
     }
 
+    /// Resolve and inspect an ISO source, returning its metadata.
+    ///
+    /// `source` may be a local filesystem path or an HTTP(S) URL. When a URL
+    /// is supplied and `cache_dir` is `None`, the default XDG cache directory
+    /// is used. Returns an error if the source cannot be found or read.
     pub async fn inspect_source(
         &self,
         source: &str,

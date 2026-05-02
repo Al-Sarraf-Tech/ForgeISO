@@ -5,6 +5,12 @@ use crate::events::{EngineEvent, EventPhase};
 use super::{DoctorReport, ForgeIsoEngine};
 
 impl ForgeIsoEngine {
+    /// Run a prerequisite check and return a [`DoctorReport`] describing the
+    /// host OS, CPU architecture, and presence of required external tools on `PATH`.
+    ///
+    /// No subprocess is spawned — tool presence is checked via `which::which`.
+    /// This method never fails; missing tools or an unsupported host are captured
+    /// as warnings inside the returned report.
     #[allow(clippy::unused_async)] // async kept for API consistency
     pub async fn doctor(&self) -> DoctorReport {
         self.emit(EngineEvent::info(

@@ -8,6 +8,10 @@ use crate::report::BuildReport;
 use super::ForgeIsoEngine;
 
 impl ForgeIsoEngine {
+    /// Re-render an existing `build-report.json` from `build_dir` into the
+    /// requested `format` (`"json"` or `"html"`), returning the output path.
+    ///
+    /// Returns [`EngineError::InvalidConfig`] for unsupported format strings.
     #[allow(clippy::unused_async)] // async kept for API consistency
     pub async fn report(&self, build_dir: &Path, format: &str) -> EngineResult<PathBuf> {
         let input = build_dir.join("build-report.json");
@@ -41,6 +45,10 @@ impl ForgeIsoEngine {
         Ok(output)
     }
 
+    /// Inspect a local ISO file and return its metadata as a JSON value.
+    ///
+    /// Wraps [`crate::iso::inspect_iso`]; the result is serialised to
+    /// `serde_json::Value` for front-end consumption.
     #[allow(clippy::unused_async)] // async kept for API consistency
     pub async fn inspect_iso(&self, iso: &Path) -> EngineResult<serde_json::Value> {
         let metadata = inspect_iso(iso, SourceKind::LocalPath, iso.display().to_string())?;

@@ -11,6 +11,12 @@ use super::{ForgeIsoEngine, Iso9660Compliance, VerifyResult};
 use crate::config::IsoSource;
 
 impl ForgeIsoEngine {
+    /// Verify the SHA-256 checksum of `source` against an upstream `SHA256SUMS` file.
+    ///
+    /// `source` may be a local path or an HTTP(S) URL. When `sums_url` is `None`
+    /// the method attempts to derive the upstream checksums URL from the ISO metadata
+    /// (currently supported for Ubuntu releases). When no upstream source is available
+    /// the computed hash is returned without a match verdict.
     pub async fn verify(&self, source: &str, sums_url: Option<&str>) -> EngineResult<VerifyResult> {
         // Top-level span for verify. Attached via `Instrument` so the future
         // remains `Send` and can be `tokio::spawn`'d from the TUI worker.

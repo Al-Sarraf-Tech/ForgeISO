@@ -8,6 +8,10 @@ use crate::error::{EngineError, EngineResult};
 
 use crate::orchestrator::CommandOutput;
 
+/// Run `program` synchronously, capture stdout/stderr, and return a [`CommandOutput`].
+///
+/// Returns [`EngineError::Runtime`] when the program cannot be launched or exits
+/// with a non-zero status. `cwd` sets the working directory when `Some`.
 pub fn run_command_capture(
     program: &str,
     args: &[String],

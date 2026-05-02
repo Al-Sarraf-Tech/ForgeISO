@@ -32,6 +32,10 @@ fn mksquashfs_breaker() -> &'static Arc<CircuitBreaker> {
 }
 
 impl ForgeIsoEngine {
+    /// Load a [`BuildConfig`] from `config_path` and run a full ISO build into `out_dir`.
+    ///
+    /// Convenience wrapper around [`Self::build`] for callers that hold a config file path
+    /// rather than a pre-parsed struct. Returns an error if the config file is missing or invalid.
     pub async fn build_from_file(
         &self,
         config_path: &Path,
@@ -41,6 +45,9 @@ impl ForgeIsoEngine {
         self.build(&cfg, out_dir).await
     }
 
+    /// Run a full ISO build from `cfg` into `out_dir`, without cancellation support.
+    ///
+    /// Equivalent to `build_cancellable(cfg, out_dir, None)`.
     pub async fn build(&self, cfg: &BuildConfig, out_dir: &Path) -> EngineResult<BuildResult> {
         self.build_cancellable(cfg, out_dir, None).await
     }

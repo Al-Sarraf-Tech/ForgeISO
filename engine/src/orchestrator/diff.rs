@@ -6,6 +6,12 @@ use crate::events::{EngineEvent, EventPhase};
 use super::{DiffEntry, ForgeIsoEngine, IsoDiff};
 
 impl ForgeIsoEngine {
+    /// Compare the file trees of two ISOs and return an [`IsoDiff`] summarising
+    /// added, removed, modified (size-changed), and unchanged entries.
+    ///
+    /// Uses `xorriso -find / -type f -exec lsdl` to extract per-file sizes;
+    /// falls back to path-only listing (all sizes reported as 0) when the lsdl
+    /// output is empty. Returns an error if xorriso is not found.
     #[allow(clippy::unused_async)] // async kept for API consistency
     pub async fn diff_isos(&self, base: &Path, target: &Path) -> EngineResult<IsoDiff> {
         self.emit(EngineEvent::info(
