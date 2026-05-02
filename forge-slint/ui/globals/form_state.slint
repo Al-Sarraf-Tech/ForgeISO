@@ -8,6 +8,10 @@ export global FormState {
     in-out property <string>  selected-preset;
     in-out property <string>  selected-preset-name;
     in-out property <string>  detected-distro;
+    // Configuration profile id; matches engine ProfileKind serialization
+    // ("server-default" | "server-hardened" | "desktop-developer" | "kiosk"
+    // | "minimal-cloud"). Defaults to ServerDefault.
+    in-out property <string>  selected-profile: "server-default";
 
     // ── Configure step ─────────────────────────────────────────────────────
     in-out property <string>  distro;

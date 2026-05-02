@@ -7,6 +7,7 @@ mod handlers;
 mod jobs;
 mod obs;
 mod persist;
+mod profiles;
 mod state;
 mod worker;
 
