@@ -441,6 +441,172 @@ impl ForgeApp {
                 fs.set_sudo_nopasswd(v);
             }
         }
+
+        // Engine ProfileCatalog produces a richer per-distro InjectConfig
+        // (50+ fields) than the GUI stub overrides. Layer those on top.
+        self.apply_engine_profile(w, profile, &distro);
+    }
+
+    /// Apply the engine ProfileCatalog's per-distro per-profile InjectConfig.
+    ///
+    /// The stub `apply_profile_overrides` only knows ~7 fields. The engine
+    /// ProfileCatalog::Profile::new(kind).populate(distro, base) returns a
+    /// full InjectConfig with the per-distro idiosyncrasies (sudo group,
+    /// service names, package mappings) baked in. This method takes that
+    /// output and writes every meaningful field to FormState — but only
+    /// for fields the user hasn't touched (per `edited_fields`).
+    fn apply_engine_profile(&mut self, w: &AppWindow, local: profiles::ProfileKind, distro: &str) {
+        use forgeiso_engine::config::InjectConfig;
+        use forgeiso_engine::profiles::{Profile as EProfile, ProfileKind as EKind};
+
+        let engine_kind = match local {
+            profiles::ProfileKind::ServerDefault => EKind::ServerDefault,
+            profiles::ProfileKind::ServerHardened => EKind::ServerHardened,
+            profiles::ProfileKind::DesktopDeveloper => EKind::DesktopDeveloper,
+            profiles::ProfileKind::Kiosk => EKind::Kiosk,
+            profiles::ProfileKind::MinimalCloud => EKind::MinimalCloud,
+        };
+        let cfg: InjectConfig =
+            EProfile::new(engine_kind).populate(distro, InjectConfig::default());
+
+        let fs = w.global::<FormState>();
+        let edited = &self.edited_fields;
+        let join_lines = |v: &[String]| -> String { v.join("\n") };
+        let join_space = |v: &[String]| -> String { v.join(" ") };
+
+        // ── Bool toggles ────────────────────────────────────────────────────
+        if !edited.contains("ssh_install_server") {
+            fs.set_ssh_install_server(cfg.ssh.install_server.unwrap_or(true));
+        }
+        if !edited.contains("docker") && cfg.containers.docker {
+            fs.set_docker(true);
+        }
+        if !edited.contains("podman") && cfg.containers.podman {
+            fs.set_podman(true);
+        }
+        if !edited.contains("firewall_enabled") {
+            fs.set_firewall_enabled(cfg.firewall.enabled);
+        }
+        if !edited.contains("encrypt") && cfg.encrypt {
+            fs.set_encrypt(true);
+        }
+        if !edited.contains("no_user_interaction") && cfg.no_user_interaction {
+            fs.set_no_user_interaction(true);
+        }
+
+        // ── String fields with safe-to-overwrite-when-non-empty semantics ───
+        let set_if_unedited =
+            |field: &str, value: String, setter: &dyn Fn(&FormState, slint::SharedString)| {
+                if !edited.contains(field) && !value.is_empty() {
+                    setter(&fs, value.into());
+                }
+            };
+        // Identity / locale
+        if let Some(tz) = &cfg.timezone {
+            set_if_unedited("timezone", tz.clone(), &|fs, v| fs.set_timezone(v));
+        }
+        if let Some(lc) = &cfg.locale {
+            set_if_unedited("locale", lc.clone(), &|fs, v| fs.set_locale(v));
+        }
+        if let Some(kb) = &cfg.keyboard_layout {
+            set_if_unedited("keyboard_layout", kb.clone(), &|fs, v| {
+                fs.set_keyboard_layout(v)
+            });
+        }
+        if let Some(sl) = &cfg.storage_layout {
+            set_if_unedited("storage_layout", sl.clone(), &|fs, v| {
+                fs.set_storage_layout(v)
+            });
+        }
+        // Network
+        if !cfg.network.dns_servers.is_empty() {
+            set_if_unedited(
+                "dns_servers",
+                cfg.network.dns_servers.join(", "),
+                &|fs, v| fs.set_dns_servers(v),
+            );
+        }
+        if !cfg.network.ntp_servers.is_empty() {
+            set_if_unedited(
+                "ntp_servers",
+                cfg.network.ntp_servers.join(", "),
+                &|fs, v| fs.set_ntp_servers(v),
+            );
+        }
+        // Packages
+        if !cfg.extra_packages.is_empty() {
+            set_if_unedited("packages", join_space(&cfg.extra_packages), &|fs, v| {
+                fs.set_packages(v)
+            });
+        }
+        // Services
+        if !cfg.enable_services.is_empty() {
+            set_if_unedited(
+                "enable_services",
+                join_lines(&cfg.enable_services),
+                &|fs, v| fs.set_enable_services(v),
+            );
+        }
+        if !cfg.disable_services.is_empty() {
+            set_if_unedited(
+                "disable_services",
+                join_lines(&cfg.disable_services),
+                &|fs, v| fs.set_disable_services(v),
+            );
+        }
+        // Firewall
+        if let Some(p) = &cfg.firewall.default_policy {
+            set_if_unedited("firewall_policy", p.clone(), &|fs, v| {
+                fs.set_firewall_policy(v)
+            });
+        }
+        if !cfg.firewall.allow_ports.is_empty() {
+            set_if_unedited(
+                "allow_ports",
+                cfg.firewall.allow_ports.join(" "),
+                &|fs, v| fs.set_allow_ports(v),
+            );
+        }
+        if !cfg.firewall.deny_ports.is_empty() {
+            set_if_unedited("deny_ports", cfg.firewall.deny_ports.join(" "), &|fs, v| {
+                fs.set_deny_ports(v)
+            });
+        }
+        // User access
+        if !cfg.user.groups.is_empty() {
+            set_if_unedited("user_groups", join_lines(&cfg.user.groups), &|fs, v| {
+                fs.set_user_groups(v)
+            });
+        }
+        if let Some(sh) = &cfg.user.shell {
+            set_if_unedited("user_shell", sh.clone(), &|fs, v| fs.set_user_shell(v));
+        }
+        if !edited.contains("sudo_nopasswd") {
+            fs.set_sudo_nopasswd(cfg.user.sudo_nopasswd);
+        }
+        if !cfg.user.sudo_commands.is_empty() {
+            set_if_unedited(
+                "sudo_commands",
+                join_lines(&cfg.user.sudo_commands),
+                &|fs, v| fs.set_sudo_commands(v),
+            );
+        }
+        // Sysctl
+        if !cfg.sysctl.is_empty() {
+            let sysctl_lines: Vec<String> =
+                cfg.sysctl.iter().map(|(k, v)| format!("{k}={v}")).collect();
+            set_if_unedited("sysctl_pairs", sysctl_lines.join("\n"), &|fs, v| {
+                fs.set_sysctl_pairs(v)
+            });
+        }
+        // Late commands (run AFTER install — typical for hardening / setup)
+        if !cfg.extra_late_commands.is_empty() {
+            set_if_unedited(
+                "late_commands",
+                join_lines(&cfg.extra_late_commands),
+                &|fs, v| fs.set_late_commands(v),
+            );
+        }
     }
 
     /// Mark a field as user-edited so defaults won't overwrite it.
