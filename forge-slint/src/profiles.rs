@@ -65,10 +65,9 @@ impl ProfileKind {
 
     /// Returns true if this profile is the recommended pairing for the
     /// given preset id. When the engine catalog ships, this will delegate
-    /// to `forgeiso_engine::profiles::ProfileKind::recommended_for`.
-    // Badge wiring lands in the next commit; the recommended_for mapping is
-    // already covered by unit tests so it is exercised at build time.
-    #[allow(dead_code)]
+    /// to `forgeiso_engine::profiles::ProfileCatalog::recommended_for`
+    /// (the engine returns a Vec of recommended profiles per preset; we
+    /// reverse the lookup here to ask "is preset X recommended for Self?").
     pub fn recommended_for(self, preset_id: &str) -> bool {
         match self {
             ProfileKind::ServerDefault => matches!(

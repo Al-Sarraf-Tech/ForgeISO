@@ -8,6 +8,11 @@ export struct PresetCard {
     emoji: string,
     name: string,
     desc: string,
+    // True when this preset is recommended by the currently-selected
+    // configuration profile (per ProfileKind::recommended_for). Drives
+    // the corner star badge on DistroCard. The Rust side recomputes the
+    // model when the active profile changes.
+    recommended: bool,
 }
 
 // One entry in the configuration-profile chip row. `id` matches the engine
@@ -163,6 +168,42 @@ component DistroCard inherits Rectangle {
         enabled: !running;
         mouse-cursor: running ? MouseCursor.default : MouseCursor.pointer;
         clicked => { root.clicked(); }
+    }
+
+    // ── Recommended badge ────────────────────────────────────────────────
+    // Top-right corner pill. Only renders when the active profile lists
+    // this preset in its recommended set. Uses Palette.amber-soft tokens
+    // so contrast stays AA in both dark + light themes.
+    if card.recommended: Rectangle {
+        x: parent.width - self.width - 6px;
+        y: 6px;
+        width: 116px;
+        height: 18px;
+        border-radius: 9px;
+        background: Palette.amber-soft;
+        border-width: 1px;
+        border-color: Palette.amber-soft-border;
+        HorizontalLayout {
+            spacing: 3px;
+            padding-left: Sizes.space-2;
+            padding-right: Sizes.space-2;
+            alignment: center;
+            // Star glyph (U+2605). Renders crisp at 10px on every backend.
+            Text {
+                text: "\u{2605}";
+                font-size: 10px;
+                color: Palette.amber;
+                vertical-alignment: center;
+            }
+            Text {
+                text: "RECOMMENDED";
+                font-size: Sizes.font-2xs;
+                font-weight: 700;
+                color: Palette.amber;
+                letter-spacing: 0.6px;
+                vertical-alignment: center;
+            }
+        }
     }
 }
 

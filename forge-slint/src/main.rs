@@ -18,7 +18,7 @@ use std::sync::Arc;
 use slint::ComponentHandle;
 
 use app::{ForgeApp, APP};
-use config::{make_preset_cards, make_profile_chips, preset_display_name};
+use config::{make_preset_cards_for, make_profile_chips, preset_display_name};
 use forgeiso_engine::ForgeIsoEngine;
 use handlers::wire_all_handlers;
 use persist::{load_state, save_state};
@@ -87,7 +87,11 @@ fn main() -> anyhow::Result<()> {
     // Populate window from persisted state.
     restore_inject(&win, &saved.inject);
     restore_verify(&win, &saved.verify);
-    let (presets_row1, presets_row2) = make_preset_cards();
+    // Build the preset grid using the *restored* profile so the recommended
+    // star badge already reflects the user's persisted selection on launch.
+    let restored_profile = profiles::ProfileKind::from_id(&saved.inject.selected_profile)
+        .unwrap_or_else(profiles::ProfileKind::default_kind);
+    let (presets_row1, presets_row2) = make_preset_cards_for(restored_profile);
     win.set_presets_row1(presets_row1);
     win.set_presets_row2(presets_row2);
     win.set_profile_chips(make_profile_chips());

@@ -13,64 +13,81 @@ use crate::{clear_build_results, AppState, AppWindow, FormState, PresetCard, Pro
 
 // ── Preset cards shown on Step 1 ─────────────────────────────────────────────
 
-/// Returns (row1, row2) preset card models for the two-row distro grid.
-pub fn make_preset_cards() -> (ModelRc<PresetCard>, ModelRc<PresetCard>) {
-    let row1: Vec<PresetCard> = vec![
-        PresetCard {
-            id: "ubuntu-server-lts".into(),
-            emoji: "\u{1F427}".into(), // 🐧
-            name: "Ubuntu Server".into(),
-            desc: "LTS Server".into(),
-        },
-        PresetCard {
-            id: "fedora-server".into(),
-            emoji: "\u{1F3A9}".into(), // 🎩
-            name: "Fedora Server".into(),
-            desc: "Latest stable".into(),
-        },
-        PresetCard {
-            id: "linux-mint-cinnamon".into(),
-            emoji: "\u{1F33F}".into(), // 🌿
-            name: "Linux Mint".into(),
-            desc: "Cinnamon".into(),
-        },
-        PresetCard {
-            id: "arch-linux".into(),
-            emoji: "\u{2699}\u{FE0F}".into(), // ⚙️
-            name: "Arch Linux".into(),
-            desc: "Rolling release".into(),
-        },
-    ];
-    let row2: Vec<PresetCard> = vec![
-        PresetCard {
-            id: "rocky-linux".into(),
-            emoji: "\u{1FAA8}".into(), // 🪨
-            name: "Rocky Linux".into(),
-            desc: "RHEL compatible".into(),
-        },
-        PresetCard {
-            id: "almalinux".into(),
-            emoji: "\u{1F9AC}".into(), // 🦬
-            name: "AlmaLinux".into(),
-            desc: "RHEL compatible".into(),
-        },
-        PresetCard {
-            id: "centos-stream".into(),
-            emoji: "\u{1F534}".into(), // 🔴
-            name: "CentOS Stream".into(),
-            desc: "RHEL upstream".into(),
-        },
-        PresetCard {
-            id: "ubuntu-server-jammy".into(),
-            emoji: "\u{1F427}".into(), // 🐧
-            name: "Ubuntu 22.04".into(),
-            desc: "Server Jammy LTS".into(),
-        },
-    ];
+/// One row of the distro grid, identified by id-only so the row layout
+/// stays decoupled from the per-profile recommended flag. Returns the
+/// fully-formed `PresetCard`s with `recommended` filled in for `profile`.
+fn preset_row(profile: ProfileKind, ids: &[(&str, &str, &str, &str)]) -> Vec<PresetCard> {
+    ids.iter()
+        .map(|(id, emoji, name, desc)| PresetCard {
+            id: (*id).into(),
+            emoji: (*emoji).into(),
+            name: (*name).into(),
+            desc: (*desc).into(),
+            recommended: profile.recommended_for(id),
+        })
+        .collect()
+}
+
+/// Returns (row1, row2) preset card models for the two-row distro grid,
+/// with the recommended flag pre-computed for `profile`. Use
+/// [`refresh_preset_cards`] to rebuild + assign the model when the active
+/// profile changes.
+pub fn make_preset_cards_for(profile: ProfileKind) -> (ModelRc<PresetCard>, ModelRc<PresetCard>) {
+    let row1 = preset_row(
+        profile,
+        &[
+            (
+                "ubuntu-server-lts",
+                "\u{1F427}",
+                "Ubuntu Server",
+                "LTS Server",
+            ),
+            (
+                "fedora-server",
+                "\u{1F3A9}",
+                "Fedora Server",
+                "Latest stable",
+            ),
+            ("linux-mint-cinnamon", "\u{1F33F}", "Linux Mint", "Cinnamon"),
+            (
+                "arch-linux",
+                "\u{2699}\u{FE0F}",
+                "Arch Linux",
+                "Rolling release",
+            ),
+        ],
+    );
+    let row2 = preset_row(
+        profile,
+        &[
+            ("rocky-linux", "\u{1FAA8}", "Rocky Linux", "RHEL compatible"),
+            ("almalinux", "\u{1F9AC}", "AlmaLinux", "RHEL compatible"),
+            (
+                "centos-stream",
+                "\u{1F534}",
+                "CentOS Stream",
+                "RHEL upstream",
+            ),
+            (
+                "ubuntu-server-jammy",
+                "\u{1F427}",
+                "Ubuntu 22.04",
+                "Server Jammy LTS",
+            ),
+        ],
+    );
     (
         ModelRc::new(VecModel::from(row1)),
         ModelRc::new(VecModel::from(row2)),
     )
+}
+
+/// Recompute the recommended flag on every preset card for the given
+/// profile and assign the new models to the window.
+pub fn refresh_preset_cards(w: &AppWindow, profile: ProfileKind) {
+    let (row1, row2) = make_preset_cards_for(profile);
+    w.set_presets_row1(row1);
+    w.set_presets_row2(row2);
 }
 
 pub fn preset_display_name(id: &str) -> Option<&'static str> {
