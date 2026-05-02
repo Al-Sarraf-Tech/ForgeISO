@@ -2,10 +2,13 @@
 
 All notable changes to ForgeISO. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+Release process: [docs/runbook-release.md](docs/runbook-release.md). Stability commitment: [STABILITY.md](STABILITY.md). Deprecation policy: [DEPRECATION.md](DEPRECATION.md).
 
 ## [Unreleased]
 
 ### Added
+- **Tag-triggered release workflow** (1.0 readiness, Round 4) at `.github/workflows/release-build.yml`. Fires on push of any `v*.*.*` tag and produces a fully-signed GitHub Release: builds CLI/TUI/forge-slint binaries, runs `scripts/release/make-packages.sh` (RPM + DEB + pacman + tarball + checksums), generates CycloneDX + SPDX SBOMs via syft, signs every artifact through `scripts/sign-release.sh` (cosign keyless OIDC against Sigstore Fulcio with Rekor transparency log entries), runs `scripts/verify-release.sh` as a smoke test before publish, and uploads everything via `softprops/action-gh-release` (SHA-pinned). Per ADR 0010 the keyless flow is the desktop-tool equivalent of SLSA L2/L3 build provenance — no signing key exists to steal, identity is tied to the GitHub Actions OIDC subject, and every signing event is publicly auditable in Rekor. Honors all CLAUDE.md absolute rules (no `actions/attest-build-provenance`, self-hosted `[self-hosted, rust-slim]` runner, no AI co-author attribution). All workflow expressions that originate outside the file are routed through `env:` to defuse the GitHub Actions injection class.
+
 - **Real-LTS integration test** (1.0 readiness, Round 3). New `engine/tests/real_lts_integration.rs` exercises `ForgeIsoEngine::build` end-to-end against the actual Ubuntu 24.04.4 LTS Server installer ISO — the unsquashfs/mksquashfs path the synthetic test matrix only stubs. Double-gated: `#[ignore]` plus `FORGEISO_RUN_REAL_LTS=1` env var. Cached ISO is verified against a pinned SHA-256 before the build runs, and the resulting ISO is checked for the ISO-9660 `CD001` magic. Helper script `tests/fixtures/download-real-lts.sh` populates the cache (verifies SHA-256 after download).
 - **Engine rustdoc** at the crate root and on every top-level `pub mod` (autoinstall, config, error, events, iso, kickstart, orchestrator, product, report, scanner, workspace). Sets the stage for a `#![warn(missing_docs)]` lint at 1.0; current pub-item rustdoc gap reduced from 439 to 426 warnings (12 highest-blast-radius items filled first; the remaining 426 are individual fields/variants/methods to fill in subsequent rounds).
 

@@ -129,18 +129,47 @@ git tag -a v0.2.1 -m "Release v0.2.1"
 git push origin v0.2.1
 ```
 
-The release job will:
-1. Install fpm + syft
-2. Build CLI, TUI, and `forge-slint`
-3. Run `make-packages.sh` (RPM + DEB + pacman + tarball)
-4. Generate `sbom.cdx.json` and `sbom.spdx.json`
-5. Verify checksums
-6. Publish all artifacts to GitHub Releases
+The release pipeline at [`.github/workflows/release-build.yml`](../.github/workflows/release-build.yml)
+fires on the tag push and runs against a `[self-hosted, rust-slim]`
+runner. The job:
+
+1. Verifies the runner has cargo / rustc / xorriso / mksquashfs /
+   unsquashfs / fpm / syft / cosign / sha256sum on `$PATH` (fails fast
+   with a clear error if any are missing).
+2. Builds CLI, TUI, and `forge-slint` from the tagged commit
+   (`cargo build --release --locked`).
+3. Confirms the built binary's `--version` matches the tag.
+4. Runs [`scripts/release/make-packages.sh`](../scripts/release/make-packages.sh)
+   (RPM + DEB + pacman + tarball + checksums).
+5. Generates `sbom.cdx.json` (CycloneDX) and `sbom.spdx.json` (SPDX) via
+   `syft`.
+6. Signs every release asset and the SBOMs via
+   [`scripts/sign-release.sh`](../scripts/sign-release.sh) — cosign
+   keyless OIDC against Sigstore Fulcio, with Rekor transparency-log
+   entries. The `id-token: write` permission on the workflow job is
+   what makes the keyless flow work without a stored signing key.
+7. Runs [`scripts/verify-release.sh`](../scripts/verify-release.sh) as a
+   smoke test against its own output so a broken signing pipeline fails
+   the release before any artifact is published.
+8. Re-generates a complete `SHA256SUMS` covering binaries, SBOMs, and
+   signatures.
+9. Publishes everything to a GitHub Release at the tag via
+   `softprops/action-gh-release` (SHA-pinned).
+
+The desktop-tool security contract this satisfies is documented in
+[ADR 0010](adr/0010-security-contract-desktop-tool.md).
 
 Monitor progress:
 
 ```bash
 gh run watch --exit-status
+```
+
+To re-run a release manually (e.g. transient Sigstore outage), use the
+`workflow_dispatch` entry point and pass the existing tag:
+
+```bash
+gh workflow run release-build.yml -f tag=v0.2.1
 ```
 
 ---

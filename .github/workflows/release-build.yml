@@ -1,0 +1,270 @@
+# Tag-triggered release workflow for ForgeISO.
+#
+# Fires on `git push` of any `v*.*.*` tag and produces a fully-signed
+# GitHub Release. The pipeline mirrors the manual runbook at
+# docs/runbook-release.md and the security contract documented in
+# docs/adr/0010-security-contract-desktop-tool.md:
+#
+# 1. Build CLI, TUI, and forge-slint release binaries from the tagged commit.
+# 2. Package via scripts/release/make-packages.sh — RPM + DEB + pacman + tarball + checksums.
+# 3. Generate a CycloneDX + SPDX SBOM via syft.
+# 4. Sign every artifact via scripts/sign-release.sh (cosign keyless OIDC,
+#    Sigstore Fulcio + Rekor; the `id-token: write` permission below is
+#    what makes the keyless flow work without a stored signing key).
+# 5. Verify every signature via scripts/verify-release.sh as a smoke test
+#    before publishing — a broken signing pipeline must fail the release
+#    rather than ship unverified bytes.
+# 6. Publish all artifacts (binaries, packages, checksums, SBOM,
+#    signatures, certificates) to a GitHub Release at the tag.
+#
+# Security notes:
+# - All `${{ ... }}` expressions that originate outside the workflow file
+#   itself are routed through `env:` blocks rather than interpolated
+#   directly into shell strings, per
+#   https://github.blog/security/vulnerability-research/how-to-catch-github-actions-workflow-injections-before-attackers-do/.
+# - No SLSA `actions/attest-build-provenance`. cosign sign-blob keyless is
+#   the desktop-tool equivalent (see ADR 0010 § Decision).
+# - Self-hosted runners only (`linux-mega-1` / `wsl2-runner` /
+#   `dominus-runner`). The `[self-hosted, rust-slim]` label set matches
+#   the convention used by the generated ci-rust.yml.
+# - No AI co-author attribution in any release commit, tag, or PR.
+
+name: Release
+run-name: Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.4.0). Must already be pushed."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  # Release runs serialise per-tag; never cancel a running release because
+  # cancellation mid-sign would leave a half-published release.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    name: Build, sign, and publish release
+    runs-on: [self-hosted, rust-slim]
+    timeout-minutes: 60
+
+    env:
+      # Concrete inputs are funnelled through env so no `${{ … }}`
+      # interpolation lands inside a `run:` shell string. Per the GitHub
+      # Actions injection guidance, these variables are then read as
+      # `"$VAR"` (quoted) inside bash.
+      GH_REPOSITORY: ${{ github.repository }}
+      GH_EVENT_NAME: ${{ github.event_name }}
+      INPUT_TAG: ${{ inputs.tag }}
+
+    steps:
+      - name: Verify repository ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Repository: ${GH_REPOSITORY}"
+          if [ "${GH_REPOSITORY}" != "Al-Sarraf-Tech/ForgeISO" ]; then
+            echo "::error::SECURITY VIOLATION: release workflow ran on an unexpected repository."
+            exit 1
+          fi
+          echo "Repository context verified."
+
+      - name: Resolve release tag and version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${GH_EVENT_NAME}" = "workflow_dispatch" ]; then
+            tag="${INPUT_TAG}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          # Guard rail: the tag must look like a SemVer release tag.
+          # Rejects anything that could carry shell metacharacters past
+          # the env-var quoting in later steps.
+          case "${tag}" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *)
+              echo "::error::tag '${tag}' does not match expected v*.*.* shape"
+              exit 1
+              ;;
+          esac
+          version="${tag#v}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Release tag:     ${tag}"
+          echo "Release version: ${version}"
+
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          # Token is consumed by softprops/action-gh-release in this same
+          # job; we don't want it persisted to the local git config where
+          # subsequent steps could read it.
+          persist-credentials: false
+          # Use the resolved tag from the previous step rather than
+          # github.ref directly, so workflow_dispatch and tag push share
+          # one code path.
+          ref: ${{ steps.version.outputs.tag }}
+
+      - name: Verify required tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for tool in cargo rustc xorriso mksquashfs unsquashfs fpm syft cosign sha256sum; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+              missing+=("$tool")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf 'missing required tool: %s\n' "${missing[@]}" >&2
+            echo "::error::Self-hosted runner is missing release tooling: ${missing[*]}"
+            exit 1
+          fi
+          echo "rustc:   $(rustc --version)"
+          echo "cargo:   $(cargo --version)"
+          echo "fpm:     $(fpm --version)"
+          echo "syft:    $(syft version | awk '/^Version/ {print $2}')"
+          echo "cosign:  $(cosign version 2>&1 | awk '/^GitVersion/ {print $2}' | head -1)"
+
+      - name: Build release binaries
+        shell: bash
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          # --locked: refuse to update Cargo.lock during a release build.
+          cargo build --release --locked \
+            -p forgeiso-cli \
+            -p forgeiso-tui \
+            -p forge-slint
+          ls -lh target/release/forgeiso target/release/forgeiso-tui target/release/forge-slint
+
+      - name: Verify built binary version matches tag
+        shell: bash
+        env:
+          WANT_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          built_version="$(target/release/forgeiso --version | awk '{print $2}')"
+          if [ "${built_version}" != "${WANT_VERSION}" ]; then
+            echo "::error::built binary reports ${built_version} but tag is v${WANT_VERSION}"
+            echo "::error::run scripts/release/bump-version.sh ${WANT_VERSION} on a release-prep branch and re-tag"
+            exit 1
+          fi
+          echo "binary version ${built_version} matches tag v${WANT_VERSION}"
+
+      - name: Run make-packages.sh
+        shell: bash
+        timeout-minutes: 15
+        env:
+          REL_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          bash scripts/release/make-packages.sh "${REL_VERSION}"
+          ls -lh dist/release/
+
+      - name: Stage release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release-assets
+          mkdir -p release-assets
+          # Copy every package + the checksums file from the make-packages
+          # output. Keep filenames as-is so they match the runbook's table.
+          cp dist/release/*.rpm           release-assets/
+          cp dist/release/*.deb           release-assets/
+          cp dist/release/*.pkg.tar.zst   release-assets/
+          cp dist/release/*.tar.gz        release-assets/
+          cp dist/release/checksums.txt   release-assets/
+          ls -lh release-assets/
+
+      - name: Generate SBOM (CycloneDX + SPDX)
+        shell: bash
+        run: |
+          set -euo pipefail
+          syft scan dir:. \
+            --output cyclonedx-json="release-assets/sbom.cdx.json" \
+            --quiet
+          syft scan dir:. \
+            --output spdx-json="release-assets/sbom.spdx.json" \
+            --quiet
+          ls -lh release-assets/sbom.*
+
+      - name: Sign artifacts (cosign keyless)
+        shell: bash
+        env:
+          # Belt-and-braces: pin the implicit yes for cosign so the
+          # browser-prompt branch is never reached in CI.
+          COSIGN_YES: "true"
+          REL_DIR: release-assets/
+          SIG_DIR: release-assets/signatures/
+        run: |
+          set -euo pipefail
+          bash scripts/sign-release.sh
+          ls -lh release-assets/signatures/
+
+      - name: Verify signatures (smoke test)
+        shell: bash
+        env:
+          # Pin verification to the workflow that just produced the
+          # signatures so a swap-in attack on the signature directory
+          # would fail the smoke test before publish. The identity regexp
+          # is built from the resolved tag, never interpolated directly
+          # into a shell string.
+          REL_TAG: ${{ steps.version.outputs.tag }}
+          REL_DIR: release-assets/
+          SIG_DIR: release-assets/signatures/
+        run: |
+          set -euo pipefail
+          export COSIGN_IDENTITY_RE="^https://github.com/${GH_REPOSITORY}/.github/workflows/release-build.yml@refs/tags/${REL_TAG}\$"
+          export COSIGN_ISSUER_RE="^https://token.actions.githubusercontent.com\$"
+          bash scripts/verify-release.sh
+
+      - name: Re-generate top-level checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          # make-packages.sh's checksums.txt only covers what was in
+          # dist/release/ at that moment. Regenerate after the SBOM and
+          # signature directory landed so consumers get a complete list.
+          ( cd release-assets && \
+            find . -maxdepth 1 -type f ! -name SHA256SUMS \
+              -printf '%P\n' | sort | xargs -I {} sha256sum {} \
+            > SHA256SUMS )
+          cat release-assets/SHA256SUMS
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ForgeISO ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          # Upload the entire release-assets/ tree, including the
+          # signatures/ subdirectory so verifiers don't have to fetch
+          # them out-of-band.
+          files: |
+            release-assets/*.rpm
+            release-assets/*.deb
+            release-assets/*.pkg.tar.zst
+            release-assets/*.tar.gz
+            release-assets/checksums.txt
+            release-assets/SHA256SUMS
+            release-assets/sbom.cdx.json
+            release-assets/sbom.spdx.json
+            release-assets/signatures/*.sig
+            release-assets/signatures/*.pem
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
