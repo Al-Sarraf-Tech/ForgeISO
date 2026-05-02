@@ -278,23 +278,52 @@ mod tests {
     }
 
     #[test]
-    fn server_default_recommended_for_servers() {
+    fn primary_recommendations_match_known_distros() {
+        assert_eq!(
+            ProfileKind::ServerDefault.primary_recommendation(),
+            "ubuntu-server-lts"
+        );
+        assert_eq!(
+            ProfileKind::ServerHardened.primary_recommendation(),
+            "fedora-server"
+        );
+        assert_eq!(
+            ProfileKind::DesktopDeveloper.primary_recommendation(),
+            "arch-linux"
+        );
+        assert_eq!(
+            ProfileKind::Kiosk.primary_recommendation(),
+            "linux-mint-cinnamon"
+        );
+        assert_eq!(
+            ProfileKind::MinimalCloud.primary_recommendation(),
+            "ubuntu-server-lts"
+        );
+    }
+
+    #[test]
+    fn recommended_for_returns_true_only_for_primary() {
+        // ServerDefault primary is ubuntu-server-lts; rocky-linux is ALSO in
+        // the engine catalog's recommended_for(rocky), but the GUI badge is
+        // tightened to single-primary so only the primary returns true.
         assert!(ProfileKind::ServerDefault.recommended_for("ubuntu-server-lts"));
-        assert!(ProfileKind::ServerDefault.recommended_for("rocky-linux"));
+        assert!(!ProfileKind::ServerDefault.recommended_for("rocky-linux"));
         assert!(!ProfileKind::ServerDefault.recommended_for("linux-mint-cinnamon"));
     }
 
     #[test]
-    fn kiosk_only_recommended_for_mint() {
+    fn kiosk_recommended_only_for_primary() {
         assert!(ProfileKind::Kiosk.recommended_for("linux-mint-cinnamon"));
         assert!(!ProfileKind::Kiosk.recommended_for("ubuntu-server-lts"));
         assert!(!ProfileKind::Kiosk.recommended_for("arch-linux"));
     }
 
     #[test]
-    fn desktop_developer_recommended_for_desktop_presets() {
-        assert!(ProfileKind::DesktopDeveloper.recommended_for("linux-mint-cinnamon"));
+    fn desktop_developer_recommended_only_for_primary() {
         assert!(ProfileKind::DesktopDeveloper.recommended_for("arch-linux"));
+        // Mint is in the engine's developer-friendly list but not the primary;
+        // the GUI badge intentionally hides on non-primaries.
+        assert!(!ProfileKind::DesktopDeveloper.recommended_for("linux-mint-cinnamon"));
         assert!(!ProfileKind::DesktopDeveloper.recommended_for("fedora-server"));
     }
 
