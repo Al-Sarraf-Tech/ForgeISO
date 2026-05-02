@@ -1,5 +1,5 @@
-import { Palette, Sizes } from "../theme.slint";
-import { FButton, FImageIconButton, FBadge, FDivider, FSectionLabel, FFieldHelp } from "../components/design_system.slint";
+import { Palette, Sizes, Theme } from "../theme.slint";
+import { FButton, FImageIconButton, FBadge, FDivider, FSectionLabel, FFieldHelp, FSwitch } from "../components/design_system.slint";
 import { ScrollView } from "std-widgets.slint";
 import { AppState } from "../globals/app_state.slint";
 
@@ -226,6 +226,11 @@ export component StepSource inherits Rectangle {
     callback source-changed(string);
     callback continue-clicked();
     callback clear-clicked();
+    // Fired when the "show recommended only" filter is toggled. The Rust side
+    // routes this to ForgeApp::persist_ui() so the UiState slot survives a
+    // restart. Theme.show-recommended-only is the live, reactive source of
+    // truth for the in-loop visibility binding below.
+    callback recommended-filter-toggled();
 
     background: Palette.bg;
 
@@ -278,12 +283,25 @@ export component StepSource inherits Rectangle {
             // -- Distro grid -------------------------------------------------
             VerticalLayout {
                 spacing: Sizes.space-3;
-                FSectionLabel {
-                    text: "POPULAR DISTRIBUTIONS";
-                    letter-spacing: 1.5px;
+
+                // Section header + recommended-only filter toggle on the same row.
+                HorizontalLayout {
+                    alignment: space-between;
+                    FSectionLabel {
+                        text: "POPULAR DISTRIBUTIONS";
+                        letter-spacing: 1.5px;
+                        vertical-alignment: center;
+                    }
+                    FSwitch {
+                        label: "Show recommended only";
+                        checked <=> Theme.show-recommended-only;
+                        toggled => { recommended-filter-toggled(); }
+                    }
                 }
 
-                // Row 1
+                // Row 1.  Cards hide when the filter is on and the active
+                // profile does not recommend this preset; visible: false also
+                // removes the card from layout so the row compacts.
                 HorizontalLayout {
                     spacing: Sizes.space-3;
                     alignment: start;
@@ -291,6 +309,7 @@ export component StepSource inherits Rectangle {
                         card: card;
                         selected: selected-preset == card.id;
                         running: running;
+                        visible: !Theme.show-recommended-only || card.recommended;
                         clicked => { preset-clicked(card.id); }
                     }
                 }
@@ -303,6 +322,7 @@ export component StepSource inherits Rectangle {
                         card: card;
                         selected: selected-preset == card.id;
                         running: running;
+                        visible: !Theme.show-recommended-only || card.recommended;
                         clicked => { preset-clicked(card.id); }
                     }
                 }

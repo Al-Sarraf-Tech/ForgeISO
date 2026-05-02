@@ -173,6 +173,10 @@ pub struct UiState {
     pub show_error_count: bool,
     #[serde(default)]
     pub compact_status_bar: bool,
+    /// When true, the distro grid on Step 1 hides cards the active profile
+    /// does not recommend. Default false so first-run users see all options.
+    #[serde(default)]
+    pub show_recommended_only: bool,
 }
 
 fn default_true() -> bool {
@@ -189,6 +193,7 @@ impl Default for UiState {
             show_license: true,
             show_error_count: true,
             compact_status_bar: false,
+            show_recommended_only: false,
         }
     }
 }

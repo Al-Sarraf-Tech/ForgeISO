@@ -21,6 +21,12 @@ export global Theme {
     in-out property <bool> show-error-count: true;
     in-out property <bool> compact-status-bar: false;
 
+    // ── Step 1 distro grid filter ────────────────────────────────────────
+    // When true, the distro grid hides cards the active profile does not
+    // recommend (per ProfileKind::recommended_for). Persisted via UiState.
+    // Default false so first-run users see every preset.
+    in-out property <bool> show-recommended-only: false;
+
     // ── Status-bar settings popup state ──────────────────────────────────
     in-out property <bool> settings-open: false;
 }

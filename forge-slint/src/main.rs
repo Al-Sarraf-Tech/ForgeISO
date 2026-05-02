@@ -82,6 +82,7 @@ fn main() -> anyhow::Result<()> {
         theme.set_show_license(saved.ui.show_license);
         theme.set_show_error_count(saved.ui.show_error_count);
         theme.set_compact_status_bar(saved.ui.compact_status_bar);
+        theme.set_show_recommended_only(saved.ui.show_recommended_only);
     }
 
     // Populate window from persisted state.

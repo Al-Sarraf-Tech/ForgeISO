@@ -149,6 +149,11 @@ export component AppWindow inherits Window {
                             source-changed(t) => { root.source-changed(t); }
                             continue-clicked => { root.source-continue(); }
                             clear-clicked => { root.clear-source(); }
+                            // Filter toggle binds <=> to Theme.show-recommended-only
+                            // so the value is already updated when this fires; we
+                            // only need to persist via the same hook that other
+                            // theme-state toggles use.
+                            recommended-filter-toggled => { root.persist-ui-settings(); }
                         }
                     }
 

@@ -295,6 +295,7 @@ impl ForgeApp {
             show_license: t.get_show_license(),
             show_error_count: t.get_show_error_count(),
             compact_status_bar: t.get_compact_status_bar(),
+            show_recommended_only: t.get_show_recommended_only(),
         }
     }
 
