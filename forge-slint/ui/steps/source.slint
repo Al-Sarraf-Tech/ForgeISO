@@ -231,26 +231,12 @@ export component StepSource inherits Rectangle {
 
     ScrollView {
         VerticalLayout {
-            padding: Sizes.space-10;
-            spacing: Sizes.space-8;
+            padding-left: Sizes.space-10;
+            padding-right: Sizes.space-10;
+            padding-top: Sizes.space-6;
+            padding-bottom: Sizes.space-10;
+            spacing: Sizes.space-6;
             alignment: start;
-
-            // -- Title -------------------------------------------------------
-            VerticalLayout {
-                spacing: Sizes.space-2;
-                Text {
-                    text: "Build Your ISO";
-                    font-size: Sizes.font-3xl;
-                    font-weight: 700;
-                    color: Palette.text;
-                    letter-spacing: -0.5px;
-                }
-                Text {
-                    text: "Inject unattended install config into any Linux ISO \u{2014} Ubuntu, Fedora, Arch, Mint and more.";
-                    font-size: Sizes.font-md;
-                    color: Palette.muted;
-                }
-            }
 
             // -- Configuration profile selector ------------------------------
             // Five segmented chips, default ServerDefault. Description below
@@ -300,7 +286,7 @@ export component StepSource inherits Rectangle {
                 // Row 1
                 HorizontalLayout {
                     spacing: Sizes.space-3;
-                    alignment: center;
+                    alignment: start;
                     for card in presets-row1: DistroCard {
                         card: card;
                         selected: selected-preset == card.id;
@@ -312,7 +298,7 @@ export component StepSource inherits Rectangle {
                 // Row 2 (only rendered if non-empty)
                 if presets-row2.length > 0: HorizontalLayout {
                     spacing: Sizes.space-3;
-                    alignment: center;
+                    alignment: start;
                     for card in presets-row2: DistroCard {
                         card: card;
                         selected: selected-preset == card.id;

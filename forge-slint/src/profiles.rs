@@ -63,35 +63,28 @@ impl ProfileKind {
         ProfileKind::ServerDefault
     }
 
-    /// Returns true if this profile is the recommended pairing for the
-    /// given preset id. When the engine catalog ships, this will delegate
-    /// to `forgeiso_engine::profiles::ProfileCatalog::recommended_for`
-    /// (the engine returns a Vec of recommended profiles per preset; we
-    /// reverse the lookup here to ask "is preset X recommended for Self?").
-    pub fn recommended_for(self, preset_id: &str) -> bool {
+    /// Returns the single PRIMARY recommended preset for this profile.
+    ///
+    /// Earlier this method returned `bool` for any matching preset, which
+    /// lit up the RECOMMENDED badge on 6+ of the 8 cards — defeating the
+    /// signal. Tightened to a single primary per profile so the badge is
+    /// a clear "if you don't know what you want, pick THIS" affordance.
+    pub fn primary_recommendation(self) -> &'static str {
         match self {
-            ProfileKind::ServerDefault => matches!(
-                preset_id,
-                "ubuntu-server-lts"
-                    | "ubuntu-server-jammy"
-                    | "fedora-server"
-                    | "rocky-linux"
-                    | "almalinux"
-                    | "centos-stream"
-            ),
-            ProfileKind::ServerHardened => matches!(
-                preset_id,
-                "rocky-linux" | "almalinux" | "centos-stream" | "fedora-server"
-            ),
-            ProfileKind::DesktopDeveloper => {
-                matches!(preset_id, "linux-mint-cinnamon" | "arch-linux")
-            }
-            ProfileKind::Kiosk => matches!(preset_id, "linux-mint-cinnamon"),
-            ProfileKind::MinimalCloud => matches!(
-                preset_id,
-                "ubuntu-server-lts" | "ubuntu-server-jammy" | "fedora-server"
-            ),
+            ProfileKind::ServerDefault => "ubuntu-server-lts",
+            ProfileKind::ServerHardened => "fedora-server",
+            ProfileKind::DesktopDeveloper => "arch-linux",
+            ProfileKind::Kiosk => "linux-mint-cinnamon",
+            ProfileKind::MinimalCloud => "ubuntu-server-lts",
         }
+    }
+
+    /// Backward-compat: returns true only for the single primary recommendation.
+    /// Callers wanting the full list should query
+    /// `forgeiso_engine::profiles::ProfileCatalog::recommended_for(distro)`
+    /// directly.
+    pub fn recommended_for(self, preset_id: &str) -> bool {
+        preset_id == self.primary_recommendation()
     }
 }
 
