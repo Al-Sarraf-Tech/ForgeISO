@@ -27,45 +27,78 @@ use crate::{
     error::{EngineError, EngineResult},
 };
 
+/// How the source ISO was obtained for this build.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceKind {
+    /// The user supplied a local filesystem path directly.
     LocalPath,
+    /// The ISO was downloaded from a URL (direct or preset) and cached locally.
     DownloadedUrl,
 }
 
+/// Which boot modes the ISO was detected to support.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BootSupport {
+    /// ISO carries a BIOS / legacy El Torito boot record.
     pub bios: bool,
+    /// ISO carries a UEFI / EFI El Torito boot record.
     pub uefi: bool,
 }
 
+/// Describes a source ISO after inspection — distro, boot modes, and paths.
+///
+/// Produced by [`inspect_iso`] and embedded verbatim into the build report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IsoMetadata {
+    /// Resolved local filesystem path of the ISO at inspection time.
     pub source_path: PathBuf,
+    /// Whether the ISO was supplied as a local path or downloaded from a URL.
     pub source_kind: SourceKind,
+    /// The raw user-supplied value (local path string or URL) before resolution.
     pub source_value: String,
+    /// File size in bytes as reported by the filesystem.
     pub size_bytes: u64,
+    /// SHA-256 hex digest of the full ISO file.
     pub sha256: String,
+    /// ISO 9660 Primary Volume Descriptor volume label, if one is present.
     pub volume_id: Option<String>,
+    /// Detected Linux distribution family, or `None` when detection is inconclusive.
     pub distro: Option<Distro>,
+    /// Detected release version string (e.g. `"24.04"`, `"40"`, `"2026.03.05"`).
     pub release: Option<String>,
+    /// Detected edition / variant label (e.g. `"Server"`, `"Desktop"`, `"Minimal"`).
     pub edition: Option<String>,
+    /// Detected CPU architecture string (e.g. `"x86_64"`, `"aarch64"`, `"i686"`).
     pub architecture: Option<String>,
+    /// ISO-relative path to the compressed root filesystem image, if found.
     pub rootfs_path: Option<String>,
+    /// BIOS and UEFI boot capability flags detected from El Torito records.
     pub boot: BootSupport,
+    /// RFC 3339 timestamp of when this inspection ran.
     pub inspected_at: String,
+    /// Non-fatal issues discovered during inspection (e.g. missing xorriso).
     pub warnings: Vec<String>,
 }
 
+/// A source ISO after it has been resolved to a local path, ready for inspection.
 #[derive(Debug, Clone)]
 pub struct ResolvedIso {
+    /// Absolute path of the ISO file on the local filesystem.
     pub source_path: PathBuf,
+    /// How the ISO was obtained (local file vs. downloaded).
     pub source_kind: SourceKind,
+    /// The original user-supplied source value (path string or URL).
     pub source_value: String,
+    /// Temporary download directory to clean up after the build, if any.
     pub _download_dir: Option<PathBuf>,
 }
 
+/// Read a local ISO file and return an [`IsoMetadata`] describing it.
+///
+/// Hashes the file, reads the ISO 9660 PVD volume label, and — if `xorriso` is
+/// on `$PATH` — probes boot records and optional distro-specific marker files.
+/// Returns [`EngineError::NotFound`] if `path` does not exist.
 pub fn inspect_iso(
     path: &Path,
     source_kind: SourceKind,

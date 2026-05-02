@@ -4,10 +4,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Hypervisor {
+    /// QEMU / KVM — generates a `qemu-system-x86_64` shell command sequence.
     Qemu,
+    /// Oracle VirtualBox — generates `VBoxManage` shell command sequence.
     VirtualBox,
+    /// VMware Workstation / Fusion — generates a `.vmx` configuration script.
     Vmware,
+    /// Microsoft Hyper-V — generates a PowerShell script for elevated execution.
     HyperV,
+    /// Proxmox VE — generates `qm` CLI command sequence for the PVE API.
     Proxmox,
 }
 

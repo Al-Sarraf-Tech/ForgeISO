@@ -26,32 +26,54 @@ use crate::{
     error::{EngineError, EngineResult},
 };
 
+/// Tallies of findings by severity level extracted from a tool's JSON output.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SeverityCount {
+    /// Number of findings classified as CRITICAL.
     pub critical: u64,
+    /// Number of findings classified as HIGH.
     pub high: u64,
+    /// Number of findings classified as MEDIUM.
     pub medium: u64,
+    /// Number of findings classified as LOW.
     pub low: u64,
 }
 
+/// Result of running one security scanning tool against the build artifact.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolReport {
+    /// Name of the tool that produced this report (e.g. `"trivy"`, `"secrets"`).
     pub tool: String,
+    /// Whether the tool ran successfully, was unavailable, or found policy violations.
     pub status: ToolStatus,
+    /// Path to the JSON file containing the full tool output.
     pub output: PathBuf,
+    /// Human-readable summary or error message from the tool.
     pub message: String,
+    /// Finding counts by severity parsed from the tool output.
     pub severities: SeverityCount,
 }
 
+/// Aggregate result of the full scan pipeline, embedded in the build report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanSummary {
+    /// Path to the SPDX-format SBOM file, if SBOM generation was enabled.
     pub sbom_spdx: Option<PathBuf>,
+    /// Path to the CycloneDX-format SBOM file, if SBOM generation was enabled.
     pub sbom_cyclonedx: Option<PathBuf>,
+    /// One entry per tool that was enabled in the scan policy.
     pub reports: Vec<ToolReport>,
+    /// Non-fatal advisories (e.g. potential secrets found in non-strict mode).
     pub warnings: Vec<String>,
+    /// `true` when a strict policy was violated (build should be rejected).
     pub strict_failed: bool,
 }
 
+/// Execute the configured scan pipeline against `target` and write all outputs to `out_dir`.
+///
+/// Only tools enabled in `policy` are invoked; missing tools are recorded as
+/// [`ToolStatus::Unavailable`] rather than failing the build. Returns
+/// [`EngineError::PolicyViolation`] when `strict_secrets` is set and secrets are found.
 pub async fn run_scans(
     target: &Path,
     out_dir: &Path,

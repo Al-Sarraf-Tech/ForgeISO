@@ -25,40 +25,68 @@ use crate::{
     scanner::ScanSummary,
 };
 
+/// Build provenance and ISO metadata captured at report generation time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildMetadata {
+    /// UTC timestamp of when the report was generated.
     pub generated_at: DateTime<Utc>,
+    /// Name of the tool that produced this report (always `"forgeiso"`).
     pub tool_name: String,
+    /// Semantic version of the ForgeISO binary that produced this report.
     pub tool_version: String,
+    /// Active injection profile used during the build.
     pub profile: ProfileKind,
+    /// User-supplied source value (local path or URL).
     pub source: String,
+    /// SHA-256 hex digest of the source ISO file.
     pub source_sha256: String,
+    /// Distro family detected by inspection, or `None` when detection failed.
     pub detected_distro: Option<String>,
+    /// Release version string detected by inspection (e.g. `"24.04"`, `"40"`).
     pub detected_release: Option<String>,
+    /// CPU architecture string detected by inspection (e.g. `"x86_64"`).
     pub detected_architecture: Option<String>,
+    /// ISO 9660 Primary Volume Descriptor volume label, if present.
     pub volume_id: Option<String>,
+    /// User-supplied output label for the repacked ISO, if any.
     pub output_label: Option<String>,
+    /// Non-fatal warnings accumulated during inspection and build.
     pub warnings: Vec<String>,
+    /// Versions of external tools used (e.g. `xorriso`, `mksquashfs`).
     pub tool_versions: BTreeMap<String, String>,
 }
 
+/// Result of an automated VM boot test against the output ISO.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestSummary {
+    /// Whether the BIOS boot test passed.
     pub bios: bool,
+    /// Whether the UEFI boot test passed.
     pub uefi: bool,
+    /// Log lines captured from the VM serial console during the boot test.
     pub logs: Vec<String>,
+    /// Overall pass/fail for all attempted boot tests.
     pub passed: bool,
 }
 
+/// Complete build report — the machine-readable contract written as `report.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildReport {
+    /// Provenance and ISO metadata captured at build time.
     pub metadata: BuildMetadata,
+    /// Absolute paths of all files written to the output directory.
     pub artifacts: Vec<String>,
+    /// Scan results, present when at least one scan policy was enabled.
     pub scan_summary: Option<ScanSummary>,
+    /// VM boot test results, present when `auto_test` was enabled.
     pub test_summary: Option<TestSummary>,
 }
 
 impl BuildReport {
+    /// Construct an empty report populated from the resolved build config and ISO metadata.
+    ///
+    /// Callers should push artifact paths into `self.artifacts` and attach scan/test
+    /// summaries before writing to disk with [`Self::write_json`] / [`Self::write_html`].
     pub fn new(cfg: &BuildConfig, iso: &IsoMetadata) -> Self {
         Self {
             metadata: BuildMetadata {
@@ -82,11 +110,16 @@ impl BuildReport {
         }
     }
 
+    /// Serialize the report to pretty-printed JSON and write it to `out`.
     pub fn write_json(&self, out: &Path) -> EngineResult<()> {
         std::fs::write(out, serde_json::to_vec_pretty(self)?)?;
         Ok(())
     }
 
+    /// Render the report as a self-contained dark-theme HTML file and write it to `out`.
+    ///
+    /// All user-supplied values (source path, warnings) are HTML-escaped before
+    /// insertion; the HTML is presentation-only and not part of the stability surface.
     pub fn write_html(&self, out: &Path) -> EngineResult<()> {
         let artifact_items = self
             .artifacts

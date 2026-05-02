@@ -21,18 +21,35 @@ use uuid::Uuid;
 
 use crate::error::{EngineError, EngineResult};
 
+/// Per-build scratch directory tree created under the user-supplied `out_dir`.
+///
+/// All engine operations are confined within [`root`](Workspace::root); the
+/// subdirectories have stable, well-known roles so callers can reference them
+/// by name rather than string-joining paths.
 #[derive(Debug, Clone)]
 pub struct Workspace {
+    /// Root directory of this build, named `<run_name>-<uuid>` to avoid collisions.
     pub root: PathBuf,
+    /// Destination for the extracted (unpacked) source ISO tree.
     pub input: PathBuf,
+    /// Scratch area for in-progress ISO modifications before repacking.
     pub work: PathBuf,
+    /// Final output location — the repacked `.iso` and its checksum land here.
     pub output: PathBuf,
+    /// JSON and HTML build reports are written here.
     pub reports: PathBuf,
+    /// Scan outputs (SBOM, trivy, grype, secrets) are written here.
     pub scans: PathBuf,
+    /// Per-build log files captured from external tools.
     pub logs: PathBuf,
 }
 
 impl Workspace {
+    /// Create the workspace directory tree under `base`.
+    ///
+    /// The root directory is named `<sanitized_run_name>-<uuid>`. All seven
+    /// subdirectories are created atomically. Returns an error if any directory
+    /// cannot be created.
     pub fn create(base: &Path, run_name: &str) -> EngineResult<Self> {
         std::fs::create_dir_all(base)?;
 
@@ -60,11 +77,21 @@ impl Workspace {
         })
     }
 
+    /// Resolve `relative` against the workspace root, rejecting path-traversal attempts.
+    ///
+    /// Delegates to the free function [`safe_join`] with this workspace's root.
+    /// Returns [`EngineError::PathSafety`] if the resolved path would escape the workspace.
     pub fn safe_join(&self, relative: &Path) -> EngineResult<PathBuf> {
         safe_join(&self.root, relative)
     }
 }
 
+/// Join `candidate` onto `root` while preventing path-traversal escapes.
+///
+/// Rejects `..` components that would cross the root boundary and any absolute
+/// path that does not resolve under `root`. Returns [`EngineError::PathSafety`]
+/// on violations; returns the resolved path on success, creating intermediate
+/// parent directories as needed.
 pub fn safe_join(root: &Path, candidate: &Path) -> EngineResult<PathBuf> {
     let root = root
         .canonicalize()

@@ -13,6 +13,7 @@ pub enum AcquisitionStrategy {
 }
 
 impl AcquisitionStrategy {
+    /// Return a stable lowercase snake_case identifier for serialisation and display.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::DirectUrl => "direct_url",

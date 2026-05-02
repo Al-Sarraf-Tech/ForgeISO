@@ -14,15 +14,21 @@
 //! [`GuidedWorkflowProgress`] to render the step rail and gate the
 //! "Continue" button.
 
+/// One of the four sequential steps in the guided GUI / TUI workflow.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GuidedWorkflowStep {
+    /// Step 1 — select or download the source ISO.
     Source,
+    /// Step 2 — fill in identity, network, packages, and services.
     Configure,
+    /// Step 3 — run the engine to produce the output ISO.
     Build,
+    /// Step 4 — optional post-build verification and boot testing.
     OptionalChecks,
 }
 
 impl GuidedWorkflowStep {
+    /// All four steps in their canonical display order.
     pub const ALL: [Self; 4] = [
         Self::Source,
         Self::Configure,
@@ -30,6 +36,7 @@ impl GuidedWorkflowStep {
         Self::OptionalChecks,
     ];
 
+    /// Zero-based position of this step in the workflow (Source = 0, OptionalChecks = 3).
     pub fn index(self) -> usize {
         match self {
             Self::Source => 0,
@@ -39,14 +46,17 @@ impl GuidedWorkflowStep {
         }
     }
 
+    /// Return the step at `index`, or `None` if `index` is out of range.
     pub fn from_index(index: usize) -> Option<Self> {
         Self::ALL.get(index).copied()
     }
 
+    /// One-based step number for display (Source = 1, OptionalChecks = 4).
     pub fn one_based(self) -> i32 {
         self.index() as i32 + 1
     }
 
+    /// Short display label shown in the step rail (e.g. `"Choose ISO"`).
     pub fn label(self) -> &'static str {
         match self {
             Self::Source => "Choose ISO",
@@ -56,6 +66,7 @@ impl GuidedWorkflowStep {
         }
     }
 
+    /// Secondary hint text displayed below the step label in the UI.
     pub fn subtitle(self) -> &'static str {
         match self {
             Self::Source => "Pick a source image",
@@ -65,6 +76,7 @@ impl GuidedWorkflowStep {
         }
     }
 
+    /// Return the next step in the workflow, or `None` at the final step.
     pub fn next(self) -> Option<Self> {
         match self {
             Self::Source => Some(Self::Configure),
@@ -74,6 +86,7 @@ impl GuidedWorkflowStep {
         }
     }
 
+    /// Return the previous step in the workflow, or `None` at the first step.
     pub fn prev(self) -> Option<Self> {
         match self {
             Self::Source => None,
@@ -84,16 +97,24 @@ impl GuidedWorkflowStep {
     }
 }
 
+/// Snapshot of completion state for each workflow step, used by the GUI to
+/// gate the "Continue" button and render check-marks in the step rail.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct GuidedWorkflowProgress {
+    /// A source ISO has been selected or downloaded successfully.
     pub source_ready: bool,
+    /// All required configuration fields have been filled in.
     pub configure_done: bool,
+    /// The engine build has completed and the output ISO exists.
     pub build_done: bool,
+    /// The ISO was verified against its expected SHA-256 checksum.
     pub verify_done: bool,
+    /// The ISO passed an iso9660 structural integrity check.
     pub iso9660_done: bool,
 }
 
 impl GuidedWorkflowProgress {
+    /// Return `true` when the given `step` has been completed.
     pub fn step_complete(self, step: GuidedWorkflowStep) -> bool {
         match step {
             GuidedWorkflowStep::Source => self.source_ready,
@@ -103,6 +124,11 @@ impl GuidedWorkflowProgress {
         }
     }
 
+    /// Return `true` if the user may navigate to `target_step` from `current_step`.
+    ///
+    /// Steps earlier than the current step are always re-openable. A later step
+    /// requires all mandatory predecessors to be complete before it becomes
+    /// accessible.
     pub fn can_open_step(
         self,
         current_step: GuidedWorkflowStep,
@@ -123,14 +149,19 @@ impl GuidedWorkflowProgress {
         }
     }
 
+    /// Return `true` if at least one optional check (verify or iso9660) has run.
     pub fn checks_run(self) -> bool {
         self.verify_done || self.iso9660_done
     }
 
+    /// Return `true` when the mandatory workflow (source → configure → build) is done.
+    ///
+    /// Optional checks are not required for the flow to be considered complete.
     pub fn flow_complete(self) -> bool {
         self.build_done
     }
 
+    /// Return a user-facing summary string for the OptionalChecks step status bar.
     pub fn optional_checks_summary(self) -> &'static str {
         if !self.build_done {
             "Build not finished"

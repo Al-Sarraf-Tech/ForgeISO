@@ -14,8 +14,11 @@ use super::vmware::vmware_instructions;
 /// Combined output produced by `emit_launch()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VmLaunchOutput {
+    /// Hypervisor this output targets.
     pub hypervisor: Hypervisor,
+    /// Firmware mode (BIOS or UEFI) this output was generated for.
     pub firmware: FirmwareMode,
+    /// Absolute path of the source ISO as a string, for embedding in scripts.
     pub iso_path: String,
     /// Shell commands (QEMU, VirtualBox, Proxmox).
     pub commands: Vec<String>,

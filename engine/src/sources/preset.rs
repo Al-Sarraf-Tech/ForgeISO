@@ -7,11 +7,17 @@ use crate::error::EngineResult;
 /// Describes a known ISO source for a distro edition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IsoPreset {
+    /// Unique identifier for this preset, used on the CLI and in config files.
     pub id: PresetId,
+    /// Human-readable display name shown in the GUI preset picker.
     pub name: &'static str,
+    /// Distro family identifier (e.g. `"ubuntu"`, `"fedora"`, `"arch"`).
     pub distro: &'static str,
+    /// Edition or flavour within the distro (e.g. `"server-lts"`, `"kde"`).
     pub edition: &'static str,
+    /// CPU architecture string (e.g. `"x86_64"`, `"aarch64"`).
     pub architecture: &'static str,
+    /// How the ISO is obtained — direct URL, discovery page, or user-supplied.
     pub strategy: AcquisitionStrategy,
     /// Official release/download page (always set).
     pub official_page: &'static str,

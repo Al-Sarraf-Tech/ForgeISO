@@ -12,12 +12,19 @@ use super::ovmf::find_ovmf;
 /// before passing to `emit_launch()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VmLaunchSpec {
+    /// Hypervisor to target when generating launch commands or scripts.
     pub hypervisor: Hypervisor,
+    /// Firmware mode (BIOS or UEFI) for this VM.
     pub firmware: FirmwareMode,
+    /// Absolute path to the ISO to boot.
     pub iso_path: PathBuf,
+    /// RAM allocation in mebibytes (default 2048 MiB).
     pub ram_mb: u32,
+    /// Number of virtual CPUs (default 2).
     pub cpus: u8,
+    /// Size of the ephemeral scratch disk in gibibytes (default 20 GiB).
     pub disk_gb: u32,
+    /// Sanitized VM name used in hypervisor APIs and shell paths.
     pub vm_name: String,
     /// Resolved OVMF firmware path (QEMU / Proxmox UEFI only).
     pub ovmf_path: Option<PathBuf>,

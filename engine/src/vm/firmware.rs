@@ -4,11 +4,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FirmwareMode {
+    /// Legacy BIOS firmware — used for Gen 1 Hyper-V VMs and non-EFI hardware.
     Bios,
+    /// UEFI / EFI firmware — required for Secure Boot and modern hardware.
     Uefi,
 }
 
 impl FirmwareMode {
+    /// Return the canonical lowercase token for display and CLI parsing.
     pub fn as_str(&self) -> &'static str {
         match self {
             FirmwareMode::Bios => "bios",
