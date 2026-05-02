@@ -1,3 +1,17 @@
+//! Kickstart (`kickstart.cfg`) generator for the Fedora / RHEL family
+//! (Fedora Server, Fedora Workstation, Rocky Linux, AlmaLinux,
+//! CentOS Stream).
+//!
+//! Public entry point is [`generate_kickstart_cfg`] (re-exported at
+//! the crate root). Sibling generators for other distro families:
+//!
+//! - [`crate::autoinstall`] — Ubuntu (`autoinstall.yaml`).
+//! - [`crate::mint_preseed`] — Debian / Mint (`preseed.cfg`).
+//!
+//! See [`ADR 0005`](https://github.com/Al-Sarraf-Tech/ForgeISO/blob/main/docs/adr/0005-iso-injection-strategy.md)
+//! for why the project ships per-distro generators rather than a
+//! single overlay format.
+
 use crate::config::InjectConfig;
 use crate::error::EngineResult;
 

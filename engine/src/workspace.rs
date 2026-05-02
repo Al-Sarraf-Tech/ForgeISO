@@ -1,3 +1,20 @@
+//! Per-build scratch directories.
+//!
+//! Every [`crate::ForgeIsoEngine::build`] call creates a
+//! [`Workspace`] under the user-supplied `out_dir`. Inside the
+//! workspace the engine extracts the source ISO, injects autoinstall
+//! files, repacks, and writes the final `.iso` plus a build report.
+//!
+//! Workspaces are cleaned up when the build completes successfully
+//! unless [`crate::config::BuildConfig::keep_workdir`] is `true`. The
+//! root directory uses a UUID suffix to avoid collisions when several
+//! builds run in parallel.
+//!
+//! Path joining inside the workspace goes through [`Workspace::safe_join`],
+//! which rejects traversal escapes (`..`) and absolute paths to
+//! contain damage from a malformed config or compromised injection
+//! source.
+
 use std::path::{Path, PathBuf};
 
 use uuid::Uuid;

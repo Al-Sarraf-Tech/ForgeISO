@@ -1,3 +1,25 @@
+//! Configuration types — the declarative inputs that drive every
+//! engine operation.
+//!
+//! Two top-level shapes:
+//!
+//! - [`InjectConfig`] — describes *what* to inject into a source ISO:
+//!   user account, hostname, network, packages, services, firewall,
+//!   storage, GRUB. Front-ends build it via the typed
+//!   [`InjectConfigBuilder`].
+//! - [`BuildConfig`] — describes *how* to build: source preset or
+//!   path, output label, profile selector, scan/test toggles.
+//!   `BuildConfig` carries (or references) an `InjectConfig`.
+//!
+//! Both types are `serde`-serializable for round-tripping through
+//! YAML or JSON and form part of the project's stability contract;
+//! see [`STABILITY.md`](https://github.com/Al-Sarraf-Tech/ForgeISO/blob/main/STABILITY.md)
+//! for which fields can change in 1.x and which are frozen.
+//!
+//! Per-concern validators live in
+//! [`crate::config::validation`](self::validation) (crate-private)
+//! and are exercised under `engine/tests/proptest_config.rs`.
+
 mod build;
 mod components;
 mod inject;

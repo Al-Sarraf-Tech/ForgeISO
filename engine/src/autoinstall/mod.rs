@@ -1,3 +1,20 @@
+//! Distro-agnostic autoinstall support shared across Ubuntu, Debian,
+//! and Mint targets. The Ubuntu-specific generator lives in
+//! [`ubuntu`](self::ubuntu) (private module re-exported through
+//! [`generate_autoinstall_yaml`]/[`merge_autoinstall_yaml`]); the
+//! late-commands rendering pipeline lives in
+//! [`late_commands`](self::late_commands) and is exposed via
+//! [`build_feature_late_commands`].
+//!
+//! Sibling modules cover other generator families:
+//!
+//! - [`crate::kickstart`] — Fedora / RHEL family (`kickstart.cfg`).
+//! - [`crate::mint_preseed`] — Debian / Mint family (`preseed.cfg`).
+//!
+//! See [`ADR 0005`](https://github.com/Al-Sarraf-Tech/ForgeISO/blob/main/docs/adr/0005-iso-injection-strategy.md)
+//! for the rationale behind the per-distro split (versus a generic
+//! overlay).
+
 mod late_commands;
 mod ubuntu;
 

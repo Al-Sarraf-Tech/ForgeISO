@@ -1,3 +1,19 @@
+//! Optional security scan pipeline executed after a successful build
+//! when [`crate::config::ScanPolicy`] enables it.
+//!
+//! Wraps three external tools when present on `$PATH`:
+//!
+//! - **syft** — software bill of materials (SBOM) generation.
+//! - **trivy** — vulnerability scan against the SBOM and the rootfs.
+//! - **gitleaks** / **trufflehog** — secrets scan over the writable
+//!   layers added during injection.
+//!
+//! The scan is driven asynchronously and produces a
+//! [`ScanSummary`] that is embedded into the build report and surfaced
+//! to the GUI's Check step. Missing tools are reported as
+//! [`crate::config::ToolStatus::Unavailable`] rather than failing the
+//! build — scans are advisory, not gating, in the desktop-tool model.
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 

@@ -3,6 +3,16 @@
 All notable changes to ForgeISO. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Real-LTS integration test** (1.0 readiness, Round 3). New `engine/tests/real_lts_integration.rs` exercises `ForgeIsoEngine::build` end-to-end against the actual Ubuntu 24.04.4 LTS Server installer ISO — the unsquashfs/mksquashfs path the synthetic test matrix only stubs. Double-gated: `#[ignore]` plus `FORGEISO_RUN_REAL_LTS=1` env var. Cached ISO is verified against a pinned SHA-256 before the build runs, and the resulting ISO is checked for the ISO-9660 `CD001` magic. Helper script `tests/fixtures/download-real-lts.sh` populates the cache (verifies SHA-256 after download).
+- **Engine rustdoc** at the crate root and on every top-level `pub mod` (autoinstall, config, error, events, iso, kickstart, orchestrator, product, report, scanner, workspace). Sets the stage for a `#![warn(missing_docs)]` lint at 1.0; current pub-item rustdoc gap reduced from 439 to 426 warnings (12 highest-blast-radius items filled first; the remaining 426 are individual fields/variants/methods to fill in subsequent rounds).
+
+### Documentation
+- Crate-root rustdoc for `forgeiso-engine` calls out `ForgeIsoEngine::{new, build, build_cancellable, inspect_source, verify_iso, scan_iso, test_iso}` as the top-level entry points and links the stability surface to `STABILITY.md` + `engine/tests/public-api.golden`.
+- Module-level rustdoc cross-links to ADRs 0004 (errors), 0005 (per-distro injection), 0008 (reliability contract), 0012 (cancellation + circuit breakers) so a reader landing on any module via `cargo doc` can jump to the load-bearing decision rationale.
+
 ## [0.3.2] - 2026-05-02
 
 ### Added

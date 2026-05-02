@@ -1,3 +1,19 @@
+//! Guided four-step workflow model that the GUI and TUI render.
+//!
+//! The product surface intentionally hides engine concepts the user
+//! does not need to know about (workspaces, circuit breakers, scan
+//! reports, etc.) and presents a simple progression:
+//!
+//! 1. Source — pick / download the upstream ISO.
+//! 2. Configure — fill in identity, network, packages, services.
+//! 3. Build — run the engine end-to-end.
+//! 4. OptionalChecks — verify, scan, boot-test the result.
+//!
+//! The CLI bypasses the guided model entirely; it accepts
+//! [`crate::BuildConfig`] directly. The GUI uses
+//! [`GuidedWorkflowProgress`] to render the step rail and gate the
+//! "Continue" button.
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GuidedWorkflowStep {
     Source,

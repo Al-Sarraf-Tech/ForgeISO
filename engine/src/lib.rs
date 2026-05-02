@@ -1,3 +1,44 @@
+//! # ForgeISO engine
+//!
+//! Library crate behind the `forgeiso` CLI, the `forgeiso-tui` TUI, and
+//! the `forge-slint` desktop GUI. The engine is the single source of
+//! truth for ISO inspection, autoinstall/kickstart/preseed generation,
+//! ISO repacking, and the post-build verify/scan/test pipeline.
+//!
+//! Front-ends never invoke external tools or touch the filesystem
+//! directly; they construct an [`InjectConfig`] (declarative description
+//! of what to inject) plus a [`BuildConfig`] (build-time options),
+//! then drive a [`ForgeIsoEngine`] instance and render the streaming
+//! [`EngineEvent`] feed.
+//!
+//! ## Top-level entry points
+//!
+//! - [`ForgeIsoEngine::new`] — construct an engine.
+//! - [`ForgeIsoEngine::build`] — produce a repacked ISO from a
+//!   [`BuildConfig`] and an output directory.
+//! - [`ForgeIsoEngine::build_cancellable`] — same, with a
+//!   [`tokio_util::sync::CancellationToken`] for cooperative
+//!   cancellation.
+//! - [`ForgeIsoEngine::inspect_source`] / [`ForgeIsoEngine::verify`]
+//!   / [`ForgeIsoEngine::scan`] / [`ForgeIsoEngine::test_iso`] —
+//!   read-only / verify / scan / boot-test surfaces.
+//!
+//! ## Stability
+//!
+//! Items re-exported at the crate root form the public stability
+//! surface. The set is captured by `engine/tests/public-api.golden`
+//! and changes to it are reviewed against the project's
+//! [`STABILITY.md`](https://github.com/Al-Sarraf-Tech/ForgeISO/blob/main/STABILITY.md)
+//! commitment. Items reachable only through `pub(crate)` paths are
+//! internal and may change at any time.
+//!
+//! ## Errors
+//!
+//! Every fallible operation returns [`EngineResult<T>`] —
+//! `Result<T, EngineError>`. The error taxonomy is documented on
+//! [`EngineError`] and each variant maps to one of the documented
+//! exit codes in `docs/RUNBOOKS.md`.
+
 pub mod autoinstall;
 pub mod config;
 pub mod error;

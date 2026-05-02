@@ -1,3 +1,29 @@
+//! [`ForgeIsoEngine`] — the central orchestrator that ties every other
+//! engine module together.
+//!
+//! Front-ends create a single [`ForgeIsoEngine`] and hold it for the
+//! lifetime of the session. It is `Clone` (cheap, internally
+//! `Arc`-backed) so handlers can be parked on multiple async tasks.
+//!
+//! The orchestrator owns four pipelines:
+//!
+//! 1. [`build`] — extract source ISO → inject autoinstall / kickstart /
+//!    preseed → repack with `xorriso` and `mksquashfs`. The
+//!    cancellable variant ([`ForgeIsoEngine::build_cancellable`]) plumbs
+//!    a [`tokio_util::sync::CancellationToken`] through every shell-out.
+//! 2. [`verify`] — SHA-256 check, ISO 9660 compliance audit,
+//!    boot-record verification.
+//! 3. [`scan_test`] — security scanning + boot smoke tests.
+//! 4. [`diff`] — structural diff between two ISOs (debugging /
+//!    regression isolation).
+//!
+//! Per-tool [`circuit_breaker::CircuitBreaker`] guards prevent runaway
+//! retries when an external tool (e.g. `mksquashfs`) starts failing —
+//! see
+//! [`ADR 0008`](https://github.com/Al-Sarraf-Tech/ForgeISO/blob/main/docs/adr/0008-reliability-contract-desktop-tool.md)
+//! and
+//! [`ADR 0012`](https://github.com/Al-Sarraf-Tech/ForgeISO/blob/main/docs/adr/0012-cancellation-and-circuit-breakers.md).
+
 pub mod build;
 pub mod circuit_breaker;
 mod diff;

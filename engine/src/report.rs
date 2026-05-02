@@ -1,3 +1,17 @@
+//! Build-report rendering.
+//!
+//! Every successful [`crate::ForgeIsoEngine::build`] writes a
+//! `report.json` and `report.html` next to the output ISO. The JSON
+//! shape is the persistent contract — log consumers, CI dashboards,
+//! and the GUI's "view report" button all parse it. The HTML renderer
+//! is presentation-only and may change between minors (it is not part
+//! of the stability surface).
+//!
+//! Report content includes the resolved [`BuildConfig`], the detected
+//! [`IsoMetadata`], the active [`ProfileKind`], every event emitted by
+//! the build, and a SHA-256 manifest of every artifact in the output
+//! directory.
+
 use std::collections::BTreeMap;
 use std::path::Path;
 

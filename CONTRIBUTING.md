@@ -88,6 +88,16 @@ bash scripts/s-tier-audit.sh --fast    # pre-commit version
 bash scripts/s-tier-audit.sh           # full audit (slow)
 ```
 
+For end-to-end validation against an actual upstream LTS ISO (multi-minute on first run; the cached ISO is reused thereafter):
+
+```bash
+bash tests/fixtures/download-real-lts.sh                       # one-time, ~3.2 GiB
+FORGEISO_RUN_REAL_LTS=1 cargo test --workspace \
+    --test real_lts_integration -- --ignored --nocapture
+```
+
+The test is double-gated (`#[ignore]` plus the `FORGEISO_RUN_REAL_LTS` env var) so a default `cargo test` will not download or build against the real ISO.
+
 ## Commit + PR conventions
 
 - **Conventional Commits**: `feat:`, `fix:`, `docs:`, `test:`, `chore:`,

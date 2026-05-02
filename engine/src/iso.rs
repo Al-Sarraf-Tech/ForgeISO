@@ -1,3 +1,21 @@
+//! ISO inspection and metadata extraction.
+//!
+//! Functions in this module read a source ISO without modifying it and
+//! produce an [`IsoMetadata`] record describing what was found:
+//!
+//! - the [`SourceKind`] discriminator (HTTP URL, preset id, local path)
+//! - distro detection (Ubuntu / Fedora / Arch / Mint / Debian / RHEL family)
+//! - boot-mode capability ([`BootSupport`] — BIOS, UEFI, both, or
+//!   neither)
+//! - volume label, manifest paths, and any per-distro signature files
+//!
+//! Inspection runs as the first step of [`crate::ForgeIsoEngine::build`]
+//! so the rest of the pipeline can branch on real ISO contents rather
+//! than the user's claim about what the ISO is.
+//!
+//! ISO repacking (the inverse direction — apply changes and emit a new
+//! `.iso`) lives in [`crate::orchestrator::build`].
+
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 

@@ -1,31 +1,73 @@
+//! Streaming engine event feed.
+//!
+//! Long-running engine operations ([`crate::ForgeIsoEngine::build`],
+//! `verify_iso`, `scan_iso`, `test_iso`) publish a sequence of
+//! [`EngineEvent`] records on a `tokio::sync::broadcast` channel that
+//! front-ends subscribe to via
+//! [`crate::ForgeIsoEngine::subscribe`].
+//!
+//! Each event carries:
+//!
+//! - an [`EventLevel`] (Debug/Info/Warn/Error) — log-level classification
+//! - an [`EventPhase`] (Configure/Resolve/Verify/Build/Scan/Test/Report) —
+//!   pipeline phase, used by progress bars and the GUI step rail
+//! - an [`EventKind`] discriminator and message text
+//!
+//! Events are also rendered into the JSON log file at
+//! `<FORGEISO_LOG_DIR or $XDG_STATE_HOME/forgeiso>/forgeiso.log.<date>`
+//! by the observability layer, so log-tailing from `jq` produces the
+//! same view the GUI sees.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// Severity classification of an [`EngineEvent`]. Maps 1:1 onto the
+/// `tracing` crate's level taxonomy.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum EventLevel {
+    /// Verbose internal detail — only surfaced when `RUST_LOG=debug`.
     Debug,
+    /// Normal progress information; the default for in-band events.
     Info,
+    /// Recoverable anomaly that did not abort the operation.
     Warn,
+    /// The operation has failed or is about to fail.
     Error,
 }
 
+/// Pipeline phase an event belongs to. Drives the GUI step rail and
+/// progress bar grouping. New phases may be added in a minor; consumer
+/// code should use `_ => ...` arms when matching.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum EventPhase {
+    /// Loading and validating user-supplied configuration.
     Configure,
+    /// Pre-flight environment check (tool availability, write permissions).
     Doctor,
+    /// Probing upstream for the latest release of a source preset.
     ReleaseLookup,
+    /// Core build pipeline (extract, inject, repack).
     Build,
+    /// Optional security scan running after a successful build.
     Scan,
+    /// Optional boot-test running after a successful build.
     Test,
+    /// Finalizing the build report and writing `report.{json,html}`.
     Report,
+    /// Read-only inspection of a source ISO ([`crate::ForgeIsoEngine::inspect_source`]).
     Inspect,
+    /// Source ISO download from a URL or preset.
     Download,
+    /// SHA-256 / signature verification against a pinned hash.
     Verify,
+    /// Writing autoinstall / kickstart / preseed files into the workspace.
     Inject,
+    /// Computing the structural diff between two ISOs.
     Diff,
+    /// Terminal completion event for a successful operation.
     Complete,
 }
 
@@ -40,23 +82,45 @@ pub enum EventKind {
     /// Progress update (percent, bytes, substage already on EngineEvent).
     Progress,
     /// A phase is starting — UI can show a transition.
-    PhaseStart { label: String },
+    PhaseStart {
+        /// Short label for the phase (e.g. `extract`, `repack`).
+        label: String,
+    },
     /// A phase completed.
-    PhaseEnd { success: bool },
+    PhaseEnd {
+        /// `true` if the phase finished without raising an error.
+        success: bool,
+    },
     /// An artifact (ISO, report, etc.) is ready at the given path.
-    ArtifactReady { path: PathBuf },
+    ArtifactReady {
+        /// Absolute path of the freshly produced artifact.
+        path: PathBuf,
+    },
     /// A config field passed or failed validation.
     ValidationResult {
+        /// Dotted field path being validated (e.g. `network.dns_servers`).
         field: String,
+        /// `Some(message)` when validation failed; `None` when passed.
         error: Option<String>,
     },
 }
 
+/// One event on the engine's broadcast channel.
+///
+/// Constructed via the [`EngineEvent::debug`] / `info` / `warn` /
+/// `error` constructors plus the `with_*` fluent attachers and the
+/// lifecycle helpers ([`EngineEvent::phase_start`],
+/// [`EngineEvent::phase_end`], [`EngineEvent::artifact`]).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EngineEvent {
+    /// UTC timestamp at which the event was created.
     pub ts: DateTime<Utc>,
+    /// Severity classification.
     pub level: EventLevel,
+    /// Pipeline phase the event belongs to.
     pub phase: EventPhase,
+    /// Human-readable message rendered into the GUI activity log and
+    /// the JSON tracing file.
     pub message: String,
     /// Semantic event kind for structured UI handling.
     #[serde(default)]
