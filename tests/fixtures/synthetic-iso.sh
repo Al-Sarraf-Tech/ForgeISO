@@ -50,6 +50,29 @@ trap 'rm -rf -- "$WORK"' EXIT
 TREE="$WORK/tree"
 mkdir -p "$TREE"
 
+# Emit a tiny synthetic squashfs at $1 from a fabricated 4-file rootfs tree.
+# Lets the engine's unsquashfs/mksquashfs branch run for real instead of
+# falling back to the warn-only "squashfs not found" path. Skips silently if
+# mksquashfs is missing so the fixture still works on minimal hosts.
+build_squashfs() {
+    local out="$1"
+    if ! command -v mksquashfs >/dev/null 2>&1; then
+        echo "fixture: mksquashfs missing — skipping rootfs payload at ${out#$TREE/}" >&2
+        return 0
+    fi
+    local rootfs="$WORK/rootfs-$(basename -- "$out" .squashfs).tree"
+    mkdir -p "$rootfs/etc" "$rootfs/usr/bin" "$rootfs/var/lib/dpkg"
+    printf 'NAME="ForgeISO Synthetic"\nID=synthetic\nVERSION="0.0"\n' \
+        >"$rootfs/etc/os-release"
+    printf 'ForgeISO Synthetic Rootfs (\\n \\l)\n\n' >"$rootfs/etc/issue"
+    : >"$rootfs/var/lib/dpkg/status"
+    mkdir -p "$(dirname -- "$out")"
+    # -comp xz keeps the payload tiny (~4 KB); -noappend avoids adding to a
+    # stale image if a previous fixture left one behind.
+    mksquashfs "$rootfs" "$out" -comp xz -no-progress -quiet -noappend \
+        >/dev/null 2>&1
+}
+
 # ---- common boot stubs (El Torito needs *some* boot image) -----------------
 mkdir -p "$TREE/boot"
 # Tiny synthetic isolinux/syslinux boot image (BIOS boot — 2 KB pad).
@@ -91,8 +114,10 @@ label install
 EOF
     printf 'SYNTHETIC-CASPER-KERNEL\n' >"$TREE/casper/vmlinuz"
     dd if=/dev/zero of="$TREE/casper/initrd" bs=1024 count=64 status=none
-    # No squashfs — engine only warns when rootfs path is missing, which is
-    # acceptable for a fixture.
+    # Tiny squashfs at the canonical Ubuntu/Mint rootfs path so the engine
+    # exercises the unsquashfs/mksquashfs branch in iso.rs (path search
+    # order: /casper/filesystem.squashfs, then /live/, then /LiveOS/).
+    build_squashfs "$TREE/casper/filesystem.squashfs"
     VOL_ID="Ubuntu-Server 24.04 LTS amd64"
 }
 
