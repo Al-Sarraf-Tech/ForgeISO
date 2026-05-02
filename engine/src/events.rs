@@ -140,6 +140,8 @@ pub struct EngineEvent {
 }
 
 impl EngineEvent {
+    /// Construct a `Debug`-level event for verbose internal detail. Surfaced
+    /// only when `RUST_LOG=debug` (or the equivalent tracing filter) is set.
     pub fn debug(phase: EventPhase, message: impl Into<String>) -> Self {
         Self {
             ts: Utc::now(),
@@ -154,6 +156,8 @@ impl EngineEvent {
         }
     }
 
+    /// Construct an `Info`-level event — the default for in-band progress
+    /// reporting that should be visible to the user in the GUI activity log.
     pub fn info(phase: EventPhase, message: impl Into<String>) -> Self {
         Self {
             ts: Utc::now(),
@@ -168,6 +172,8 @@ impl EngineEvent {
         }
     }
 
+    /// Construct a `Warn`-level event for a recoverable anomaly that did not
+    /// abort the operation (e.g. fallback path taken, optional tool missing).
     pub fn warn(phase: EventPhase, message: impl Into<String>) -> Self {
         Self {
             ts: Utc::now(),
@@ -182,6 +188,9 @@ impl EngineEvent {
         }
     }
 
+    /// Construct an `Error`-level event for a failure that aborted (or is
+    /// about to abort) the operation. The accompanying [`EngineError`]
+    /// returned by the failing call carries the structured error variant.
     pub fn error(phase: EventPhase, message: impl Into<String>) -> Self {
         Self {
             ts: Utc::now(),

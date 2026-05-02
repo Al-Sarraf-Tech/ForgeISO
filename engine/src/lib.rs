@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! # ForgeISO engine
 //!
 //! Library crate behind the `forgeiso` CLI, the `forgeiso-tui` TUI, and
