@@ -7,10 +7,11 @@ use forgeiso_engine::{
 };
 use slint::{ComponentHandle, ModelRc, VecModel};
 
-use crate::profiles::{preview_rows, ProfileKind, PROFILE_META};
+use crate::profiles::{compare_rows, preview_rows, ProfileKind, PROFILE_META};
 use crate::state::{lines, opt, tokens, InjectState};
 use crate::{
-    clear_build_results, AppState, AppWindow, FormState, PresetCard, ProfileChip, ProfileDefaultRow,
+    clear_build_results, AppState, AppWindow, FormState, PresetCard, ProfileChip,
+    ProfileCompareUiRow, ProfileDefaultRow,
 };
 
 // ── Preset cards shown on Step 1 ─────────────────────────────────────────────
@@ -137,6 +138,22 @@ pub fn make_profile_preview_rows(kind: ProfileKind) -> ModelRc<ProfileDefaultRow
 pub fn refresh_profile_dependent_models(w: &AppWindow, kind: ProfileKind) {
     refresh_preset_cards(w, kind);
     w.set_profile_preview_rows(make_profile_preview_rows(kind));
+}
+
+/// Build the side-by-side compare-rows model for the compare-profiles modal.
+/// Caller is responsible for resolving chip ids to ProfileKind via
+/// `profile_kind_for`.
+pub fn make_compare_rows(a: ProfileKind, b: ProfileKind) -> ModelRc<ProfileCompareUiRow> {
+    let rows: Vec<ProfileCompareUiRow> = compare_rows(a, b)
+        .into_iter()
+        .map(|r| ProfileCompareUiRow {
+            label: r.label.into(),
+            value_a: r.value_a.into(),
+            value_b: r.value_b.into(),
+            differs: r.differs,
+        })
+        .collect();
+    ModelRc::new(VecModel::from(rows))
 }
 
 // ── Preset selection handler ──────────────────────────────────────────────────

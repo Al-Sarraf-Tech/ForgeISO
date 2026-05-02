@@ -19,7 +19,8 @@ use slint::ComponentHandle;
 
 use app::{ForgeApp, APP};
 use config::{
-    make_preset_cards_for, make_profile_chips, make_profile_preview_rows, preset_display_name,
+    make_compare_rows, make_preset_cards_for, make_profile_chips, make_profile_preview_rows,
+    preset_display_name,
 };
 use forgeiso_engine::ForgeIsoEngine;
 use handlers::wire_all_handlers;
@@ -99,6 +100,11 @@ fn main() -> anyhow::Result<()> {
     win.set_presets_row2(presets_row2);
     win.set_profile_chips(make_profile_chips());
     win.set_profile_preview_rows(make_profile_preview_rows(restored_profile));
+    // Seed initial compare-rows with the default A/B pair from AppState.
+    win.set_compare_rows(make_compare_rows(
+        profiles::ProfileKind::ServerDefault,
+        profiles::ProfileKind::ServerHardened,
+    ));
 
     // Create app logic and register in thread-local.
     let app_rc = Rc::new(RefCell::new(ForgeApp::new(

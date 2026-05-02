@@ -5,6 +5,7 @@ import { PageHeader }  from "components/page_header.slint";
 import { StatusBar, StatusBarSettings } from "components/status_bar.slint";
 import { LogPanel, LogEntry } from "components/log_panel.slint";
 import { StepSource, PresetCard, ProfileChip, ProfileDefaultRow } from "steps/source.slint";
+import { ProfileCompareModal, ProfileCompareUiRow } from "components/profile_compare_modal.slint";
 import { StepConfigure }  from "steps/configure.slint";
 import { StepBuild }      from "steps/build.slint";
 import { StepCheck }      from "steps/check.slint";
@@ -27,12 +28,17 @@ export component AppWindow inherits Window {
     in property <[PresetCard]>   presets-row2;
     in property <[ProfileChip]>  profile-chips;
     in property <[ProfileDefaultRow]> profile-preview-rows;
+    in property <[ProfileCompareUiRow]> compare-rows;
 
     // ── Callbacks ───────────────────────────────────────────────────────
     callback cancel-job();
     callback doctor-toggle();
     callback theme-toggle();
     callback persist-ui-settings();
+    // Compare-profiles modal
+    callback compare-open();
+    callback compare-select-a(string);
+    callback compare-select-b(string);
     // Step bar / sidebar
     callback step-bar-clicked(int);
     // Source
@@ -156,6 +162,7 @@ export component AppWindow inherits Window {
                             // only need to persist via the same hook that other
                             // theme-state toggles use.
                             recommended-filter-toggled => { root.persist-ui-settings(); }
+                            compare-clicked => { root.compare-open(); }
                         }
                     }
 
@@ -356,6 +363,19 @@ export component AppWindow inherits Window {
             doctor-ok: true;
             theme-toggle => { root.theme-toggle(); }
         }
+    }
+
+    // ── Compare-profiles modal (overlays everything when open) ─────────────
+    if AppState.compare-modal-open: ProfileCompareModal {
+        x: 0;
+        y: 0;
+        width: 100%;
+        height: 100%;
+        profile-chips: root.profile-chips;
+        compare-rows: root.compare-rows;
+        close => { AppState.compare-modal-open = false; }
+        select-a(id) => { root.compare-select-a(id); }
+        select-b(id) => { root.compare-select-b(id); }
     }
 
     // ── Status-bar settings popup (anchored above the gear icon) ───────────

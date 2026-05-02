@@ -299,6 +299,89 @@ pub fn preview_rows(kind: ProfileKind) -> Vec<(&'static str, String)> {
     rows
 }
 
+/// One row in the side-by-side compare table — `value_a` and `value_b` are
+/// pre-formatted just like `preview_rows`, with `(unset)` standing in when a
+/// profile leaves the field at the distro default.
+pub struct ProfileCompareRow {
+    pub label: &'static str,
+    pub value_a: String,
+    pub value_b: String,
+    pub differs: bool,
+}
+
+/// Build side-by-side comparison rows for two profiles. Every defined field
+/// in `ProfileDefaults` shows up in the result regardless of whether either
+/// profile sets it, so the user can see the full surface — `(unset)` makes
+/// it clear when the profile is silent and leaves the distro default.
+pub fn compare_rows(a: ProfileKind, b: ProfileKind) -> Vec<ProfileCompareRow> {
+    let pa = populate(a);
+    let pb = populate(b);
+
+    fn fmt_str(v: &Option<String>) -> String {
+        match v {
+            None => "(unset)".to_string(),
+            Some(s) if s.is_empty() => "(cleared)".to_string(),
+            Some(s) => s.replace('\n', ", "),
+        }
+    }
+    fn fmt_bool(v: Option<bool>) -> String {
+        match v {
+            None => "(unset)".to_string(),
+            Some(true) => "yes".to_string(),
+            Some(false) => "no".to_string(),
+        }
+    }
+
+    let mut rows = Vec::with_capacity(8);
+    for (label, va, vb) in [
+        ("Packages", fmt_str(&pa.packages), fmt_str(&pb.packages)),
+        (
+            "Enable services",
+            fmt_str(&pa.enable_services),
+            fmt_str(&pb.enable_services),
+        ),
+        (
+            "Disable services",
+            fmt_str(&pa.disable_services),
+            fmt_str(&pb.disable_services),
+        ),
+        (
+            "Firewall policy",
+            fmt_str(&pa.firewall_policy),
+            fmt_str(&pb.firewall_policy),
+        ),
+        (
+            "Allow ports",
+            fmt_str(&pa.allow_ports),
+            fmt_str(&pb.allow_ports),
+        ),
+        (
+            "Sysctl tweaks",
+            fmt_str(&pa.sysctl_pairs),
+            fmt_str(&pb.sysctl_pairs),
+        ),
+        (
+            "Allow SSH password auth",
+            fmt_bool(pa.ssh_password_auth),
+            fmt_bool(pb.ssh_password_auth),
+        ),
+        (
+            "Passwordless sudo",
+            fmt_bool(pa.sudo_nopasswd),
+            fmt_bool(pb.sudo_nopasswd),
+        ),
+    ] {
+        let differs = va != vb;
+        rows.push(ProfileCompareRow {
+            label,
+            value_a: va,
+            value_b: vb,
+            differs,
+        });
+    }
+    rows
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -358,6 +441,37 @@ mod tests {
         let rows = preview_rows(ProfileKind::DesktopDeveloper);
         let sudo = rows.iter().find(|(l, _)| *l == "Passwordless sudo");
         assert_eq!(sudo.map(|(_, v)| v.as_str()), Some("yes"));
+    }
+
+    #[test]
+    fn compare_rows_marks_differing_fields() {
+        let rows = compare_rows(ProfileKind::ServerDefault, ProfileKind::ServerHardened);
+        // Packages differs (unset vs curl wget...)
+        let pkgs = rows.iter().find(|r| r.label == "Packages").unwrap();
+        assert!(pkgs.differs);
+        // Firewall policy is "deny" for both → differs == false
+        let fw = rows.iter().find(|r| r.label == "Firewall policy").unwrap();
+        assert!(!fw.differs);
+        assert_eq!(fw.value_a, "deny");
+        assert_eq!(fw.value_b, "deny");
+    }
+
+    #[test]
+    fn compare_rows_emits_unset_for_silent_profile_field() {
+        let rows = compare_rows(ProfileKind::ServerDefault, ProfileKind::ServerHardened);
+        let pkgs = rows.iter().find(|r| r.label == "Packages").unwrap();
+        // ServerDefault is silent on packages → "(unset)"
+        assert_eq!(pkgs.value_a, "(unset)");
+        assert!(pkgs.value_b.contains("auditd"));
+    }
+
+    #[test]
+    fn compare_rows_emits_eight_rows_for_every_pair() {
+        for a in ProfileKind::ALL {
+            for b in ProfileKind::ALL {
+                assert_eq!(compare_rows(a, b).len(), 8);
+            }
+        }
     }
 
     #[test]

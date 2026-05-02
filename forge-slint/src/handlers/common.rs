@@ -6,6 +6,7 @@
 use slint::ComponentHandle;
 
 use crate::app::with_app;
+use crate::config::{make_compare_rows, profile_kind_for};
 use crate::{AppState, AppWindow, Theme};
 
 pub(crate) fn wire(win: &AppWindow) {
@@ -37,6 +38,51 @@ pub(crate) fn wire(win: &AppWindow) {
     win.on_persist_ui_settings(|| {
         with_app(|a| a.persist_ui());
     });
+
+    // compare-open — open the compare-profiles modal. AppState slots already
+    // hold the A/B pair from prior interaction (or the startup defaults), so
+    // this just flips the modal visible.
+    {
+        let weak = win.as_weak();
+        win.on_compare_open(move || {
+            if let Some(w) = weak.upgrade() {
+                w.global::<AppState>().set_compare_modal_open(true);
+            }
+        });
+    }
+
+    // compare-select-a / compare-select-b — change one side of the compared
+    // pair, recompute the diff rows, and push back. The AppState id slot is
+    // updated first so the chip's "selected" highlight reacts before the row
+    // model has rebuilt.
+    {
+        let weak = win.as_weak();
+        win.on_compare_select_a(move |id| {
+            if let Some(w) = weak.upgrade() {
+                let id_str: String = id.into();
+                w.global::<AppState>()
+                    .set_compare_profile_a(id_str.clone().into());
+                let a = profile_kind_for(&id_str);
+                let b_str: String = w.global::<AppState>().get_compare_profile_b().into();
+                let b = profile_kind_for(&b_str);
+                w.set_compare_rows(make_compare_rows(a, b));
+            }
+        });
+    }
+    {
+        let weak = win.as_weak();
+        win.on_compare_select_b(move |id| {
+            if let Some(w) = weak.upgrade() {
+                let id_str: String = id.into();
+                w.global::<AppState>()
+                    .set_compare_profile_b(id_str.clone().into());
+                let a_str: String = w.global::<AppState>().get_compare_profile_a().into();
+                let a = profile_kind_for(&a_str);
+                let b = profile_kind_for(&id_str);
+                w.set_compare_rows(make_compare_rows(a, b));
+            }
+        });
+    }
 
     // doctor-toggle
     {

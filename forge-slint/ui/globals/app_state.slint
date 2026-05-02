@@ -24,6 +24,14 @@ export global AppState {
     in-out property <bool>   doctor-loading: false;
     in-out property <string> doctor-text;
 
+    // ── Compare-profiles modal ─────────────────────────────────────────────
+    // Active when the user clicks "Compare" near the profile chip row. The
+    // selected pair drives the compare-rows model on AppWindow; Rust
+    // recomputes on each chip click. Defaults seeded at startup.
+    in-out property <bool>   compare-modal-open: false;
+    in-out property <string> compare-profile-a: "server-default";
+    in-out property <string> compare-profile-b: "server-hardened";
+
     // ── Step done flags ────────────────────────────────────────────────────
     in-out property <bool>   step1-done: false;
     in-out property <bool>   step2-done: false;

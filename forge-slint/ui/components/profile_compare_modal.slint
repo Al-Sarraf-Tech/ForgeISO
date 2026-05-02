@@ -1,0 +1,217 @@
+// ProfileCompareModal — side-by-side profile diff dialog. Triggered from
+// Step 1 by the "Compare" button near the profile chip row.
+//
+// Layout: header with profile-A/B chip selectors + close button, then a
+// scrollable diff table (label | A value | B value), with rows that differ
+// tinted via amber-soft so the user spots changes at a glance.
+
+import { Palette, Sizes, Theme } from "../theme.slint";
+import { ProfileChip } from "../steps/source.slint";
+import { ScrollView } from "std-widgets.slint";
+import { AppState } from "../globals/app_state.slint";
+
+export struct ProfileCompareUiRow {
+    label: string,
+    value-a: string,
+    value-b: string,
+    differs: bool,
+}
+
+// One pill in the A-or-B chip selector at the top of the modal. Smaller
+// variant of the Step 1 ProfileChipBtn — same visual language without the
+// "running" lock state.
+component CompareChip inherits Rectangle {
+    in property <ProfileChip> chip;
+    in property <bool>        selected: false;
+    callback clicked();
+
+    height: 26px;
+    border-radius: 13px;
+    background: selected ? Palette.accent-soft
+              : ta.has-hover ? Palette.active : Palette.elevated;
+    border-width: 1px;
+    border-color: selected ? Palette.accent-soft-border
+               : ta.has-hover ? Palette.border-focus : Palette.border;
+    animate background { duration: 120ms; }
+    animate border-color { duration: 120ms; }
+
+    HorizontalLayout {
+        padding-left: Sizes.space-3;
+        padding-right: Sizes.space-3;
+        alignment: center;
+        Text {
+            text: chip.label;
+            font-size: Sizes.font-2xs;
+            font-weight: 700;
+            color: selected ? Palette.accent : Palette.text-secondary;
+            letter-spacing: 0.5px;
+            vertical-alignment: center;
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component ProfileCompareModal inherits Rectangle {
+    in property <[ProfileChip]> profile-chips;
+    in property <[ProfileCompareUiRow]> compare-rows;
+    callback close();
+    callback select-a(string);
+    callback select-b(string);
+
+    background: Palette.shadow-md;
+
+    // Click on the dim background closes the modal — but not when the click
+    // lands on the dialog itself, so the inner Rectangle stops the bubble.
+    backdrop-ta := TouchArea {
+        clicked => { root.close(); }
+    }
+
+    // Centered dialog
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: min(parent.width - 80px, 720px);
+        height: min(parent.height - 80px, 540px);
+        background: Palette.panel;
+        border-radius: Sizes.radius-lg;
+        border-width: 1px;
+        border-color: Palette.border;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: Palette.shadow-md;
+        drop-shadow-offset-y: 4px;
+
+        // Eat clicks so the backdrop close-on-click doesn't fire here.
+        TouchArea {
+            clicked => {}
+        }
+
+        VerticalLayout {
+            padding: Sizes.space-5;
+            spacing: Sizes.space-4;
+
+            // ── Header ────────────────────────────────────────────────────
+            HorizontalLayout {
+                alignment: space-between;
+                Text {
+                    text: "Compare configuration profiles";
+                    font-size: Sizes.font-md;
+                    font-weight: 700;
+                    color: Palette.text;
+                    vertical-alignment: center;
+                }
+                Rectangle {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 14px;
+                    background: close-ta.has-hover ? Palette.active : transparent;
+                    animate background { duration: 120ms; }
+                    Image {
+                        source: @image-url("../icons/x.svg");
+                        width: 14px;
+                        height: 14px;
+                        colorize: Palette.text-secondary;
+                    }
+                    close-ta := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        clicked => { root.close(); }
+                    }
+                }
+            }
+
+            // ── A/B selector chips ────────────────────────────────────────
+            VerticalLayout {
+                spacing: Sizes.space-2;
+                Text {
+                    text: "Profile A";
+                    font-size: Sizes.font-2xs;
+                    font-weight: 700;
+                    color: Palette.text-secondary;
+                    letter-spacing: 0.6px;
+                }
+                HorizontalLayout {
+                    spacing: Sizes.space-2;
+                    alignment: start;
+                    for chip in profile-chips: CompareChip {
+                        chip: chip;
+                        selected: AppState.compare-profile-a == chip.id;
+                        clicked => { root.select-a(chip.id); }
+                    }
+                }
+                Text {
+                    text: "Profile B";
+                    font-size: Sizes.font-2xs;
+                    font-weight: 700;
+                    color: Palette.text-secondary;
+                    letter-spacing: 0.6px;
+                }
+                HorizontalLayout {
+                    spacing: Sizes.space-2;
+                    alignment: start;
+                    for chip in profile-chips: CompareChip {
+                        chip: chip;
+                        selected: AppState.compare-profile-b == chip.id;
+                        clicked => { root.select-b(chip.id); }
+                    }
+                }
+            }
+
+            // ── Diff table ────────────────────────────────────────────────
+            // Three columns: label | A | B. Differing rows get an amber tint
+            // (amber-soft is WCAG-AA in both themes via the same path the
+            // status bar warning chips use).
+            Rectangle {
+                vertical-stretch: 1;
+                background: Palette.elevated;
+                border-radius: Sizes.radius-sm;
+                border-width: 1px;
+                border-color: Palette.border-subtle;
+
+                ScrollView {
+                    VerticalLayout {
+                        padding: Sizes.space-2;
+                        spacing: 0px;
+                        for row in compare-rows: Rectangle {
+                            height: max(44px, content.preferred-height + 2 * Sizes.space-2);
+                            background: row.differs ? Palette.amber-soft : transparent;
+                            border-radius: Sizes.radius-sm;
+                            content := HorizontalLayout {
+                                padding-left: Sizes.space-3;
+                                padding-right: Sizes.space-3;
+                                padding-top: Sizes.space-2;
+                                padding-bottom: Sizes.space-2;
+                                spacing: Sizes.space-3;
+                                Text {
+                                    text: row.label;
+                                    font-size: Sizes.font-xs;
+                                    font-weight: 600;
+                                    color: row.differs ? Palette.amber : Palette.text-secondary;
+                                    width: 180px;
+                                    vertical-alignment: top;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    text: row.value-a;
+                                    font-size: Sizes.font-xs;
+                                    color: Palette.text;
+                                    horizontal-stretch: 1;
+                                    wrap: word-wrap;
+                                }
+                                Text {
+                                    text: row.value-b;
+                                    font-size: Sizes.font-xs;
+                                    color: Palette.text;
+                                    horizontal-stretch: 1;
+                                    wrap: word-wrap;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

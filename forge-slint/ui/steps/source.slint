@@ -245,6 +245,10 @@ export component StepSource inherits Rectangle {
     // restart. Theme.show-recommended-only is the live, reactive source of
     // truth for the in-loop visibility binding below.
     callback recommended-filter-toggled();
+    // Open the compare-profiles modal. AppState.compare-modal-open carries
+    // visibility; this callback exists only so Rust can seed initial
+    // compare-rows + ensure the A/B pair is non-degenerate before showing.
+    callback compare-clicked();
 
     background: Palette.bg;
 
@@ -277,6 +281,34 @@ export component StepSource inherits Rectangle {
                         selected: selected-profile == chip.id;
                         running: running;
                         clicked => { profile-clicked(chip.id); }
+                    }
+                    // Compare button at the end of the chip row — small,
+                    // muted; opens the compare-profiles modal.
+                    Rectangle {
+                        height: 30px;
+                        border-radius: 15px;
+                        background: compare-ta.has-hover ? Palette.active : Palette.elevated;
+                        border-width: 1px;
+                        border-color: compare-ta.has-hover ? Palette.border-focus : Palette.border;
+                        animate background { duration: 120ms; }
+                        animate border-color { duration: 120ms; }
+                        HorizontalLayout {
+                            padding-left: Sizes.space-3;
+                            padding-right: Sizes.space-3;
+                            alignment: center;
+                            Text {
+                                text: "Compare";
+                                font-size: Sizes.font-2xs;
+                                font-weight: 700;
+                                color: Palette.text-secondary;
+                                letter-spacing: 0.5px;
+                                vertical-alignment: center;
+                            }
+                        }
+                        compare-ta := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { compare-clicked(); }
+                        }
                     }
                 }
 
