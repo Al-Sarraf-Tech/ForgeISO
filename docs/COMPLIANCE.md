@@ -53,7 +53,7 @@ override anything here.
 |---|---|
 | **CC1.1 Integrity & Ethical Values** | License (MIT), code of conduct (implied by Al-Sarraf-Tech repo policy), no AI-author attribution per CLAUDE.md absolute. |
 | **CC2.1 Communication & Information** | docs/ + CHANGELOG + ADRs + RUNBOOKS provide stakeholder visibility. |
-| **CC3.1 Risk Assessment** | This document + docs/RUNBOOKS.md (E001-E100) + docs/security.md. |
+| **CC3.1 Risk Assessment** | This document + docs/RUNBOOKS.md (E001-E100) + docs/runtime-security.md. |
 | **CC4.1 Monitoring** | Structured tracing → log_dir → operator-runnable jq queries. See docs/METRICS.md (TBD — add equivalent of session-sync's METRICS.md if needed). |
 | **CC6.1 Logical & Physical Access** | N/A for the build tool itself; the operator's access controls govern who runs ForgeISO. |
 | **CC7.1 System Operations** | docs/runbook-{gui,local,release,remote-agent}.md cover ops procedures. |

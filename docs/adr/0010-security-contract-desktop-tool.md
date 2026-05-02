@@ -44,14 +44,14 @@ the Sigstore stack — without invoking the banned attestation action.
 | Secrets scanning | gitleaks / trufflehog | gitleaks (CI security job, `--exit-code=1`) |
 | Dependency pinning | renovate + lockfile commit | `Cargo.lock` committed; CI containers pin `rust:1.93-bookworm`; security-tool versions pinned via `ARG` |
 | Signed releases | GPG signed tarballs | cosign sign-blob keyless (this ADR) |
-| Threat model | STRIDE doc | `docs/security.md` (running-tool) + this ADR (release-pipeline) + ADR 0008 (reliability) |
+| Threat model | STRIDE doc | `docs/runtime-security.md` (running-tool) + this ADR (release-pipeline) + ADR 0008 (reliability) |
 | Signed commits | gpg/ssh-sign | branch-protection requires PR review on Al-Sarraf-Tech repo (CLAUDE.md absolute) |
 | SLSA L2 build provenance | `actions/attest-build-provenance` (BANNED) | cosign sign-blob keyless OIDC + Rekor transparency-log entry per artifact |
 | Automated supply-chain alerts | dependabot security alerts | RUSTSEC ignores in `deny.toml` carry rationale; Trivy fs on every PR |
 | SLSA L3 | hermetic + non-falsifiable provenance | cosign keyless ties signing identity to GitHub OIDC workflow subject; Rekor is non-falsifiable |
 | Reproducible builds | bit-identical rebuild | partial — `Cargo.lock` + pinned compiler; not yet verified bit-identical (TODO follow-up) |
 | Sigstore | sigstore / cosign | cosign sign-blob (this ADR) |
-| WAF | CloudFlare / AWS WAF | N/A — no public service to protect; substitute is input validation in `InjectConfig::validate()` (`docs/security.md`) |
+| WAF | CloudFlare / AWS WAF | N/A — no public service to protect; substitute is input validation in `InjectConfig::validate()` (`docs/runtime-security.md`) |
 | Zero secrets in code/CI | OIDC + workload identity everywhere | Keyless cosign uses GitHub Actions OIDC; no signing key stored as a secret |
 | Formal verification | TLA+ / Lean specs | partial — property tests + golden contract test for public API; no formal proof |
 | Insider-threat protections | code review + privileged access reviews | branch protection on Al-Sarraf-Tech repos (absolute); release-tag job gated on `startsWith(github.ref, 'refs/tags/')` |
@@ -154,7 +154,7 @@ provenance chains to the same Sigstore identity as code provenance.
 - `scripts/sign-release.sh` — signing entry point (operator + CI)
 - `scripts/verify-release.sh` — verification entry point (consumer + CI)
 - `docs/SECURITY.md` — end-user-facing description of the security model
-- `docs/security.md` — running-tool security (input validation, supply chain)
+- `docs/runtime-security.md` — running-tool security (input validation, supply chain)
 - `docs/CI-INTEGRATION.md` — describes the `release-sign` CI job to add
 - `docs/COMPLIANCE.md` — cross-references SC-12 / CIS 2 / CC8.1 to this ADR
 - ADR 0008 (reliability contract) — the model this ADR mirrors structurally

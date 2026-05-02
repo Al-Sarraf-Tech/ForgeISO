@@ -5,7 +5,7 @@ signature-verification model that ForgeISO releases ship under, and how an
 end user verifies a downloaded release.
 
 For the input-validation, supply-chain, and host-trust posture of the running
-tool itself, see also [`security.md`](security.md).
+tool itself, see also [`runtime-security.md`](runtime-security.md).
 
 For the architectural rationale (why we picked this model, what we rejected,
 and how it maps to the S+ Security rubric), see
@@ -93,5 +93,5 @@ break the corresponding signature.
 ## Reporting a security issue
 
 If you discover a security issue, open a GitHub issue or contact the
-maintainers directly. See [`security.md`](security.md) for the running-tool
+maintainers directly. See [`runtime-security.md`](runtime-security.md) for the running-tool
 security posture (input validation, supply chain, dependency policy).

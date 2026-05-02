@@ -385,7 +385,7 @@ source.
 - [Release runbook](docs/runbook-release.md)
 - [Distro support matrix](docs/distro-support.md)
 - [VM testing](docs/vm-testing.md)
-- [Security notes](docs/security.md)
+- [Security notes](docs/runtime-security.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
 ---
