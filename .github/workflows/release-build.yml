@@ -107,7 +107,7 @@ jobs:
           echo "Release version: ${version}"
 
       - name: Checkout tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Token is consumed by softprops/action-gh-release in this same
           # job; we don't want it persisted to the local git config where
